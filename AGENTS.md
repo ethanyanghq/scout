@@ -10,7 +10,7 @@ If a value is missing, find it in the README, Makefile, or package configuration
 
 - Build: `uv sync` (Python service), `cd bridge && bun install` (Photon bridge)
 - Fast tests: `uv run pytest` and `cd bridge && bun test`
-- E2E tests: none yet. Try a full conversation without phones by piping a script into `uv run --env-file .env scout-simulate maya leo priya`, or by calling the service with `curl` (both need `ANTHROPIC_API_KEY`; see [DEVELOPING.md](DEVELOPING.md)).
+- E2E tests: `cd bridge && bun run e2e` plays a console script for each critical user journey (`bridge/e2e/`; needs uv, and `ANTHROPIC_API_KEY` in `.env`). To try a conversation step by step without phones, use the developer console: `cd bridge && bun run devchat` (see [DEVELOPING.md](DEVELOPING.md)).
 - Lint: `uv run ruff check src tests` and `cd bridge && bun run typecheck`
 - Format: `uv run ruff format src tests`
 - Critical user journeys: scout joins a chat and introduces itself; members share preferences and scout confirms them; scout posts the summary and destination poll; members vote by number and scout announces the winner.
@@ -19,8 +19,8 @@ Formatting is the formatter's job. Run it; don't hand-format code.
 
 ### Group chats and real messages
 
-- Read [DEVELOPING.md](DEVELOPING.md) before changing `bridge/` or testing a conversation. Its "What exists today" table says which developer tools are built. Never run a planned command (such as `bun run dev` or `devchat`) as if it exists.
-- A Linq or Photon line sends real iMessages to real people. Don't send messages, create chats, add contacts or change webhooks, whether through the `linq` CLI, Linq's API or a bridge connected to a real line, unless the user asked for that action. Test with `scout-simulate`, `curl` or the test suites instead.
+- Read [DEVELOPING.md](DEVELOPING.md) before changing `bridge/` or testing a conversation. Its "What exists today" table says which developer tools are built. Never run a planned command (such as the demo group commands) as if it exists.
+- A Linq or Photon line sends real iMessages to real people. Don't send messages, create chats, add contacts or change webhooks, whether through the `linq` CLI, Linq's API or a bridge connected to a real line, unless the user asked for that action. Test with the developer console, `scout-simulate`, `curl` or the test suites instead.
 - Never commit real phone numbers, API keys, `.env` files or `scout.db`. Replace the numbers in recorded Linq webhooks with 555 numbers before committing them.
 - When a pull request ships a tool from [scout-group-chat-plan.md](scout-group-chat-plan.md), it also checks the item off there and updates DEVELOPING.md.
 

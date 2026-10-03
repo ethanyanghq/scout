@@ -3,7 +3,7 @@
 | | |
 | --- | --- |
 | **Goal** | scout lives in real iMessage group chats through a Linq line running inside Photon's Spectrum SDK. Teammates and their AI agents build and test group chat features, including tapbacks, threaded replies and link cards, without phones, and the demo group can be set up in minutes. |
-| **Status** | Docs written. Nothing in milestones 1–3 is built yet. Last updated October 3, 2026. |
+| **Status** | Milestone 1 is built, apart from running the two Claude scripts against the real API. Milestones 2 and 3 aren't started. Last updated October 3, 2026. |
 | **Design** | [scout-imessage-groups.md](scout-imessage-groups.md): why Linq, how it plugs into Spectrum, the developer console |
 | **How to use it** | [DEVELOPING.md](DEVELOPING.md): what exists today, and how to test without phones |
 | **Rest of the demo** | [TODO.md](TODO.md) |
@@ -28,20 +28,22 @@ Check items off in the pull request that finishes them. When a pull request ship
 - [x] Rewrite the design doc for Linq inside Photon ([scout-imessage-groups.md](scout-imessage-groups.md)).
 - [x] Update the PRD, README and TODO so nothing plans around an Apple ID or BlueBubbles.
 - [x] Write [DEVELOPING.md](DEVELOPING.md) for teammates and their agents. Add rules for real messages to AGENTS.md, and a CLAUDE.md that imports AGENTS.md so Claude Code follows the same rules.
-- [ ] Land the docs through a pull request.
+- [x] Commit the docs.
 
 ### 1. Developer tools
 
 Shipped when a teammate can start everything with one command and script a group conversation that runs through the real bridge, and an AI agent can do the same from a shell. Design: [scout-imessage-groups.md](scout-imessage-groups.md), section 4.
 
-- [ ] `bun run dev`: checks the `.env` files, the keys the chosen mode needs, the Linq login (`linq whoami`) and free ports, then starts the service, the bridge and the Linq relay with labeled logs. Ctrl-C stops all three.
-- [ ] Event trace: the bridge logs one line per event, either handled (with how long scout took) or skipped and why (private chat, scout's own message, a sticker, a repeat delivery).
-- [ ] Dev-only service endpoints: start a chat at a seeded stage (`poll-open`, `destination-chosen`), read a chat's trip, and reset one chat's trip.
-- [ ] The developer console (`devchat`): a fake group, as a Spectrum platform, that goes through the real bridge and service.
-- [ ] Console commands an agent can run from a shell: `start`, `say`, `photo`, `state`, `transcript` and `reset`. Each waits until scout has finished replying, then prints the replies with their message IDs.
-- [ ] Console scripts: `devchat run <script>` replays one, and `bun test` runs every script in `e2e/`.
-- [ ] A script for each critical user journey in `AGENTS.md`, and AGENTS.md's "E2E tests" line pointing at them.
-- [ ] DEVELOPING.md covers `bun run dev`, the console and scripts, and its "What exists today" table marks them built.
+- [x] `bun run dev`: checks the `.env` files, the keys the chosen mode needs, the Linq login (`linq whoami`) and free ports, then starts the service, the bridge and the Linq relay with labeled logs. Ctrl-C stops all three.
+- [x] Event trace: the bridge logs one line per event, either handled (with how long scout took) or skipped and why (private chat, scout's own message, a sticker, a repeat delivery).
+- [x] Dev-only service endpoints: start a chat at a seeded stage (`poll-open`, `destination-chosen`), read a chat's trip, and reset one chat's trip.
+- [x] The developer console (`devchat`): a fake group, as a Spectrum platform, that goes through the real bridge and service.
+- [x] Console commands an agent can run from a shell: `start`, `say`, `photo`, `state`, `transcript` and `reset`. Each waits until scout has finished replying, then prints the replies with their message IDs.
+- [x] Console scripts: `devchat run <script>` replays one, and `bun run e2e` runs every script in `bridge/e2e/`. It's separate from `bun test`, so the fast tests stay fast and free.
+- [x] A script for each critical user journey in `AGENTS.md`, and AGENTS.md's "E2E tests" line pointing at them.
+- [ ] Run `bun run e2e` with a real `ANTHROPIC_API_KEY`, and adjust the two scripts that need Claude (`shares-preferences.chat`, `posts-summary-and-poll.chat`) until they pass reliably. The other two pass without Claude.
+- [ ] Photos with a caption in the console. Spectrum delivers them as a group of messages, which the console can't build yet.
+- [x] DEVELOPING.md covers `bun run dev`, the console and scripts, and its "What exists today" table marks them built.
 
 ### 2. Group chat connector: Linq inside Photon
 

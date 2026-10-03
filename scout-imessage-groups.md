@@ -122,7 +122,8 @@ expect card title ~ "Tulum"
 - **`from`** starts the chat at a seeded stage, such as `poll-open` or `destination-chosen`, so a script about voting doesn't replay preference collection through Claude.
 - **Messages are named, never numbered.** A script points at `scout.last` or a label, because message IDs change between runs.
 - **`expect` checks the trip and scout's replies.** Claude's wording changes between runs, so scripts check the trip's state, a word a reply must contain (`~`), or a link card's fields, never whole replies.
-- **Two ways to run them.** `devchat run <script>` replays a script and prints the transcript. `bun test` runs every script in `e2e/` as the E2E tests for the critical user journeys in `AGENTS.md`. Scripts call the real Claude API, so seeded stages also keep them short and cheap.
+- **Two ways to run them.** `devchat run <script>` replays a script and prints the transcript. `bun run e2e` runs every script in `bridge/e2e/` against a throwaway service, as the E2E tests for the critical user journeys in `AGENTS.md`. It's separate from `bun test`, so the fast tests stay fast and free. Scripts call the real Claude API, so seeded stages also keep them short and cheap.
+- **Built so far.** Messages, photos, `expect scout`, `expect state` and the seeded stages. Tapbacks, threaded replies and link card checks come with events in, actions out.
 
 #### One command at a time, for agents
 
