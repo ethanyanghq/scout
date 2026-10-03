@@ -9,8 +9,10 @@ import { askScout, toJpeg } from "./scout";
 import { logOutcome, secondsSince, type Skipped } from "./trace";
 
 const LINQ_API_URL = "https://api.linqapp.com/api/partner/v3";
-const WEBHOOK_PORT = 8788;
+export const WEBHOOK_PORT = 8788;
 const WEBHOOK_PATH = "/linq-events";
+// Where `linq webhooks listen --forward-to` sends Linq's events.
+export const WEBHOOK_URL = `http://127.0.0.1:${WEBHOOK_PORT}${WEBHOOK_PATH}`;
 
 export type LinqEvent = {
   event_type: string;
@@ -43,9 +45,9 @@ export type GroupMessage = {
 
 export async function relayLinqGroupMessages(apiKey: string): Promise<void> {
   const events = receiveWebhookEvents();
-  const forwardTo = `http://127.0.0.1:${WEBHOOK_PORT}${WEBHOOK_PATH}`;
-  console.log(`scout bridge is waiting for Linq events. In another terminal, run:`);
-  console.log(`  linq webhooks listen --forward-to ${forwardTo}`);
+  console.log(`scout bridge is waiting for Linq events at ${WEBHOOK_URL}.`);
+  console.log(`Relay them with \`linq webhooks listen --forward-to ${WEBHOOK_URL}\`,`);
+  console.log("which `bun run dev` starts for you.");
 
   // Linq delivers each event at least once, so a retry can repeat one.
   const handledEventIds = new Set<string>();

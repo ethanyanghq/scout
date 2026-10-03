@@ -16,6 +16,7 @@
   },
   "scripts": {
     "start": "bun run index.ts",
+    "dev": "bun run dev.ts",
     "devchat": "bun run devchat/commands.ts",
     "e2e": "bun run e2e/run.ts",
     "test": "bun test",
