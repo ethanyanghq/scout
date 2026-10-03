@@ -574,3 +574,37 @@ def test_picking_a_place_that_was_not_suggested_is_refused(maya_actions, store):
 def test_no_directions_without_suggestions(maya_actions):
     with pytest.raises(TripActionError, match="no place suggestions"):
         maya_actions.send_directions(0)
+
+
+def test_settle_up_opens_nessie_accounts_for_everyone_who_pays_or_is_paid(store):
+    maya_owes_leo_50(store)
+    bank = FakeBank()
+
+    TripActions(store, SPACE, MAYA, OutsideServices(bank=bank)).post_settle_up()
+
+    trip = store.get_trip(SPACE)
+    assert bank.accounts_opened == 2
+    assert [m.nessie_account_id for m in trip.members] == ["account-1", "account-2"]
+
+
+def test_paying_after_the_settle_up_opens_no_more_accounts(store):
+    maya_owes_leo_50(store)
+    bank = FakeBank()
+    TripActions(store, SPACE, MAYA, OutsideServices(bank=bank)).post_settle_up()
+
+    TripActions(store, SPACE, MAYA, OutsideServices(bank=bank)).pay_from_sender("Leo")
+
+    assert bank.accounts_opened == 2
+    assert bank.payments == [("account-1", "account-2", 5_000)]
+
+
+def test_the_settle_up_is_still_posted_when_nessie_is_down(store):
+    maya_owes_leo_50(store)
+    maya_actions = TripActions(
+        store, SPACE, MAYA, OutsideServices(bank=FakeBank(is_down=True))
+    )
+
+    maya_actions.post_settle_up()
+
+    assert maya_actions.outbox[0].startswith("💸 Shared costs: $100")
+    assert store.get_trip(SPACE).find_member(MAYA).nessie_account_id is None

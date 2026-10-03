@@ -29,7 +29,7 @@ Nothing after the vote has ever run against real Claude, so expect fixes here.
 ## 3. Fixes that protect the demo
 
 - [x] Check the Nessie key at startup, so a bad key stops the server instead of silently turning every payment into "simulated".
-- [ ] Add a way to open everyone's Nessie accounts before going on stage, so a slow API can't stall the first payment.
+- [x] Open everyone's Nessie accounts when scout posts who owes whom, so a slow API can't stall the first payment.
 - [ ] When a photo can't be converted, still forward its caption instead of dropping the whole message (`bridge/index.ts`).
 
 ## 4. Decide
@@ -54,7 +54,6 @@ Nothing after the vote has ever run against real Claude, so expect fixes here.
 - [ ] Delete the old `scout.db` and start a fresh group chat.
 - [ ] Mac plugged in, awake, and online. Service and bridge running.
 - [ ] Send a test text 30 minutes before going on stage.
-- [ ] Open the Nessie accounts (see section 3).
 
 ## Team
 
