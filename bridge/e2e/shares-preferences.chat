@@ -1,0 +1,11 @@
+# Journey: members share preferences in plain words, and scout saves and confirms them.
+# Needs Claude.
+members maya leo priya
+
+maya: hey @scout, spring break?
+maya: i'm maya, free mar 13-20, ~$800, flying from boston, need a beach
+expect scout ~ "boston"
+expect state members.0.display_name ~ "maya"
+expect state members.0.budget_usd = 800
+expect state members.0.home_city ~ "boston"
+expect state members.0.must_haves ~ "beach"

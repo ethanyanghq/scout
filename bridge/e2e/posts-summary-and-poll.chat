@@ -1,0 +1,10 @@
+# Journey: once everyone has shared, scout posts the summary and the destination poll.
+# Needs Claude.
+members maya leo priya
+
+maya: hey @scout, spring break?
+maya: i'm maya, free mar 13-20, ~$800, flying from boston, need a beach
+leo: leo here, mar 14-22, 600, nyc, anything works
+priya: priya, mar 13-21, 700, chicago, want good food
+expect scout ~ "Reply with a number"
+expect state stage = "voting"
