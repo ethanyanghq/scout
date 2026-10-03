@@ -110,6 +110,8 @@ Add `--verbose` to see each tool I call.
 
 ## Development
 
+[DEVELOPING.md](DEVELOPING.md) covers testing a change without phones, running me in a real group, and setting up the demo group. It's written for teammates and their coding agents.
+
 ```sh
 uv run pytest                  # tests
 uv run ruff check src tests    # lint
