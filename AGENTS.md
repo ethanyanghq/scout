@@ -109,6 +109,7 @@ Follow [Conventional Commits](https://www.conventionalcommits.org/):
 - Mark breaking changes with `!` after the type or scope (`feat(api)!: ...`), and explain them in a `BREAKING CHANGE:` footer.
 - Use the body to explain *why* the change was made, not to repeat the diff.
 - Make each commit one logical change. Don't mix a refactor with a behavior change; commit them separately.
+- Don't attribute commits to an AI agent. Claude, Codex and other coding agents add no `Co-Authored-By` trailer for themselves and no "Generated with" line. The teammate who asked for the change is the author.
 
 ## Before you finish
 
