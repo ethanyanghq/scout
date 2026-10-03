@@ -73,7 +73,7 @@ Priorities: **P0** is required for the demo, **P1** is a stretch goal, and **P2*
 | ID | Requirement | Priority |
 |---|---|---|
 | GC-1 | Users can add scout to an existing group text by adding its phone number. No app or account is required for anyone. | P0 |
-| GC-2 | On joining, scout sends one short introduction that explains what it does and asks for dates, budget, home city, and one must-have. | P0 |
+| GC-2 | On joining, scout sends one short introduction that explains what it does and asks for each person's name, dates, budget, home city, and one must-have. iMessage only gives scout phone numbers, so it has to ask for names. Without a "member joined" event, scout treats the first message it sees in a chat as joining. | P0 |
 | GC-3 | scout responds when tagged with "@scout" or addressed by name. | P0 |
 | GC-4 | scout attributes each message to the right group member by phone number and learns display names from context. | P0 |
 | GC-5 | Any member can pause or remove scout with a plain command ("@scout pause"). | P1 |
@@ -146,7 +146,7 @@ Priorities: **P0** is required for the demo, **P1** is a stretch goal, and **P2*
 
 The biggest open design question is when scout should speak. A group chat agent that talks too much gets muted or removed; one that talks too little doesn't move the plan forward.
 
-The proposed default is **tag-first with a few proactive moments**. scout replies whenever it's tagged, and speaks unprompted only at moments where the group clearly benefits: after everyone has shared preferences, when a poll closes, and for payment reminders. Proactive messages should be capped per day, and any member can pause scout. This model should be validated with real groups before committing (see Open questions).
+**Decision (October 2026): scout reads every message and speaks only when it's useful.** It always replies when tagged or addressed by name. While collecting preferences, it saves details people share without tagging it and confirms each in one line, asking only for what's still missing. While a poll is open, it counts plain votes like "2" or "Tulum" without being tagged. Everything else (chatter, side conversations) gets no reply. It also speaks unprompted at a few moments where the group clearly benefits: after everyone has shared preferences, when a poll closes, and later for payment reminders. A daily cap on proactive messages and a pause command (GC-5) are still planned. Validate this with real groups and loosen or tighten it based on how often groups pause or remove scout.
 
 ## 8. Conversation design
 
@@ -168,14 +168,19 @@ Because SMS has no rich cards or buttons, structured content (summaries, polls, 
 
 | Component | Proposed approach | Notes |
 |---|---|---|
-| Messaging | An SMS/MMS provider that supports group messaging (for example, Twilio) | Verify group messaging support early; it's the biggest technical risk. |
-| Agent | A large language model with tool calling (for example, Claude via the Anthropic API) | Handles extraction, planning, and conversation; tools call the services below. |
+| Messaging | iMessage through [Photon](https://photon.codes)'s Spectrum SDK (`spectrum-ts`), in local mode on a Mac signed into scout's Apple ID, or on a Photon cloud line | Photon's cheaper plans use shared numbers that can't reliably join group chats, so groups need local mode or a Business line. See [scout-imessage-groups.md](scout-imessage-groups.md). |
+| Agent | Claude Opus 5.5 via the Anthropic API, with tool calling | Claude handles language: extracting preferences, deciding when to speak, suggesting destinations. Plain code handles the rules: date overlap, budget range, vote counting, tie-breaks. |
 | Places and directions | A maps or places API | Grounds restaurant and activity suggestions and generates directions links. |
 | Travel prices | Flight and lodging search APIs, or cached estimates for the demo | Estimates are acceptable for the demo if clearly labeled. |
 | Payments | Deep links to payment apps (for example, Venmo, PayPal, or Cash App) | Links only; no money passes through scout. |
 | Photo album | A scout-hosted web album backed by file storage, shared through a private link | Hosting the album keeps it account-free and works the same on iPhone and Android. Google retired its Photos API method for sharing albums in March 2025, and Apple doesn't offer a public API for iCloud Shared Albums, so building on either is unreliable. Photos texted to scout arrive as MMS attachments through the messaging provider. |
 | Receipt reading | The same vision-capable language model reads receipt photos | Extracts merchant, date, total, and line items, and tells receipts apart from trip photos. Every extracted total is confirmed in the chat before it's logged. |
-| Storage | A simple database | Stores trips, members, preferences, polls, itineraries, and expenses. |
+| Storage | SQLite | Stores trips, members, preferences, polls, and the recent chat. Itineraries and expenses come in Phase 2. |
+| Polls | Numbered text replies ("1", "2", "3") | Native iMessage polls don't work in Photon's local mode or for members on SMS. Plain-number replies work everywhere. |
+
+### Architecture
+
+Photon can only send messages from its TypeScript SDK, but scout's logic is written in Python. A small TypeScript **bridge** (`bridge/`) receives each text from Photon, posts it to scout's **Python service** (`src/scout/`) on the same machine, and sends back whatever scout replies. The bridge handles one message at a time, so scout always finishes one reply before reading the next. That way two votes can never race to close the same poll.
 
 ### Core data model
 
@@ -215,7 +220,7 @@ If the project continues beyond the demo, these metrics would show whether scout
 
 | Phase | Scope | Outcome |
 |---|---|---|
-| 1. Core loop | GC-1 to GC-4, PR-1 and PR-2, DS-1 to DS-3 | scout joins a group text, gathers preferences, and runs a destination vote. |
+| 1. Core loop (built, not yet tested in a real group) | GC-1 to GC-4, PR-1 and PR-2, DS-1 to DS-3 | scout joins a group text, gathers preferences, and runs a destination vote. |
 | 2. Full journey | IT-1 and IT-2, OT-1 to OT-3, CS-1 to CS-3, CS-7, AL-1 and AL-2 | The complete six-step journey works end to end. |
 | 3. Polish and demo | Selected P1 items, demo script, fallback plan | A reliable live demo plus the interactive journey as backup. |
 
@@ -223,9 +228,9 @@ If the project continues beyond the demo, these metrics would show whether scout
 
 | Risk | Mitigation |
 |---|---|
-| Group messaging support from SMS providers is limited and can vary by carrier and region. | Test group messaging on day one. Keep a fallback demo (1:1 texting or the interactive journey page) ready. |
-| Adding a regular phone number to an iMessage group turns it into a standard SMS/MMS group, which some iPhone users may dislike. | Position scout as working with any phone, and test the experience with mixed iPhone and Android groups. |
-| Sending automated texts at scale in the US requires carrier registration. | Fine to use a trial or test number for the hackathon; plan registration before any public launch. |
+| Photon's shared-number plans (Free and Pro) can't reliably join group chats. | Run scout in local mode on a Mac signed into its own Apple ID, and test it in a real group on day one. Keep a fallback demo (1:1 texting, `scout-simulate`, or the interactive journey page) ready. |
+| Apple flags or bans scout's Apple ID for automated messaging. | Follow Photon's deliverability guidance: people message scout first, no cold outreach, no message bursts. Automating a personal Apple ID is a grey area under Apple's terms; acceptable for a class demo, revisit before real users. |
+| In local mode, scout can't list a group's members, so people who never text are invisible to it. | Ask everyone to reply to the introduction. The agent only posts the summary once the people it knows about have all shared, and anyone can ask for it with "@scout summary." |
 | scout becomes noisy or annoying. | Tag-first interaction model, a daily cap on proactive messages, and a pause command. |
 | Suggestions include made-up places or wrong prices. | Pull places only from a data source and label all prices as estimates. |
 | Members feel uneasy that an AI reads their chat. | Explain what it reads and stores when it joins, keep only trip data, and support deletion on request. |
@@ -236,4 +241,4 @@ If the project continues beyond the demo, these metrics would show whether scout
 
 ## 14. Open questions
 
-The main question to resolve is the interaction model from section 7: should scout respond only when tagged, or also read the whole conversation and chime in on its own when the group stalls or a decision is made? Closely related is whether it should read every message or only the ones that mention it, which affects both how helpful it can be and how comfortable groups feel. Other questions to settle include how members should share their location during a trip, whether private one-on-one texting for sensitive constraints like budgets is worth building, whether groups would rather have the album live in a photo app they already use than in scout's own web album, and, if the project continues past the class, how scout would sustain itself (for example, booking affiliate links versus a paid tier).
+The interaction model from section 7 is decided for now; what's left is checking it with real groups. The biggest open question is how scout joins iMessage groups: local mode on a Mac, Photon's Business plan, or the Pro plan if a quick test shows it can handle existing groups (see [scout-imessage-groups.md](scout-imessage-groups.md)). Other questions to settle include how members should share their location during a trip, whether private one-on-one texting for sensitive constraints like budgets is worth building, whether groups would rather have the album live in a photo app they already use than in scout's own web album, and, if the project continues past the class, how scout would sustain itself (for example, booking affiliate links versus a paid tier).
