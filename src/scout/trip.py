@@ -16,6 +16,12 @@ class TripStage(StrEnum):
 
 
 @dataclass(frozen=True)
+class DateWindow:
+    start: date
+    end: date
+
+
+@dataclass(frozen=True)
 class IncomingMessage:
     space_id: str
     sender_phone: str
@@ -99,13 +105,24 @@ class Poll:
     votes: dict[str, int]
 
 
+@dataclass(frozen=True)
+class ItineraryDay:
+    day: date
+    # The one big thing planned for the day, e.g. "Night kayak on a bio bay".
+    plan: str
+
+
 @dataclass
 class Trip:
     space_id: str
     stage: TripStage
     destination: str | None
+    # Locked in when the destination poll closes. None if no dates worked for
+    # everyone at that point.
+    dates: DateWindow | None
     members: list[Member]
     open_poll: Poll | None
+    itinerary: list[ItineraryDay]
 
     def find_member(self, phone: str) -> Member:
         for member in self.members:

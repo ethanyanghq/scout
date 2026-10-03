@@ -7,8 +7,11 @@ agent to read.
 """
 
 from scout import polls
+from scout.booking_links import format_booking_links
+from scout.calendar_link import format_calendar_message
 from scout.group_summary import format_group_summary, summarize_group
-from scout.trip import DestinationOption, PreferenceUpdate, Trip
+from scout.itinerary import format_itinerary
+from scout.trip import DestinationOption, ItineraryDay, PreferenceUpdate, Trip
 from scout.trip_store import TripStore
 
 DESTINATION_OPTION_COUNT = 3
@@ -89,14 +92,58 @@ class TripActions:
             raise TripActionError("there is no open poll")
         return self._close(trip)
 
+    def post_itinerary(self, days: list[ItineraryDay]) -> str:
+        trip = self._load_locked_in_trip()
+        if not days:
+            raise TripActionError("an itinerary needs at least one day")
+        planned_days = [day.day for day in days]
+        if len(set(planned_days)) != len(planned_days):
+            raise TripActionError("each date can appear only once")
+        for day in planned_days:
+            if not trip.dates.start <= day <= trip.dates.end:
+                raise TripActionError(
+                    f"{day} is outside the trip dates, "
+                    f"{trip.dates.start} to {trip.dates.end}"
+                )
+
+        in_order = sorted(days, key=lambda day: day.day)
+        self._store.replace_itinerary(self._space_id, in_order)
+        self.outbox.append(format_itinerary(in_order))
+        return "Itinerary posted."
+
+    def send_booking_links(self) -> str:
+        self.outbox.append(format_booking_links(self._load_locked_in_trip()))
+        return "Booking links posted."
+
     def _close(self, trip: Trip) -> str:
         result = polls.decide_winner(trip.open_poll)
         if result is None:
             raise TripActionError("nobody has voted yet, so there's no winner")
 
-        self._store.close_poll(trip.open_poll.id, result.winner.name)
+        # Lock in the dates everyone shares right now, so later preference
+        # edits can't quietly move a trip people have started booking.
+        dates = summarize_group(trip.members).shared_window
+        self._store.close_poll(trip.open_poll.id, result.winner.name, dates)
         self.outbox.append(polls.format_result(result, len(trip.open_poll.votes)))
+        if dates is None:
+            return (
+                f"Poll closed. Destination is now {result.winner.name}, "
+                "but no dates work for everyone, so the trip has no dates."
+            )
+        self.outbox.append(format_calendar_message(result.winner.name, dates))
         return f"Poll closed. Destination is now {result.winner.name}."
+
+    def _load_locked_in_trip(self) -> Trip:
+        """Loads a trip whose destination and dates are both settled."""
+        trip = self._load_trip()
+        if trip.destination is None:
+            raise TripActionError("the group hasn't picked a destination yet")
+        if trip.dates is None:
+            raise TripActionError(
+                "the trip has no dates because none worked for everyone "
+                "when the poll closed"
+            )
+        return trip
 
     def _load_trip(self) -> Trip:
         trip = self._store.get_trip(self._space_id)

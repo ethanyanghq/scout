@@ -3,7 +3,7 @@
 from datetime import date
 from typing import Any
 
-from scout.trip import DestinationOption, PreferenceUpdate
+from scout.trip import DestinationOption, ItineraryDay, PreferenceUpdate
 from scout.trip_actions import TripActionError, TripActions
 
 
@@ -150,6 +150,58 @@ TOOL_DEFINITIONS = [
             "additionalProperties": False,
         },
     },
+    {
+        "name": "post_itinerary",
+        "description": (
+            "Post a day-by-day plan for the chosen destination, one anchor "
+            "activity per day within the trip dates. Replaces any earlier plan, "
+            "so include every day when editing."
+        ),
+        "strict": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "days": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "date": {
+                                "type": "string",
+                                "description": "The day, as YYYY-MM-DD.",
+                            },
+                            "plan": {
+                                "type": "string",
+                                "description": (
+                                    "The day's one big thing, under 10 words, "
+                                    "e.g. 'Night kayak on a bioluminescent bay'."
+                                ),
+                            },
+                        },
+                        "required": ["date", "plan"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
+            "required": ["days"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "send_booking_links",
+        "description": (
+            "Post flight search links from each member's home city and a stay "
+            "search link sized for the group, for the chosen destination and "
+            "trip dates."
+        ),
+        "strict": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": False,
+        },
+    },
 ]
 
 
@@ -167,6 +219,10 @@ def run_tool(actions: TripActions, name: str, tool_input: dict[str, Any]) -> str
             return actions.record_sender_vote(tool_input["option_number"] - 1)
         case "close_poll":
             return actions.close_poll()
+        case "post_itinerary":
+            return actions.post_itinerary(_to_itinerary(tool_input))
+        case "send_booking_links":
+            return actions.send_booking_links()
         case _:
             raise TripActionError(f"unknown tool {name}")
 
@@ -180,6 +236,13 @@ def _to_preference_update(tool_input: dict[str, Any]) -> PreferenceUpdate:
         home_city=tool_input["home_city"],
         must_haves=tool_input["must_haves"],
     )
+
+
+def _to_itinerary(tool_input: dict[str, Any]) -> list[ItineraryDay]:
+    return [
+        ItineraryDay(day=_parse_date(day["date"]), plan=day["plan"])
+        for day in tool_input["days"]
+    ]
 
 
 def _parse_date(value: str | None) -> date | None:

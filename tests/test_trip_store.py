@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from scout.trip import DestinationOption, PreferenceUpdate, TripStage
+from scout.trip import DateWindow, DestinationOption, PreferenceUpdate, TripStage
 
 SPACE = "group-chat-1"
 MAYA = "+15550000001"
@@ -70,17 +70,29 @@ def test_changing_a_vote_replaces_the_old_one(store):
     assert store.get_trip(SPACE).open_poll.votes == {MAYA: 2}
 
 
-def test_closing_a_poll_sets_the_destination(store):
+def test_closing_a_poll_sets_the_destination_and_dates(store):
     store.create_trip(SPACE)
     store.open_poll(SPACE, OPTIONS)
     poll_id = store.get_trip(SPACE).open_poll.id
+    dates = DateWindow(date(2027, 3, 14), date(2027, 3, 19))
 
-    store.close_poll(poll_id, "Tulum, Mexico")
+    store.close_poll(poll_id, "Tulum, Mexico", dates)
 
     trip = store.get_trip(SPACE)
     assert trip.stage == TripStage.DESTINATION_CHOSEN
     assert trip.destination == "Tulum, Mexico"
+    assert trip.dates == dates
     assert trip.open_poll is None
+
+
+def test_a_trip_closed_without_shared_dates_has_no_dates(store):
+    store.create_trip(SPACE)
+    store.open_poll(SPACE, OPTIONS)
+    poll_id = store.get_trip(SPACE).open_poll.id
+
+    store.close_poll(poll_id, "Tulum, Mexico", None)
+
+    assert store.get_trip(SPACE).dates is None
 
 
 def test_recent_messages_come_back_oldest_first_and_limited(store):

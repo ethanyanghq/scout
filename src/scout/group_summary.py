@@ -1,15 +1,8 @@
 """Where the group landed: shared dates, budget range, and who's still missing."""
 
 from dataclasses import dataclass
-from datetime import date
 
-from scout.trip import Member
-
-
-@dataclass(frozen=True)
-class DateWindow:
-    start: date
-    end: date
+from scout.trip import DateWindow, Member
 
 
 @dataclass(frozen=True)

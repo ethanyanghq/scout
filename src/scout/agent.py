@@ -103,6 +103,11 @@ def _describe_trip(trip: Trip) -> str:
     lines = [f"Stage: {trip.stage}"]
     if trip.destination:
         lines.append(f"Chosen destination: {trip.destination}")
+    if trip.dates:
+        lines.append(f"Trip dates: {format_window(trip.dates)} {trip.dates.start.year}")
+    if trip.itinerary:
+        lines.append("Itinerary:")
+        lines.extend(f"  {day.day:%a %Y-%m-%d}: {day.plan}" for day in trip.itinerary)
     lines.append("Members:")
     lines.extend(f"- {_describe_member(member)}" for member in trip.members)
     if summary.shared_window:

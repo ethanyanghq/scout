@@ -4,10 +4,10 @@ Claude is the one external service here, so it's the one thing faked. The
 store, polls, and summaries are all real.
 """
 
-from datetime import datetime
+from datetime import date, datetime
 
 from scout.conversation import INTRODUCTION, SNAG_REPLY, handle_message
-from scout.trip import DestinationOption, IncomingMessage, TripStage
+from scout.trip import DestinationOption, IncomingMessage, PreferenceUpdate, TripStage
 
 SPACE = "group-chat-1"
 MAYA = "+15550000001"
@@ -118,6 +118,29 @@ def test_last_vote_closes_the_poll_and_announces_the_winner(store):
     assert trip.stage == TripStage.DESTINATION_CHOSEN
     assert trip.destination == "Tulum, Mexico"
     assert replies == ["🎉 Poll closed! Tulum, Mexico wins with 2 of 3 votes."]
+
+
+def test_last_vote_also_sends_a_calendar_link_for_the_shared_dates(store):
+    start_voting(store)
+    for member in EVERYONE:
+        store.save_preferences(
+            SPACE,
+            member,
+            PreferenceUpdate(
+                available_from=date(2027, 3, 14),
+                available_to=date(2027, 3, 19),
+                budget_usd=800,
+                home_city="Boston",
+            ),
+        )
+    agent = FakeAgent()
+
+    send(store, agent, MAYA, "2")
+    send(store, agent, LEO, "2")
+    replies = send(store, agent, PRIYA, "2")
+
+    assert replies[0] == "🎉 Poll closed! San Juan, Puerto Rico wins with 3 of 3 votes."
+    assert replies[1].startswith("📅 Locked in: San Juan, Puerto Rico, Mar 14–19.")
 
 
 def test_scout_apologizes_when_it_fails_on_a_message_addressed_to_it(store):

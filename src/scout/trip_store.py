@@ -9,7 +9,9 @@ from datetime import date, datetime
 from pathlib import Path
 
 from scout.trip import (
+    DateWindow,
     DestinationOption,
+    ItineraryDay,
     Member,
     Poll,
     PreferenceUpdate,
@@ -22,6 +24,8 @@ CREATE TABLE IF NOT EXISTS trips (
     space_id    TEXT PRIMARY KEY,
     stage       TEXT NOT NULL,
     destination TEXT,
+    starts_on   TEXT,
+    ends_on     TEXT,
     created_at  TEXT NOT NULL
 );
 
@@ -52,6 +56,13 @@ CREATE TABLE IF NOT EXISTS votes (
     phone        TEXT NOT NULL,
     option_index INTEGER NOT NULL,
     PRIMARY KEY (poll_id, phone)
+);
+
+CREATE TABLE IF NOT EXISTS itinerary_days (
+    space_id TEXT NOT NULL REFERENCES trips (space_id),
+    day      TEXT NOT NULL,
+    plan     TEXT NOT NULL,
+    PRIMARY KEY (space_id, day)
 );
 
 CREATE TABLE IF NOT EXISTS chat_log (
@@ -89,8 +100,10 @@ class TripStore:
                 space_id=space_id,
                 stage=TripStage(row["stage"]),
                 destination=row["destination"],
+                dates=_load_dates(row),
                 members=_load_members(db, space_id),
                 open_poll=_load_open_poll(db, space_id),
+                itinerary=_load_itinerary(db, space_id),
             )
 
     def create_trip(self, space_id: str) -> None:
@@ -154,15 +167,32 @@ class TripStore:
                 (poll_id, phone, option_index),
             )
 
-    def close_poll(self, poll_id: int, destination: str) -> None:
+    def close_poll(
+        self, poll_id: int, destination: str, dates: DateWindow | None
+    ) -> None:
         with self._transaction() as db:
             space_id = db.execute(
                 "SELECT space_id FROM polls WHERE id = ?", (poll_id,)
             ).fetchone()["space_id"]
             db.execute("UPDATE polls SET is_open = 0 WHERE id = ?", (poll_id,))
             db.execute(
-                "UPDATE trips SET stage = ?, destination = ? WHERE space_id = ?",
-                (TripStage.DESTINATION_CHOSEN, destination, space_id),
+                "UPDATE trips SET stage = ?, destination = ?, starts_on = ?, "
+                "ends_on = ? WHERE space_id = ?",
+                (
+                    TripStage.DESTINATION_CHOSEN,
+                    destination,
+                    dates.start.isoformat() if dates else None,
+                    dates.end.isoformat() if dates else None,
+                    space_id,
+                ),
+            )
+
+    def replace_itinerary(self, space_id: str, days: list[ItineraryDay]) -> None:
+        with self._transaction() as db:
+            db.execute("DELETE FROM itinerary_days WHERE space_id = ?", (space_id,))
+            db.executemany(
+                "INSERT INTO itinerary_days (space_id, day, plan) VALUES (?, ?, ?)",
+                [(space_id, day.day.isoformat(), day.plan) for day in days],
             )
 
     def log_message(
@@ -203,6 +233,15 @@ class TripStore:
             connection.close()
 
 
+def _load_dates(trip_row: sqlite3.Row) -> DateWindow | None:
+    if trip_row["starts_on"] is None:
+        return None
+    return DateWindow(
+        date.fromisoformat(trip_row["starts_on"]),
+        date.fromisoformat(trip_row["ends_on"]),
+    )
+
+
 def _load_members(db: sqlite3.Connection, space_id: str) -> list[Member]:
     rows = db.execute(
         "SELECT * FROM members WHERE space_id = ? ORDER BY rowid", (space_id,)
@@ -235,6 +274,14 @@ def _load_open_poll(db: sqlite3.Connection, space_id: str) -> Poll | None:
         options=[DestinationOption(**option) for option in json.loads(row["options"])],
         votes={vote["phone"]: vote["option_index"] for vote in votes},
     )
+
+
+def _load_itinerary(db: sqlite3.Connection, space_id: str) -> list[ItineraryDay]:
+    rows = db.execute(
+        "SELECT day, plan FROM itinerary_days WHERE space_id = ? ORDER BY day",
+        (space_id,),
+    ).fetchall()
+    return [ItineraryDay(date.fromisoformat(row["day"]), row["plan"]) for row in rows]
 
 
 def _parse_date(value: str | None) -> date | None:

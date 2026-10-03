@@ -1,8 +1,8 @@
 # scout
 
-An AI trip planner that lives in your group chat. Add scout to a group text and it collects everyone's dates, budget, and must-haves, suggests three destinations, and runs the vote. See [scout-PRD.md](scout-PRD.md) for the full product.
+An AI trip planner that lives in your group chat. Add scout to a group text and it collects everyone's dates, budget, and must-haves, suggests three destinations, runs the vote, and then plans the days and sends booking and calendar links. See [scout-PRD.md](scout-PRD.md) for the full product.
 
-**Status:** Phase 1 (the core loop: join, collect preferences, vote on a destination).
+**Status:** Phase 1 (join, collect preferences, vote on a destination) is done. Phase 2 has started with the itinerary, booking links, and the Add to Google Calendar link.
 
 ## How it fits together
 
@@ -22,6 +22,9 @@ Photon only sends messages from TypeScript, so `bridge/` is a thin relay. Everyt
 | `trip_actions.py` | The changes scout can make to a trip (save preferences, post a poll, record a vote). |
 | `group_summary.py` | Date overlap, budget range, and who hasn't replied. |
 | `polls.py` | Reading "2" or "tulum" as a vote, and picking the winner. |
+| `itinerary.py` | How the day-by-day plan reads in the chat. |
+| `booking_links.py` | Google Flights links from each home city and an Airbnb link for the group. |
+| `calendar_link.py` | The "Add to Google Calendar" link sent once the trip is locked in. |
 | `trip_store.py` | Saving everything to SQLite. |
 | `simulate.py` | A fake group chat in your terminal for testing without phones. |
 

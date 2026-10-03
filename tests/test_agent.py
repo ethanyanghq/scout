@@ -1,10 +1,10 @@
 """The agent loop, with a scripted stand-in for the Claude API."""
 
-from datetime import datetime
+from datetime import date, datetime
 from types import SimpleNamespace
 
 from scout.agent import ScoutAgent
-from scout.trip import IncomingMessage
+from scout.trip import DateWindow, DestinationOption, IncomingMessage, ItineraryDay
 
 SPACE = "group-chat-1"
 MAYA = "+15550000001"
@@ -126,3 +126,24 @@ def test_tells_claude_whether_it_was_tagged(store):
     situation = claude.requests[0]["messages"][0]["content"]
     assert "It tags or addresses you." in situation
     assert "[…0001] @scout hi" in situation
+
+
+def test_shows_claude_the_locked_in_dates_and_plan(store):
+    trip, message = maya_says(store, "@scout what's tuesday again?")
+    store.open_poll(SPACE, [DestinationOption("San Juan, Puerto Rico", 750, "Beach")])
+    poll_id = store.get_trip(SPACE).open_poll.id
+    store.close_poll(
+        poll_id,
+        "San Juan, Puerto Rico",
+        DateWindow(date(2027, 3, 14), date(2027, 3, 19)),
+    )
+    store.replace_itinerary(
+        SPACE, [ItineraryDay(date(2027, 3, 16), "Waterfall hike in El Yunque")]
+    )
+    claude = ScriptedClaude(response("end_turn", text("El Yunque hike!")))
+
+    ScoutAgent(claude, store).respond(store.get_trip(SPACE), message)
+
+    situation = claude.requests[0]["messages"][0]["content"]
+    assert "Trip dates: Mar 14–19 2027" in situation
+    assert "Tue 2027-03-16: Waterfall hike in El Yunque" in situation

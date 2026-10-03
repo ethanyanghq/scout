@@ -1,7 +1,9 @@
+from datetime import date
+
 import pytest
 
 from scout.agent_tools import run_tool
-from scout.trip import DestinationOption
+from scout.trip import DateWindow, DestinationOption, ItineraryDay
 from scout.trip_actions import TripActionError, TripActions
 
 SPACE = "group-chat-1"
@@ -41,3 +43,17 @@ def test_agent_dates_must_be_real_calendar_dates(maya_actions):
 
     with pytest.raises(TripActionError, match="YYYY-MM-DD"):
         run_tool(maya_actions, "save_sender_preferences", tool_input)
+
+
+def test_agent_itinerary_dates_become_planned_days(maya_actions, store):
+    maya_actions.start_destination_poll(OPTIONS)
+    poll_id = store.get_trip(SPACE).open_poll.id
+    dates = DateWindow(date(2027, 3, 14), date(2027, 3, 19))
+    store.close_poll(poll_id, "San Juan, Puerto Rico", dates)
+    tool_input = {"days": [{"date": "2027-03-14", "plan": "Land and check in"}]}
+
+    run_tool(maya_actions, "post_itinerary", tool_input)
+
+    assert store.get_trip(SPACE).itinerary == [
+        ItineraryDay(date(2027, 3, 14), "Land and check in")
+    ]
