@@ -1,0 +1,15 @@
+# Journey: members vote by number and scout announces the winner. Votes are
+# counted in code, so this one doesn't need Claude.
+members maya leo priya
+from poll-open
+
+maya: 2
+expect scout ~ "1 of 3 voted"
+leo: lol this is taking forever
+expect scout quiet
+leo: 2
+priya: 1
+expect scout ~ "San Juan, Puerto Rico wins"
+expect scout ~ "Add it to your calendar"
+expect state destination = "San Juan, Puerto Rico"
+expect state stage = "destination_chosen"

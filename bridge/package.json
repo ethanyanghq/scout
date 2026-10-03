@@ -17,6 +17,7 @@
   "scripts": {
     "start": "bun run index.ts",
     "devchat": "bun run devchat/commands.ts",
+    "e2e": "bun run e2e/run.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
   }
