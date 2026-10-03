@@ -6,14 +6,14 @@ Write code that a human can read and understand quickly. These rules are strong 
 
 ## This repository
 
-Fill in per repository. If a value is missing, find it in the README, Makefile, or package configuration rather than guessing.
+If a value is missing, find it in the README, Makefile, or package configuration rather than guessing.
 
-- Build: `<command>`
-- Fast tests: `<command>`
-- E2E tests: `<command>`
-- Lint: `<command>`
-- Format: `<command>`
-- Critical user journeys: `<list>`
+- Build: `uv sync` (Python service), `cd bridge && bun install` (Photon bridge)
+- Fast tests: `uv run pytest`
+- E2E tests: none yet. Try a full conversation by hand with `uv run scout-simulate maya leo priya` (needs `ANTHROPIC_API_KEY`).
+- Lint: `uv run ruff check src tests` and `cd bridge && bun run typecheck`
+- Format: `uv run ruff format src tests`
+- Critical user journeys: scout joins a chat and introduces itself; members share preferences and scout confirms them; scout posts the summary and destination poll; members vote by number and scout announces the winner.
 
 Formatting is the formatter's job. Run it; don't hand-format code.
 
