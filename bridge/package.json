@@ -10,6 +10,7 @@
     "typescript": "^7.0.2"
   },
   "dependencies": {
+    "@photon-ai/imessage-kit": "^3.0.0",
     "@spectrum-ts/imessage-local": "^12.10.1",
     "spectrum-ts": "^12.10.1"
   },

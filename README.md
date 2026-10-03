@@ -62,9 +62,10 @@ scout needs its own iMessage account. In local mode that's an Apple ID signed in
    ANTHROPIC_API_KEY=sk-ant-...
    ```
 5. Create `bridge/.env` with one of these:
-   - Local mode, which runs on this Mac's Messages account and needs no Photon plan. See [scout-imessage-groups.md](scout-imessage-groups.md).
+   - Local mode, which runs on this Mac's Messages account and needs no Photon plan. See [scout-imessage-groups.md](scout-imessage-groups.md). scout only reads and replies in the one group chat named here, which must match the group's name in Messages exactly:
      ```
      IMESSAGE_MODE=local
+     SCOUT_GROUP_NAME="BRH Spring Break Trip"
      ```
    - A Photon cloud line:
      ```
@@ -75,7 +76,7 @@ scout needs its own iMessage account. In local mode that's an Apple ID signed in
 6. Run `./start.sh`. It starts the Python service, waits for it, then starts the bridge, and keeps the Mac awake until you press Ctrl-C. On a MacBook, closing the lid still sleeps it: leave the lid open, or run `sudo pmset -a disablesleep 1` (and `sudo pmset -a disablesleep 0` afterwards).
 7. Add scout's Apple ID or number to a group text and say "hi scout".
 
-scout only plans in group chats. Anyone who texts it one-on-one gets one reply asking them to add it to a group; nothing else they send reaches scout.
+In local mode scout ignores every chat except `SCOUT_GROUP_NAME`, so it can run on a real person's Messages account. It also ignores messages sent from that account, so whoever owns it shouldn't type in the group while scout is running. On a cloud line scout plans in any group chat and ignores one-on-one texts.
 
 ## Development
 

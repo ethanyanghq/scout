@@ -7,6 +7,8 @@
 // Run with:  bun run index.ts
 // Settings (Bun reads them from bridge/.env automatically):
 //   IMESSAGE_MODE=local           Use this Mac's Messages account (no Photon plan).
+//                                 Also set SCOUT_GROUP_NAME: the one group chat
+//                                 scout may read and reply in.
 //   IMESSAGE_MODE=cloud           Use a Photon cloud line; also set
 //                                 PHOTON_PROJECT_ID and PHOTON_PROJECT_SECRET.
 //   SCOUT_URL=http://127.0.0.1:8787   Where the Python service is listening.
@@ -14,12 +16,9 @@
 import { Spectrum, UnsupportedError, type Message, type Space } from "spectrum-ts";
 import { imessage } from "spectrum-ts/providers/imessage";
 import { localIMessage } from "@spectrum-ts/imessage-local";
+import { IMessageSDK } from "@photon-ai/imessage-kit";
 
 const SCOUT_URL = process.env.SCOUT_URL ?? "http://127.0.0.1:8787";
-
-// scout only plans in group chats. Someone who texts it one-on-one gets this
-// once, so they know what to do, and nothing they send reaches scout.
-const DIRECT_MESSAGE_REPLY = "Hey! Add me to a group chat and say hi to get started 👋";
 
 type IncomingText = {
   space_id: string;
@@ -29,11 +28,10 @@ type IncomingText = {
   participant_phones: string[];
 };
 
-const app = await connectToIMessage(process.env.IMESSAGE_MODE ?? "local");
+const mode = process.env.IMESSAGE_MODE ?? "local";
+const isScoutChat = await decideWhichChatsScoutJoins(mode);
+const app = await connectToIMessage(mode);
 console.log(`scout bridge is listening for texts, forwarding to ${SCOUT_URL}`);
-
-// One-on-one chats that already got DIRECT_MESSAGE_REPLY since the bridge started.
-const answeredDirectMessages = new Set<string>();
 
 // Messages are handled one at a time, on purpose: scout finishes replying to
 // one text before it reads the next, so its view of the trip is never stale.
@@ -42,15 +40,10 @@ for await (const [space, message] of app.messages) {
   // Phase 1 only understands text. Photos and receipts arrive in Phase 2.
   if (message.content.type !== "text" || !message.sender) continue;
 
-  try {
-    if (!isGroupChat(space)) {
-      if (!answeredDirectMessages.has(space.id)) {
-        answeredDirectMessages.add(space.id);
-        await space.send(DIRECT_MESSAGE_REPLY);
-      }
-      continue;
-    }
+  // Every other chat is dropped here, before scout or Claude sees any of it.
+  if (!isScoutChat(space)) continue;
 
+  try {
     const replies = await askScout({
       space_id: space.id,
       sender_phone: message.sender.id,
@@ -94,10 +87,35 @@ async function askScout(text: IncomingText): Promise<string[]> {
   return replies;
 }
 
-function isGroupChat(space: Space): boolean {
-  if (localIMessage.is(space)) return localIMessage(space).type === "group";
-  if (imessage.is(space)) return imessage(space).type === "group";
-  return false;
+// In local mode the Mac's Messages account may be a real person's, so scout is
+// locked to the one group named in SCOUT_GROUP_NAME. A cloud line belongs to
+// scout alone, so there it plans in any group but never in one-on-one chats.
+async function decideWhichChatsScoutJoins(mode: string): Promise<(space: Space) => boolean> {
+  if (mode !== "local") {
+    return (space) => imessage.is(space) && imessage(space).type === "group";
+  }
+  const groupName = requireSetting("SCOUT_GROUP_NAME");
+  const groupId = await findGroupChatId(groupName);
+  console.log(`scout will only read and reply in "${groupName}"`);
+  return (space) => space.id === groupId;
+}
+
+async function findGroupChatId(name: string): Promise<string> {
+  const messages = new IMessageSDK();
+  try {
+    const chats = await messages.listChats({ search: name, kind: "group" });
+    const matches = chats.filter((chat) => chat.name === name);
+    const [match] = matches;
+    if (matches.length !== 1 || !match) {
+      throw new Error(
+        `Expected exactly one group chat named "${name}" in Messages, found ${matches.length}. ` +
+          "Check SCOUT_GROUP_NAME matches the group's name exactly.",
+      );
+    }
+    return match.chatId;
+  } finally {
+    await messages.close();
+  }
 }
 
 // Lets scout count group members who haven't texted yet. Only cloud group
