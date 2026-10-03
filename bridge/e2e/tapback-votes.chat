@@ -1,0 +1,14 @@
+# Journey: members vote with a tapback on the option they want, and scout
+# announces the winner. Counted in code, so this doesn't need Claude.
+members maya leo priya
+from poll-open
+
+maya react like "2. San Juan"
+expect scout ~ "1 of 3 voted"
+leo react laugh "3. Miami"
+expect scout quiet
+leo react love "2. San Juan"
+expect scout ~ "2 of 3 voted"
+priya: 1
+expect scout ~ "San Juan, Puerto Rico wins"
+expect state destination = "San Juan, Puerto Rico"

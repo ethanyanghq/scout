@@ -97,7 +97,7 @@ class TripActions:
             raise TripActionError("a poll is already open; close it first")
 
         self._store.open_poll(self._space_id, options)
-        self.outbox.append(Say(polls.format_poll(options)))
+        self.outbox.extend(Say(text) for text in polls.format_poll(options))
         return "Poll posted."
 
     def record_sender_vote(

@@ -30,6 +30,24 @@ function messageReceived(overrides: {
 }
 
 const RECEIPT = { type: "media", url: "https://cdn.example/receipt.jpeg", mime_type: "image/jpeg" };
+const SAN_JUAN_OPTION = "2. San Juan, Puerto Rico (~$750/person est.): No passport";
+
+function reactionAdded(overrides: { type?: string; isFromMe?: boolean } = {}): LinqEvent {
+  return {
+    event_type: "reaction.added",
+    event_id: "event-2",
+    data: {
+      chat_id: "group-chat-1",
+      message_id: "poll-option-2",
+      part_index: 0,
+      reaction_type: overrides.type ?? "like",
+      custom_emoji: null,
+      is_from_me: overrides.isFromMe ?? false,
+      from: LEO.handle,
+      reacted_at: "2026-10-03T20:40:00.000Z",
+    },
+  };
+}
 
 describe("reading a Linq event", () => {
   test("reads the id, chat, sender, text and time of a group text", () => {
@@ -87,6 +105,27 @@ describe("reading a Linq event", () => {
     expect(readLinqEvent(messageReceived({ direction: "outbound" }))).toEqual(ownMessage);
   });
 
+  test("reads a tapback as a reaction on the message it was added to", () => {
+    expect(readLinqEvent(reactionAdded())).toMatchObject({
+      id: "event-2",
+      content: { type: "reaction", emoji: "👍", target: { id: "poll-option-2" } },
+      sender: { id: LEO.handle },
+      space: { id: "group-chat-1" },
+    });
+  });
+
+  test("skips scout's own tapbacks, removed ones and stickers", () => {
+    expect(readLinqEvent(reactionAdded({ isFromMe: true }))).toEqual({
+      skipReason: "scout's own tapback",
+    });
+    expect(readLinqEvent({ ...reactionAdded(), event_type: "reaction.removed" })).toEqual({
+      skipReason: "a removed tapback (a vote it made stays counted)",
+    });
+    expect(readLinqEvent(reactionAdded({ type: "sticker" }))).toEqual({
+      skipReason: "a sticker reaction",
+    });
+  });
+
   test("skips events that aren't new messages", () => {
     const typing = { ...messageReceived({}), event_type: "chat.typing_indicator.started" };
 
@@ -115,6 +154,15 @@ describe("a Linq group chat through Spectrum", () => {
     port: 0,
     async fetch(request) {
       const path = new URL(request.url).pathname;
+      if (path === "/messages/poll-option-2") {
+        return Response.json({
+          id: "poll-option-2",
+          chat_id: "group-chat-1",
+          is_from_me: true,
+          created_at: "2026-10-03T20:30:00.000Z",
+          parts: [{ type: "text", value: SAN_JUAN_OPTION }],
+        });
+      }
       if (request.method === "GET") return Response.json({ handles: [SCOUT, MAYA, LEO] });
       linqReceived.push({ path, body: await request.json() });
       return Response.json({ chat_id: "group-chat-1", message: { id: "sent-1" } });
@@ -177,6 +225,19 @@ describe("a Linq group chat through Spectrum", () => {
         body: { message: { parts: [{ type: "text", value: "hey Maya 👋" }] } },
       },
     ]);
+  });
+
+  test("hands a member's tapback to scout with the words Linq has for that message", async () => {
+    scoutActions = [];
+
+    await deliver(reactionAdded());
+
+    expect(scoutReceived[0]).toMatchObject({
+      space_id: "group-chat-1",
+      sender_phone: LEO.handle,
+      tapback: "like",
+      message_text: SAN_JUAN_OPTION,
+    });
   });
 
   test("sends scout's tapback to Linq on the member's message", async () => {

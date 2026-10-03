@@ -22,9 +22,6 @@ class Say:
     text: str
     # The message to thread this under, or None for the main chat.
     reply_to: str | None = None
-    # Names this message, so a later tapback on it can be traced back to what
-    # it was (for example, one option of a poll).
-    key: str | None = None
 
 
 @dataclass(frozen=True)

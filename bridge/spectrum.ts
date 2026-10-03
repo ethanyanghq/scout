@@ -12,15 +12,16 @@ import {
 } from "spectrum-ts";
 import { imessage } from "spectrum-ts/providers/imessage";
 import { localIMessage } from "@spectrum-ts/imessage-local";
-import { askScout, toJpeg, type ScoutAction } from "./scout";
-import { tapbackEmoji } from "./tapbacks";
+import { askScout, tellScoutAboutTapback, toJpeg, type ScoutAction } from "./scout";
+import { tapbackEmoji, tapbackNamed } from "./tapbacks";
 import { secondsSince, type MessageOutcome, type Skipped } from "./trace";
 
 type PhotoAttachment = Extract<Content, { type: "attachment" }>;
 
 // What scout can use from one message: its words and its first photo.
 type ReadableParts = { text: string; photo: PhotoAttachment | null };
-type ScoutMessage = ReadableParts & { senderPhone: string };
+type ScoutMessage = ReadableParts & { kind: "message"; senderPhone: string };
+type ScoutTapback = { kind: "tapback"; senderPhone: string; tapback: string; targetId: string };
 
 // Spectrum reacts and replies to a Message, not an ID, so the relay keeps the
 // messages it has seen and sent lately. Older ones, and everything from before
@@ -45,15 +46,24 @@ export async function relaySpectrumMessages(
     }
 
     try {
-      const actions = await askScout({
-        space_id: space.id,
-        sender_phone: readable.senderPhone,
-        text: readable.text,
-        sent_at: message.timestamp.toISOString(),
-        participant_phones: await listParticipants(space, message),
-        photo: readable.photo ? await toJpeg(await readable.photo.read()) : null,
-        message_id: message.id,
-      });
+      const actions =
+        readable.kind === "tapback"
+          ? await tellScoutAboutTapback({
+              space_id: space.id,
+              sender_phone: readable.senderPhone,
+              tapback: readable.tapback,
+              message_text: await findText(space, readable.targetId, recent),
+              sent_at: message.timestamp.toISOString(),
+            })
+          : await askScout({
+              space_id: space.id,
+              sender_phone: readable.senderPhone,
+              text: readable.text,
+              sent_at: message.timestamp.toISOString(),
+              participant_phones: await listParticipants(space, message),
+              photo: readable.photo ? await toJpeg(await readable.photo.read()) : null,
+              message_id: message.id,
+            });
       for (const action of actions) {
         await perform(space, action, recent);
       }
@@ -113,16 +123,35 @@ class RecentMessages {
   }
 }
 
-function readForScout(space: Space, message: Message): ScoutMessage | Skipped {
+function readForScout(space: Space, message: Message): ScoutMessage | ScoutTapback | Skipped {
   if (message.direction === "outbound") return { skipReason: "scout's own message" };
   if (!message.sender) return { skipReason: "no sender" };
   if (isLocalDirectMessage(space)) {
     return { skipReason: "a private chat with scout's local account" };
   }
-  // Reactions, typing indicators, and the like aren't for scout.
+  const senderPhone = message.sender.id;
+  if (message.content.type === "reaction") {
+    const { emoji, target } = message.content;
+    return { kind: "tapback", senderPhone, tapback: tapbackNamed(emoji) ?? emoji, targetId: target.id };
+  }
+  // Typing indicators, voice memos and the like aren't for scout.
   const parts = readableParts(message.content);
   if (!parts) return { skipReason: `nothing scout can read (${message.content.type})` };
-  return { ...parts, senderPhone: message.sender.id };
+  return { kind: "message", ...parts, senderPhone };
+}
+
+// The words of the message a tapback is on, from the messages the relay
+// remembers or else from the line itself. Null if neither has them.
+async function findText(space: Space, messageId: string, recent: RecentMessages): Promise<string | null> {
+  let message = recent.find(messageId);
+  if (!message) {
+    try {
+      message = await space.getMessage(messageId);
+    } catch (error) {
+      if (!(error instanceof UnsupportedError)) throw error;
+    }
+  }
+  return message?.content.type === "text" ? message.content.text : null;
 }
 
 // In local mode the bridge runs on scout's own Apple ID, which exists only to

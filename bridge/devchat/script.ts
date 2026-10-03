@@ -25,6 +25,7 @@ type StepSource = { line: number; source: string };
 export type Step = StepSource &
   (
     | { kind: "say"; member: string; text: string }
+    | { kind: "react"; member: string; tapback: Tapback; target: string }
     | { kind: "photo"; member: string; path: string }
     | Expectation
   );
@@ -47,6 +48,8 @@ const STEP_PATTERNS = {
   from: /^from\s+(\S+)$/,
   say: /^(\w+):\s*(.+)$/,
   photo: /^(\w+)\s+photo\s+(.+)$/,
+  // The target is "scout.last" or quoted words from one of scout's messages.
+  react: /^(\w+)\s+react\s+(\S+)\s+(scout\.last|".*")$/,
   expectQuiet: /^expect\s+scout\s+quiet$/,
   expectTapback: /^expect\s+scout\s+reacted\s+(\S+)$/,
   expectReply: /^expect\s+scout\s+~\s+(".*")$/,
@@ -78,11 +81,8 @@ export async function runScript(
 ): Promise<boolean> {
   let latestReplies: ChatEntry[] = [];
   for (const step of script.steps) {
-    if (step.kind === "say" || step.kind === "photo") {
-      const exchange =
-        step.kind === "say"
-          ? await chat.say(step.member, step.text)
-          : await chat.sendPhoto(step.member, await readPhoto(step.path));
+    if (step.kind === "say" || step.kind === "react" || step.kind === "photo") {
+      const exchange = await send(chat, step);
       report({ kind: "exchange", exchange });
       if (exchange.outcome.kind === "failed") return false;
       latestReplies = exchange.replies;
@@ -95,6 +95,19 @@ export async function runScript(
     if (!result.passed) return false;
   }
   return true;
+}
+
+function send(chat: DevChat, step: Step): Promise<Exchange> {
+  switch (step.kind) {
+    case "say":
+      return chat.say(step.member, step.text);
+    case "react":
+      return chat.react(step.member, step.target, step.tapback);
+    case "photo":
+      return readPhoto(step.path).then((photo) => chat.sendPhoto(step.member, photo));
+    default:
+      throw new Error(`line ${step.line} doesn't send anything`);
+  }
 }
 
 export function checkExpectation(expectation: Expectation, context: CheckContext): CheckResult {
@@ -143,6 +156,15 @@ function readLine(script: Script, at: StepSource, scriptFolder: string): void {
     const [, path, matcher, value] = match as [string, string, "=" | "~", string];
     const expected = matcher === "=" ? readJson(value) : readQuoted(value);
     script.steps.push({ ...at, kind: "expect-state", path, matcher, expected });
+  } else if ((match = source.match(STEP_PATTERNS.react))) {
+    const [, name, tapback, target] = match as [string, string, string, string];
+    script.steps.push({
+      ...at,
+      kind: "react",
+      member: readMember(script, name),
+      tapback: readTapback(tapback),
+      target: target === "scout.last" ? target : readQuoted(target),
+    });
   } else if ((match = source.match(STEP_PATTERNS.photo))) {
     const member = readMember(script, match[1]!);
     script.steps.push({ ...at, kind: "photo", member, path: resolve(scriptFolder, match[2]!) });

@@ -1,7 +1,8 @@
-"""Reading votes from plain texts and deciding a poll's winner.
+"""Reading votes from plain texts and tapbacks, and deciding a poll's winner.
 
 SMS has no buttons, so members vote by replying with a number or an option's
-name. Parsing is deliberately strict: "tulum looks pricey" is chatter, not a
+name. On iMessage, each option is its own message, so a 👍 on one is a vote
+too. Parsing is deliberately strict: "tulum looks pricey" is chatter, not a
 vote. Anything looser goes to the agent, which can record a vote by tool.
 """
 
@@ -71,14 +72,30 @@ def count_votes(poll: Poll) -> list[int]:
     return counts
 
 
-def format_poll(options: list[DestinationOption]) -> str:
-    lines = ["🗳️ Where should we go? Reply with a number:"]
-    for number, option in enumerate(options, start=1):
-        lines.append(
+def format_poll(options: list[DestinationOption]) -> list[str]:
+    """The poll as separate messages: a question, then one per option, so
+    members can vote with a tapback on the option they want."""
+    return [
+        "🗳️ Where should we go? Reply with a number, or 👍 your pick:",
+        *(
             f"{number}. {option.name} (~${option.estimated_cost_per_person_usd:,}"
             f"/person est.): {option.reason}"
-        )
-    return "\n".join(lines)
+            for number, option in enumerate(options, start=1)
+        ),
+    ]
+
+
+def option_in_poll_message(text: str, option_names: list[str]) -> int | None:
+    """Which option one of format_poll's option messages is about, as a
+    0-based index, or None for any other message."""
+    match = re.match(r"(\d+)\. ", text)
+    if match is None:
+        return None
+    index = int(match.group(1)) - 1
+    if not 0 <= index < len(option_names):
+        return None
+    # The name check keeps a tapback on some other numbered list from voting.
+    return index if text[match.end() :].startswith(option_names[index]) else None
 
 
 def format_result(result: PollResult, voter_count: int) -> str:

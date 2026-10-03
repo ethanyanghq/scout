@@ -40,14 +40,33 @@ export function scoutUrl(): string {
   return process.env.SCOUT_URL ?? DEFAULT_SCOUT_URL;
 }
 
-export async function askScout(text: IncomingText): Promise<ScoutAction[]> {
-  const response = await fetch(`${scoutUrl()}/messages`, {
+// A tapback (or other reaction) a member added to a message.
+export type IncomingTapback = {
+  space_id: string;
+  sender_phone: string;
+  // A tapback's name ("like"), or the emoji of any other reaction.
+  tapback: string;
+  // The words of the message it's on: a poll option's text says which option.
+  message_text: string | null;
+  sent_at: string;
+};
+
+export function askScout(text: IncomingText): Promise<ScoutAction[]> {
+  return postToScout("/messages", text);
+}
+
+export function tellScoutAboutTapback(tapback: IncomingTapback): Promise<ScoutAction[]> {
+  return postToScout("/reactions", tapback);
+}
+
+async function postToScout(path: string, body: object): Promise<ScoutAction[]> {
+  const response = await fetch(`${scoutUrl()}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(text),
+    body: JSON.stringify(body),
   });
   if (!response.ok) {
-    throw new Error(`scout returned ${response.status}: ${await response.text()}`);
+    throw new Error(`scout ${path} returned ${response.status}: ${await response.text()}`);
   }
   const { actions } = (await response.json()) as { actions: ScoutAction[] };
   return actions;

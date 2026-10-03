@@ -6,12 +6,19 @@ store, polls, and summaries are all real.
 
 from datetime import date, datetime
 
-from scout.conversation import INTRODUCTION, SNAG_REPLY, handle_message
+from scout.conversation import (
+    INTRODUCTION,
+    SNAG_REPLY,
+    handle_message,
+    handle_reaction,
+)
 from scout.outgoing import React, Say, Tapback
 from scout.places import Coordinates, Place
+from scout.polls import format_poll
 from scout.trip import (
     DestinationOption,
     IncomingMessage,
+    IncomingReaction,
     MessagePhoto,
     PendingReceipt,
     PreferenceUpdate,
@@ -345,3 +352,73 @@ def test_numbers_are_just_chat_once_a_place_is_picked(store):
 
     assert replies == []
     assert agent.messages_seen == []
+
+
+def tapback(store, sender, on_text, kind="like"):
+    reaction = IncomingReaction(
+        space_id=SPACE,
+        sender_phone=sender,
+        tapback=kind,
+        message_text=on_text,
+        sent_at=datetime(2026, 10, 2, 9, 0),
+    )
+    return handle_reaction(reaction, store)
+
+
+POLL_QUESTION, TULUM_OPTION, SAN_JUAN_OPTION, MIAMI_OPTION = format_poll(OPTIONS)
+
+
+def test_a_thumbs_up_on_a_poll_option_counts_as_a_vote(store):
+    start_voting(store)
+
+    replies = tapback(store, LEO, SAN_JUAN_OPTION)
+
+    assert store.get_trip(SPACE).open_poll.votes == {LEO: 1}
+    assert said(replies) == ["Got it, …0002 → San Juan, Puerto Rico (1 of 3 voted)"]
+
+
+def test_a_heart_on_a_poll_option_counts_as_a_vote(store):
+    start_voting(store)
+
+    tapback(store, MAYA, TULUM_OPTION, kind="love")
+
+    assert store.get_trip(SPACE).open_poll.votes == {MAYA: 0}
+
+
+def test_a_laugh_on_a_poll_option_is_not_a_vote(store):
+    start_voting(store)
+
+    replies = tapback(store, LEO, MIAMI_OPTION, kind="laugh")
+
+    assert replies == []
+    assert store.get_trip(SPACE).open_poll.votes == {}
+
+
+def test_a_thumbs_up_on_the_poll_question_is_not_a_vote(store):
+    start_voting(store)
+
+    assert tapback(store, LEO, POLL_QUESTION) == []
+    assert store.get_trip(SPACE).open_poll.votes == {}
+
+
+def test_a_thumbs_up_once_the_poll_is_closed_changes_nothing(store):
+    choose_san_juan(store)
+
+    assert tapback(store, LEO, TULUM_OPTION) == []
+    assert store.get_trip(SPACE).destination == "San Juan, Puerto Rico"
+
+
+def test_a_tapback_in_a_chat_without_a_trip_is_ignored(store):
+    assert tapback(store, LEO, TULUM_OPTION) == []
+    assert store.get_trip(SPACE) is None
+
+
+def test_the_last_tapback_vote_closes_the_poll(store):
+    start_voting(store)
+    tapback(store, MAYA, SAN_JUAN_OPTION)
+    tapback(store, LEO, SAN_JUAN_OPTION)
+
+    replies = tapback(store, PRIYA, TULUM_OPTION)
+
+    assert store.get_trip(SPACE).destination == "San Juan, Puerto Rico"
+    assert said(replies)[0].startswith("🎉 Poll closed! San Juan, Puerto Rico wins")

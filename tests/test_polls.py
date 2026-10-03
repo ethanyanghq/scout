@@ -1,6 +1,12 @@
 import pytest
 
-from scout.polls import decide_winner, format_poll, format_result, parse_vote
+from scout.polls import (
+    decide_winner,
+    format_poll,
+    format_result,
+    option_in_poll_message,
+    parse_vote,
+)
 from scout.trip import DestinationOption, Poll
 
 TULUM = DestinationOption("Tulum, Mexico", 900, "Beaches and cenotes")
@@ -65,11 +71,34 @@ def test_no_winner_when_nobody_voted():
     assert decide_winner(Poll(id=1, options=OPTIONS, votes={})) is None
 
 
-def test_poll_lists_numbered_options_with_estimated_prices():
-    text = format_poll(OPTIONS)
+def test_poll_sends_each_option_as_its_own_numbered_message():
+    messages = format_poll(OPTIONS)
 
-    assert "1. Tulum, Mexico (~$900/person est.): Beaches and cenotes" in text
-    assert "3. Miami, Florida" in text
+    assert len(messages) == 4
+    assert messages[0].startswith("🗳️ Where should we go?")
+    assert messages[1] == "1. Tulum, Mexico (~$900/person est.): Beaches and cenotes"
+    assert messages[3].startswith("3. Miami, Florida")
+
+
+def test_an_option_message_says_which_option_it_is():
+    names = [option.name for option in OPTIONS]
+
+    assert option_in_poll_message(format_poll(OPTIONS)[2], names) == 1
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "🗳️ Where should we go? Reply with a number, or 👍 your pick:",
+        "2. Lote 23 (food park, 4 min walk)",
+        "4. Cancún, Mexico (~$700/person est.): Cheap flights",
+        "lol san juan",
+    ],
+)
+def test_other_messages_are_no_poll_option(text):
+    names = [option.name for option in OPTIONS]
+
+    assert option_in_poll_message(text, names) is None
 
 
 def test_tie_announcement_explains_the_cost_tiebreak():

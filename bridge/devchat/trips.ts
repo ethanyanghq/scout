@@ -1,25 +1,25 @@
 // The scout service's developer endpoints: start a chat's trip partway
-// through the journey, show it, or reset it (src/scout/dev_endpoints.py).
+// through the journey, show it or its latest messages, or reset it
+// (src/scout/dev_endpoints.py).
 
 import { scoutUrl } from "../scout";
 
 export const SEED_STAGES = ["poll-open", "destination-chosen"] as const;
 export type SeedStage = (typeof SEED_STAGES)[number];
 
-// The parts of a trip the console prints. showTrip returns all of it.
-export type TripSummary = {
-  destination: string | null;
-  dates: { start: string; end: string } | null;
-  open_poll: { options: { name: string; estimated_cost_per_person_usd: number }[] } | null;
-};
+// One message from the chat log. A sender of null is scout.
+export type LoggedMessage = { sender_phone: string | null; text: string };
 
 export async function seedTrip(
   chatId: string,
   stage: SeedStage,
   members: { phone: string; name: string }[],
-): Promise<TripSummary> {
-  const trip = await callDevEndpoint("POST", `${tripPath(chatId)}/seed`, { stage, members });
-  return trip as TripSummary;
+): Promise<void> {
+  await callDevEndpoint("POST", `${tripPath(chatId)}/seed`, { stage, members });
+}
+
+export async function showMessages(chatId: string): Promise<LoggedMessage[]> {
+  return (await callDevEndpoint("GET", `${tripPath(chatId)}/messages`)) as LoggedMessage[];
 }
 
 export function showTrip(chatId: string): Promise<unknown> {

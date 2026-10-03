@@ -13,11 +13,11 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 
 from scout.agent import ScoutAgent
-from scout.conversation import handle_message
+from scout.conversation import handle_message, handle_reaction
 from scout.dev_endpoints import create_dev_router
 from scout.outgoing import Link, Outgoing, React, Say
 from scout.outside_services import connect_outside_services
-from scout.trip import IncomingMessage, MessagePhoto
+from scout.trip import IncomingMessage, IncomingReaction, MessagePhoto
 from scout.trip_store import TripStore
 
 # Only the bridge on this machine should reach scout, never the internet.
@@ -43,6 +43,16 @@ class IncomingText(BaseModel):
     participant_phones: list[str] = []
     photo: IncomingPhoto | None = None
     message_id: str | None = None
+
+
+class IncomingTapback(BaseModel):
+    space_id: str
+    sender_phone: str
+    # A tapback's name ("like"), or the emoji of any other reaction.
+    tapback: str
+    # The words of the message it's on, or None if the bridge can't find them.
+    message_text: str | None
+    sent_at: datetime
 
 
 class Actions(BaseModel):
@@ -72,6 +82,11 @@ def create_app(store: TripStore, agent: ScoutAgent) -> FastAPI:
             message_id=incoming.message_id,
         )
         return _as_actions(handle_message(message, store, agent))
+
+    @app.post("/reactions")
+    def receive_reaction(incoming: IncomingTapback) -> Actions:
+        reaction = IncomingReaction(**incoming.model_dump())
+        return _as_actions(handle_reaction(reaction, store))
 
     app.include_router(create_dev_router(store))
     return app

@@ -11,6 +11,9 @@ from scout.trip import Trip
 from scout.trip_seeds import SeedMember, SeedStage, seed_trip
 from scout.trip_store import TripStore
 
+# Enough to see what scout said when a chat was seeded, or lately.
+RECENT_MESSAGE_COUNT = 30
+
 
 class SeededMember(BaseModel):
     phone: str
@@ -42,6 +45,14 @@ def create_dev_router(store: TripStore) -> APIRouter:
         if trip is None:
             raise HTTPException(404, f"Chat {space_id} has no trip.")
         return trip
+
+    @router.get("/{space_id}/messages")
+    def show_messages(space_id: str) -> list[dict]:
+        """The chat's latest messages, oldest first. A sender of None is scout."""
+        return [
+            {"sender_phone": logged.sender_phone, "text": logged.text}
+            for logged in store.recent_messages(space_id, RECENT_MESSAGE_COUNT)
+        ]
 
     @router.delete("/{space_id}", status_code=204)
     def reset(space_id: str) -> Response:
