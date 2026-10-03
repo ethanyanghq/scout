@@ -6,6 +6,7 @@
 // this machine, so scout needs no public URL.
 
 import { askScout, toJpeg } from "./scout";
+import { logOutcome, secondsSince, type Skipped } from "./trace";
 
 const LINQ_API_URL = "https://api.linqapp.com/api/partner/v3";
 const WEBHOOK_PORT = 8788;
@@ -51,11 +52,19 @@ export async function relayLinqGroupMessages(apiKey: string): Promise<void> {
   // Messages are handled one at a time, on purpose: scout finishes replying to
   // one text before it reads the next, so its view of the trip is never stale.
   for await (const event of events) {
-    if (handledEventIds.has(event.event_id)) continue;
+    const startedAt = performance.now();
+    if (handledEventIds.has(event.event_id)) {
+      logOutcome({ id: event.event_id, chatId: null, kind: "skipped", reason: "repeat delivery" });
+      continue;
+    }
     handledEventIds.add(event.event_id);
     const message = readGroupMessage(event);
-    if (!message) continue;
+    if ("skipReason" in message) {
+      logOutcome({ id: event.event_id, chatId: null, kind: "skipped", reason: message.skipReason });
+      continue;
+    }
 
+    const outcome = { id: event.event_id, chatId: message.chatId };
     try {
       const replies = await askScout({
         space_id: message.chatId,
@@ -68,21 +77,30 @@ export async function relayLinqGroupMessages(apiKey: string): Promise<void> {
       for (const reply of replies) {
         await sendText(apiKey, message.chatId, reply);
       }
+      logOutcome({
+        ...outcome,
+        kind: "handled",
+        replyCount: replies.length,
+        seconds: secondsSince(startedAt),
+      });
     } catch (error) {
       // Keep listening: one failed message shouldn't take scout offline.
-      console.error(`Couldn't handle Linq event ${event.event_id} in ${message.chatId}:`, error);
+      logOutcome({ ...outcome, kind: "failed", error });
     }
   }
 }
 
-// Returns null for anything scout shouldn't answer.
-export function readGroupMessage(event: LinqEvent): GroupMessage | null {
-  if (event.event_type !== "message.received") return null;
+export function readGroupMessage(event: LinqEvent): GroupMessage | Skipped {
+  if (event.event_type !== "message.received") {
+    return { skipReason: `not a new message (${event.event_type})` };
+  }
   const message = event.data as ReceivedMessage;
-  if (message.direction !== "inbound" || message.sender_handle.is_me) return null;
+  if (message.direction !== "inbound" || message.sender_handle.is_me) {
+    return { skipReason: "scout's own message" };
+  }
   // Linq's free line only answers people who texted it privately first, so
   // every member says hi to scout one-on-one. Those hellos mustn't start trips.
-  if (!message.chat.is_group) return null;
+  if (!message.chat.is_group) return { skipReason: "a private chat, not a group" };
 
   const text = message.parts
     .flatMap((part) => (part.type === "text" ? [part.value] : []))
@@ -91,7 +109,7 @@ export function readGroupMessage(event: LinqEvent): GroupMessage | null {
     (part) => part.type === "media" && part.mime_type.startsWith("image/"),
   );
   // Stickers, voice memos and the like aren't for scout.
-  if (!text && !photo) return null;
+  if (!text && !photo) return { skipReason: "nothing scout can read (no text or photo)" };
 
   return {
     chatId: message.chat.id,
