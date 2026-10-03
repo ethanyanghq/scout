@@ -17,6 +17,10 @@ import { localIMessage } from "@spectrum-ts/imessage-local";
 
 const SCOUT_URL = process.env.SCOUT_URL ?? "http://127.0.0.1:8787";
 
+// scout only plans in group chats. Someone who texts it one-on-one gets this
+// once, so they know what to do, and nothing they send reaches scout.
+const DIRECT_MESSAGE_REPLY = "Hey! Add me to a group chat and say hi to get started 👋";
+
 type IncomingText = {
   space_id: string;
   sender_phone: string;
@@ -28,6 +32,9 @@ type IncomingText = {
 const app = await connectToIMessage(process.env.IMESSAGE_MODE ?? "local");
 console.log(`scout bridge is listening for texts, forwarding to ${SCOUT_URL}`);
 
+// One-on-one chats that already got DIRECT_MESSAGE_REPLY since the bridge started.
+const answeredDirectMessages = new Set<string>();
+
 // Messages are handled one at a time, on purpose: scout finishes replying to
 // one text before it reads the next, so its view of the trip is never stale.
 for await (const [space, message] of app.messages) {
@@ -36,6 +43,14 @@ for await (const [space, message] of app.messages) {
   if (message.content.type !== "text" || !message.sender) continue;
 
   try {
+    if (!isGroupChat(space)) {
+      if (!answeredDirectMessages.has(space.id)) {
+        answeredDirectMessages.add(space.id);
+        await space.send(DIRECT_MESSAGE_REPLY);
+      }
+      continue;
+    }
+
     const replies = await askScout({
       space_id: space.id,
       sender_phone: message.sender.id,
@@ -77,6 +92,12 @@ async function askScout(text: IncomingText): Promise<string[]> {
   }
   const { replies } = (await response.json()) as { replies: string[] };
   return replies;
+}
+
+function isGroupChat(space: Space): boolean {
+  if (localIMessage.is(space)) return localIMessage(space).type === "group";
+  if (imessage.is(space)) return imessage(space).type === "group";
+  return false;
 }
 
 // Lets scout count group members who haven't texted yet. Only cloud group

@@ -52,9 +52,17 @@ Add `--verbose` to see each tool scout calls.
 
 ## Run it on iMessage
 
-1. Start the Python service: `uv run scout-server` (listens on `127.0.0.1:8787`).
-2. Create `bridge/.env` with one of these:
-   - Local mode, which runs on this Mac's Messages account. It needs Full Disk Access for your terminal, and no Photon plan. See [scout-imessage-groups.md](scout-imessage-groups.md).
+scout needs its own iMessage account. In local mode that's an Apple ID signed into Messages on a Mac, ideally in a separate macOS user called "scout" so it never sees your own chats. The Mac has to stay on and awake, with the scout user logged in (switch users from the menu bar; don't log out).
+
+1. In the scout user, sign into Messages with scout's Apple ID and set **Messages → Settings → Share Name and Photo** to "scout".
+2. Give Terminal Full Disk Access (**System Settings → Privacy & Security**) so the bridge can read Messages.
+3. Install [uv](https://docs.astral.sh/uv/) and [Bun](https://bun.sh), clone this repo, then run `uv sync` and `cd bridge && bun install`.
+4. Create `.env` in the repo root with your Anthropic key:
+   ```
+   ANTHROPIC_API_KEY=sk-ant-...
+   ```
+5. Create `bridge/.env` with one of these:
+   - Local mode, which runs on this Mac's Messages account and needs no Photon plan. See [scout-imessage-groups.md](scout-imessage-groups.md).
      ```
      IMESSAGE_MODE=local
      ```
@@ -64,8 +72,10 @@ Add `--verbose` to see each tool scout calls.
      PHOTON_PROJECT_ID=...
      PHOTON_PROJECT_SECRET=...
      ```
-3. Start the bridge: `cd bridge && bun start`.
-4. Add scout's number or Apple ID to a group text and say hi.
+6. Run `./start.sh`. It starts the Python service, waits for it, then starts the bridge, and keeps the Mac awake until you press Ctrl-C. On a MacBook, closing the lid still sleeps it: leave the lid open, or run `sudo pmset -a disablesleep 1` (and `sudo pmset -a disablesleep 0` afterwards).
+7. Add scout's Apple ID or number to a group text and say "hi scout".
+
+scout only plans in group chats. Anyone who texts it one-on-one gets one reply asking them to add it to a group; nothing else they send reaches scout.
 
 ## Development
 
