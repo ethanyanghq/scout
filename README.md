@@ -27,7 +27,7 @@ i never book anything or touch real money. i find the links, you book. and i sta
 
 ```
 iMessage ⇄ Photon (spectrum-ts) ⇄ bridge/  ──HTTP──▶  src/scout/  ⇄ Claude API
-                                  TypeScript          Python         + SQLite
+         ⇄ or a Linq line       ⇄ TypeScript          Python         + SQLite
                                                                      + Nessie
 ```
 
@@ -98,8 +98,15 @@ Add `--verbose` to see each tool I call.
      PHOTON_PROJECT_ID=...
      PHOTON_PROJECT_SECRET=...
      ```
+   - A Linq line, which needs no Apple ID. Get a free line and key with `npm i -g @linqapp/cli && linq signup`.
+     ```
+     IMESSAGE_MODE=linq
+     LINQ_API_KEY=...
+     ```
 3. Start the bridge: `cd bridge && bun start`.
+   - In Linq mode, also run `linq webhooks listen --forward-to http://127.0.0.1:8788/linq-events` in another terminal. It relays Linq's events to the bridge.
 4. Add my number or Apple ID to a group text and say hi.
+   - On Linq's free line, everyone in the group texts my number privately first (`linq contacts add` each of them, up to 20). I ignore those private texts.
 
 ## Development
 
@@ -107,5 +114,6 @@ Add `--verbose` to see each tool I call.
 uv run pytest                  # tests
 uv run ruff check src tests    # lint
 uv run ruff format src tests   # format
+cd bridge && bun test          # bridge tests
 cd bridge && bun run typecheck # type-check the bridge
 ```
