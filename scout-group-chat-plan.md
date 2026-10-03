@@ -3,7 +3,7 @@
 | | |
 | --- | --- |
 | **Goal** | scout lives in real iMessage group chats through a Linq line running inside Photon's Spectrum SDK. Teammates and their AI agents build and test group chat features, including tapbacks, threaded replies and link cards, without phones, and the demo group can be set up in minutes. |
-| **Status** | Milestones 1 and 2 are built. What's left of them needs a real Linq line, phones or a Claude key: recording real webhooks, testing the free line, running the journey in a real group, and running the two Claude scripts. Milestone 3 isn't started. Last updated October 3, 2026. |
+| **Status** | Milestones 1 and 2 are built. What's left of them needs a real Linq line, phones or a Claude key: recording real webhooks, testing the free line, running the journey in a real group, and running the two Claude scripts. Milestone 3's commands are built, but only tested against a stand-in for Linq's API: checking them on the demo line and rehearsing the on-stage moment need the line and the phones. Last updated October 3, 2026. |
 | **Design** | [scout-imessage-groups.md](scout-imessage-groups.md): why Linq, how it plugs into Spectrum, the developer console |
 | **How to use it** | [DEVELOPING.md](DEVELOPING.md): what exists today, and how to test without phones |
 | **Rest of the demo** | [TODO.md](TODO.md) |
@@ -65,12 +65,12 @@ The console plugs into the bridge's existing Spectrum loop, so milestone 1 doesn
 Shipped when the demo phones can be set up for scout in a few minutes, a rehearsal group can be made and reset with one command each, and the on-stage "add scout" moment has been rehearsed. This milestone doesn't depend on 1 or 2.
 
 - [ ] Check on the demo line that Linq's API can create a group chat and send a contact card. The commands below depend on both.
-- [ ] A demo roster: each demo phone's persona and number (Maya, Leo, Jordan, Priya; at least 3 phones besides scout, all on iMessage) in a git-ignored file. Real numbers are never committed.
-- [ ] A setup command (name not final): adds every roster phone as a contact on the demo line, prints scout's number for each phone to text once, and shows who has texted so far. It also sends scout's contact card in that private chat, so phones can save "scout" with its photo instead of showing a number.
-- [ ] A group command: for rehearsals, creates a fresh group of every roster phone plus scout through Linq, so nobody builds groups by hand.
-- [ ] A reset command: clears the demo group's trip, so the journey can rerun in the same group without deleting `scout.db`.
+- [x] A demo roster: each demo phone's persona and number (Maya, Leo, Jordan, Priya; at least 3 phones besides scout, all on iMessage) in a git-ignored file. Real numbers are never committed.
+- [x] A setup command (`bun run demo setup`): adds every roster phone as a contact on the demo line, prints scout's number for each phone to text once, and shows who has texted so far. It also sends scout's contact card in that private chat, so phones can save "scout" with its photo instead of showing a number.
+- [x] A group command (`bun run demo group`): for rehearsals, creates a fresh group of every roster phone plus scout through Linq, so nobody builds groups by hand.
+- [x] A reset command (`bun run demo reset`): clears the demo group's trip, so the journey can rerun in the same group without deleting `scout.db`.
 - [ ] Rehearse the on-stage moment: a member adds scout's number to a group of the demo phones, and scout introduces itself. On stage this is done by hand, not with the group command, because it's the moment the demo shows.
-- [ ] DEVELOPING.md's "Set up the demo group" section uses the new commands.
+- [x] DEVELOPING.md's "Set up the demo group" section uses the new commands.
 
 ## Still open
 

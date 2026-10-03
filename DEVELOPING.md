@@ -23,7 +23,7 @@ Several tools are planned but not built yet. **If a tool is marked planned, it d
 | Seeded stages and resetting one chat | Built | |
 | Tapbacks, threaded replies and link cards, with console previews | Built, but only tested against a stand-in for Linq's API | |
 | Message effects (confetti) | Planned (design doc, events in, actions out) | Plain text |
-| Demo group commands | Planned (plan, milestone 3) | [Set up the demo group by hand](#set-up-the-demo-group) |
+| Demo group commands (`bun run demo`) | Built, but only tested against a stand-in for Linq's API | |
 
 When a pull request ships one of these, it updates this table and the instructions below.
 
@@ -221,11 +221,20 @@ scout sends a link as its own action (`Link` in `outgoing.py`), so it's always a
 
 ## Set up the demo group
 
-Until the demo group commands exist (plan, milestone 3):
+The demo runs on one teammate's Linq line, from the demo Mac. `bun run demo` gets the demo phones (Maya, Leo, Jordan, Priya) ready and makes rehearsal groups. **These commands send real iMessages to the phones on the roster**, so only run them on the demo line, when you mean to.
 
-1. Pick one teammate's line as the demo line, and run the service, bridge and relay on the demo Mac.
-2. Add every demo phone (Maya, Leo, Jordan, Priya) with `linq contacts add`, and have each one text scout once.
-3. Make a group of the demo phones on iMessage, and have one member add scout's number.
-4. To rehearse again in the same group, reset its trip: `cd bridge && bun run devchat reset --chat <chat ID>`. The chat ID is in the bridge's log lines.
+1. Put each demo phone's persona and number in `bridge/demo/roster.json` (copy `bridge/demo/roster.example.json`). It's git-ignored: never commit the real numbers. It needs at least 3 phones besides scout, all on iMessage.
+2. Set `LINQ_API_KEY` in `bridge/.env` to the demo line's key, and log the Linq CLI into the same line.
+3. From `bridge/`, run `bun run demo setup`. It adds every phone as a contact (on a shared line, which only answers its contacts), creates scout's contact card if the line has none, and prints scout's number with who has texted it so far. Each phone that has texted gets a hi from scout and scout's contact card, so the phone can save "scout" instead of showing a number.
+4. From each phone marked ✗, text scout's number once, then run `bun run demo setup` again until every phone has a ✓. It's safe to rerun: scout says hi to each phone once, and sends the card again each run (Linq suggests at most once a day, since nobody can tell whether a phone saved it).
+5. Start everything with `bun run dev`.
 
-Never commit the demo phones' real numbers.
+Then rehearse:
+
+- `bun run demo group` makes a fresh group of every phone plus scout, named "Rehearsal 1", "Rehearsal 2" and so on. Any member texts the group to get scout's introduction.
+- `bun run demo reset` clears the trip of the newest group of demo phones on scout's line, whether the group command made it or a member did, so the journey can run again in the same group. It needs the scout service running. To reset another chat, use `bun run devchat reset --chat <chat ID>`.
+
+On stage, a member makes the group of demo phones and adds scout's number by hand, because that's the moment the demo shows. Don't use the group command for it.
+
+- A new contact card is named "scout" with no photo. Add the photo in Linq's dashboard (Contact cards). Linq takes a moment to apply a new card, so `setup` sends it on the next run.
+- `group` stops if a phone hasn't texted scout yet, since Linq won't let scout add it. It also stops if Linq sends to an existing unnamed group of the same phones instead of making a new one. Name that group in Messages, then run it again.
