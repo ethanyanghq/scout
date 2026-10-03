@@ -99,18 +99,18 @@ function isPhoto(content: Content): content is PhotoAttachment {
   return content.type === "attachment" && content.mimeType.startsWith("image/");
 }
 
-// Lets scout count group members who haven't texted yet. Only cloud group
-// chats can list members; everywhere else scout learns who's in the group as
-// people text, so an empty list is expected there.
+// Lets scout count group members who haven't texted yet. Cloud group chats and
+// the developer console can list members. Elsewhere scout learns who's in the
+// group as people text, so an empty list is expected there.
 async function listParticipants(space: Space, message: Message): Promise<string[]> {
-  if (message.platform !== "imessage" || imessage(space).type !== "group") {
+  if (message.platform === "imessage" && imessage(space).type !== "group") {
     return [];
   }
   try {
     const members = await space.getMembers();
     return members.map((member) => member.id);
   } catch (error) {
-    // Photon's shared-pool lines can't list group members.
+    // Photon's shared-pool lines and local mode can't list group members.
     if (error instanceof UnsupportedError) return [];
     throw error;
   }
