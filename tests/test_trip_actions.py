@@ -4,6 +4,7 @@ import pytest
 
 from scout.nessie import NessieError, SandboxPayment
 from scout.outside_services import OutsideServices
+from scout.places import Coordinates, Place, PlacesError
 from scout.trip import (
     DateWindow,
     DestinationOption,
@@ -429,3 +430,116 @@ def test_a_dropped_receipt_is_never_logged(store):
 def test_a_receipt_total_must_be_more_than_zero(maya_actions):
     with pytest.raises(TripActionError):
         maya_actions.ask_to_confirm_receipt("Casa Brisa", None, 0)
+
+
+CONDADO = Coordinates(18.4574, -66.0745)
+TACO_SPOTS = [
+    Place("place-1", "Lote 23", Coordinates(18.4518, -66.0730), "$$", "Food park."),
+    Place("place-2", "Taco Bar", Coordinates(18.4580, -66.0750), "$", None),
+    Place("place-3", "Cocina", Coordinates(18.4560, -66.0700), None, "Patio."),
+]
+
+
+class FakePlaces:
+    """Stands in for Google Places.
+
+    Finding a spot ("Condado, San Juan") only knows Condado. Searching for a
+    vibe ("tacos in San Juan") returns `results`.
+    """
+
+    def __init__(self, results=TACO_SPOTS, is_down=False):
+        self.results = results
+        self.is_down = is_down
+        self.searches = []
+
+    def search(self, text_query, limit, near=None):
+        if self.is_down:
+            raise PlacesError("search didn't connect: timed out")
+        self.searches.append((text_query, near))
+        if " in " in text_query:
+            return self.results[:limit]
+        if text_query.startswith("Condado"):
+            return [Place("condado", "Condado", CONDADO, None, None)]
+        return []
+
+
+def actions_with(store, places):
+    return TripActions(store, SPACE, MAYA, OutsideServices(places=places))
+
+
+def test_nearby_places_are_posted_with_rough_walking_times(locked_in_actions, store):
+    maya_actions = actions_with(store, FakePlaces())
+
+    maya_actions.suggest_nearby_places("cozy tacos with outdoor seating", "Condado")
+
+    assert maya_actions.outbox == [
+        "📍 Near Condado:\n"
+        "1. Lote 23 · $$ · ~10 min walk\n"
+        "   Food park.\n"
+        "2. Taco Bar · $ · ~1 min walk\n"
+        "3. Cocina · ~8 min walk\n"
+        "   Patio."
+    ]
+
+
+def test_places_are_searched_near_the_spot_the_group_named(locked_in_actions, store):
+    places = FakePlaces()
+
+    actions_with(store, places).suggest_nearby_places("tacos", "Condado")
+
+    assert places.searches == [
+        ("Condado, San Juan, Puerto Rico", None),
+        ("tacos in San Juan, Puerto Rico", CONDADO),
+    ]
+
+
+def test_without_a_named_spot_places_come_from_the_whole_destination(
+    locked_in_actions, store
+):
+    maya_actions = actions_with(store, FakePlaces())
+
+    maya_actions.suggest_nearby_places("tacos", None)
+
+    assert maya_actions.outbox[0].startswith(
+        "📍 Near San Juan, Puerto Rico:\n1. Lote 23 · $$\n"
+    )
+
+
+def test_suggested_places_are_remembered_for_picking_one(locked_in_actions, store):
+    actions_with(store, FakePlaces()).suggest_nearby_places("tacos", "Condado")
+
+    assert store.get_trip(SPACE).place_suggestions == TACO_SPOTS
+
+
+def test_no_suggestions_before_a_destination_is_chosen(maya_actions, store):
+    with pytest.raises(TripActionError, match="hasn't picked a destination"):
+        actions_with(store, FakePlaces()).suggest_nearby_places("tacos", None)
+
+
+def test_no_suggestions_without_a_places_api_key(locked_in_actions):
+    with pytest.raises(TripActionError, match="place search isn't set up"):
+        locked_in_actions.suggest_nearby_places("tacos", None)
+
+
+def test_a_spot_that_cannot_be_found_is_reported(locked_in_actions, store):
+    places = FakePlaces()
+
+    with pytest.raises(TripActionError, match="couldn't find 'Narnia'"):
+        actions_with(store, places).suggest_nearby_places("tacos", "Narnia")
+
+
+def test_a_search_with_no_matches_is_reported(locked_in_actions, store):
+    with pytest.raises(TripActionError, match="no places matched"):
+        actions_with(store, FakePlaces(results=[])).suggest_nearby_places(
+            "igloo bar", None
+        )
+
+
+def test_a_places_outage_is_reported_instead_of_inventing_places(
+    locked_in_actions, store
+):
+    with pytest.raises(TripActionError, match="place search isn't working"):
+        actions_with(store, FakePlaces(is_down=True)).suggest_nearby_places(
+            "tacos", None
+        )
+    assert store.get_trip(SPACE).place_suggestions == []

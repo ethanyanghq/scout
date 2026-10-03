@@ -205,6 +205,35 @@ TOOL_DEFINITIONS = [
         },
     },
     {
+        "name": "suggest_nearby_places",
+        "description": (
+            "Post three real nearby places that fit what the group asked for, "
+            "with price level and a rough travel time from where they are."
+        ),
+        "strict": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "request": {
+                    "type": "string",
+                    "description": (
+                        "What they want, in search words, e.g. 'cozy taco "
+                        "restaurant with outdoor seating, not touristy'."
+                    ),
+                },
+                "near": _nullable(
+                    "string",
+                    (
+                        "Where they are, as they named it, e.g. 'Condado' or "
+                        "'Old San Juan'. Null if nobody said; ask if it matters."
+                    ),
+                ),
+            },
+            "required": ["request", "near"],
+            "additionalProperties": False,
+        },
+    },
+    {
         "name": "log_sender_expense",
         "description": (
             "Log a shared trip cost that the sender of the newest message paid. "
@@ -348,6 +377,10 @@ def run_tool(actions: TripActions, name: str, tool_input: dict[str, Any]) -> str
             return actions.post_itinerary(_to_itinerary(tool_input))
         case "send_booking_links":
             return actions.send_booking_links()
+        case "suggest_nearby_places":
+            return actions.suggest_nearby_places(
+                tool_input["request"], tool_input["near"]
+            )
         case "log_sender_expense":
             return actions.log_sender_expense(
                 _to_cents(tool_input["amount_usd"]), tool_input["description"]

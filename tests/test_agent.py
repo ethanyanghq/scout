@@ -4,6 +4,7 @@ from datetime import date, datetime
 from types import SimpleNamespace
 
 from scout.agent import ScoutAgent
+from scout.places import Coordinates, Place
 from scout.trip import (
     DateWindow,
     DestinationOption,
@@ -215,3 +216,21 @@ def test_shows_claude_a_receipt_waiting_for_confirmation(store):
 
     situation = situation_text(claude)
     assert "Receipt waiting for …0001 to confirm: Casa Brisa, $164" in situation
+
+
+def test_shows_claude_the_places_it_last_suggested(store):
+    trip, message = maya_says(store, "@scout how far is the second one?")
+    store.replace_place_suggestions(
+        SPACE,
+        [
+            Place("place-1", "Lote 23", Coordinates(18.45, -66.07), "$$", None),
+            Place("place-2", "La Factoría", Coordinates(18.46, -66.11), None, None),
+        ],
+    )
+    claude = ScriptedClaude(response("end_turn", text("About 15 minutes.")))
+
+    ScoutAgent(claude, store).respond(store.get_trip(SPACE), message)
+
+    assert "Places you last suggested:\n  1. Lote 23\n  2. La Factoría" in (
+        situation_text(claude)
+    )

@@ -9,6 +9,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 from scout.nessie import SandboxPayment
+from scout.places import Coordinates, Place
 from scout.trip import (
     DateWindow,
     DestinationOption,
@@ -100,6 +101,20 @@ CREATE TABLE IF NOT EXISTS pending_receipts (
     total_cents INTEGER NOT NULL
 );
 
+-- Only the latest suggestions are kept: they're what "2" or "the first one"
+-- refers to.
+CREATE TABLE IF NOT EXISTS place_suggestions (
+    space_id  TEXT NOT NULL REFERENCES trips (space_id),
+    position  INTEGER NOT NULL,
+    place_id  TEXT NOT NULL,
+    name      TEXT NOT NULL,
+    latitude  REAL NOT NULL,
+    longitude REAL NOT NULL,
+    price     TEXT,
+    summary   TEXT,
+    PRIMARY KEY (space_id, position)
+);
+
 CREATE TABLE IF NOT EXISTS chat_log (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     space_id     TEXT NOT NULL REFERENCES trips (space_id),
@@ -142,6 +157,7 @@ class TripStore:
                 expenses=_load_expenses(db, space_id),
                 settlements=_load_settlements(db, space_id),
                 pending_receipt=_load_pending_receipt(db, space_id),
+                place_suggestions=_load_place_suggestions(db, space_id),
             )
 
     def create_trip(self, space_id: str) -> None:
@@ -263,6 +279,28 @@ class TripStore:
     def clear_pending_receipt(self, space_id: str) -> None:
         with self._transaction() as db:
             db.execute("DELETE FROM pending_receipts WHERE space_id = ?", (space_id,))
+
+    def replace_place_suggestions(self, space_id: str, places: list[Place]) -> None:
+        with self._transaction() as db:
+            db.execute("DELETE FROM place_suggestions WHERE space_id = ?", (space_id,))
+            db.executemany(
+                "INSERT INTO place_suggestions (space_id, position, place_id, name, "
+                "latitude, longitude, price, summary) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                [
+                    (
+                        space_id,
+                        position,
+                        place.place_id,
+                        place.name,
+                        place.location.latitude,
+                        place.location.longitude,
+                        place.price,
+                        place.summary,
+                    )
+                    for position, place in enumerate(places)
+                ],
+            )
 
     def save_nessie_account(self, space_id: str, phone: str, account_id: str) -> None:
         with self._transaction() as db:
@@ -426,6 +464,23 @@ def _load_pending_receipt(
     if row is None:
         return None
     return PendingReceipt(row["payer_phone"], row["merchant"], row["total_cents"])
+
+
+def _load_place_suggestions(db: sqlite3.Connection, space_id: str) -> list[Place]:
+    rows = db.execute(
+        "SELECT * FROM place_suggestions WHERE space_id = ? ORDER BY position",
+        (space_id,),
+    ).fetchall()
+    return [
+        Place(
+            place_id=row["place_id"],
+            name=row["name"],
+            location=Coordinates(row["latitude"], row["longitude"]),
+            price=row["price"],
+            summary=row["summary"],
+        )
+        for row in rows
+    ]
 
 
 def _parse_date(value: str | None) -> date | None:

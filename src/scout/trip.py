@@ -5,6 +5,8 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from enum import StrEnum
 
+from scout.places import Place
+
 # Matches "@scout", "scout,", "Scout?" but not "scouting".
 SCOUT_MENTION = re.compile(r"\bscout\b", re.IGNORECASE)
 # Matches "$164", "$ 40", "164 dollars", "40 bucks", "12.50 usd".
@@ -175,6 +177,8 @@ class Trip:
     expenses: list[Expense]
     settlements: list[Settlement]
     pending_receipt: PendingReceipt | None
+    # The latest nearby places scout suggested, in the order it numbered them.
+    place_suggestions: list[Place]
 
     def find_member(self, phone: str) -> Member:
         for member in self.members:

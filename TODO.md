@@ -32,8 +32,9 @@ Everything still open, grouped by what it unblocks. Requirement IDs point to [sc
 
 ## Phase 2: still to build (P0)
 
-- [ ] On-trip discovery: 3 nearby options for a vibe, with travel time and price level (OT-1).
-- [ ] Work out the group's location from a named place, the lodging, or a shared location (OT-2).
+- [x] On-trip discovery: 3 nearby options for a vibe, with travel time and price level (OT-1).
+- [x] Work out the group's location from a place someone names (OT-2).
+- [ ] Use the lodging address on file, or a location a member shares (OT-2).
 - [ ] Send a directions link once the group picks (OT-3).
 - [ ] Create the shared trip album and text everyone the link (AL-1).
 - [ ] Add photos texted to scout or uploaded through the link (AL-2).
@@ -69,7 +70,7 @@ Everything still open, grouped by what it unblocks. Requirement IDs point to [sc
 - [ ] Nudge members who haven't shared preferences (PR-3).
 - [ ] Reuse polls for restaurants and activities (DS-4).
 - [ ] "@scout summary" for the whole trip (IT-4).
-- [ ] Opening hours and group size in recommendations (OT-4).
+- [ ] Opening hours and group size in recommendations (OT-4). Text Search's `openNow` filter is one field away.
 - [ ] .ics files and per-day calendar events (CAL-2, CAL-3), and updated links when plans change (CAL-4).
 - [ ] Album extras: auto-add with opt-in, late joiners, post-trip reminder, download (AL-3 to AL-5).
 - [ ] Private DMs with scout for sensitive constraints (GC-6).
