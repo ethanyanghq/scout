@@ -13,7 +13,7 @@
 
 ## 1. Summary
 
-scout is an AI agent that plans group outings and trips from inside the group chat itself. Anyone can add its phone number to an existing text thread, so there's no app to download and no one has to sign up for anything. The flagship use case is a friend group planning spring break: instead of a chaotic thread where ideas get buried and no one commits, scout collects each person's constraints (dates, budget, home city, must-dos), suggests destinations and day-by-day itineraries, runs polls so the group can vote, and keeps a running summary of what's been decided. Once the group decides, it texts a link that puts the trip on everyone's Google Calendar in one tap. During the trip it handles in-the-moment requests like "find us a cozy taco spot with outdoor seating nearby" and sends directions once the group picks. Once money starts moving, it tracks who paid for what (members can just text a photo of the receipt), splits shared costs, tells everyone who owes whom, and settles each payment in the chat ("@scout pay Leo") over a sandbox bank, Capital One's Nessie API. It also creates a shared trip album, adds everyone in the group, and collects the photos people take along the way.
+scout is an AI agent that plans group outings and trips from inside the group chat itself. Anyone can add its phone number to an existing text thread, so there's no app to download and no one has to sign up for anything. The flagship use case is a friend group planning spring break: instead of a chaotic thread where ideas get buried and no one commits, scout collects each person's constraints (dates, budget, home city, must-dos), suggests destinations and day-by-day itineraries, runs polls so the group can vote, and keeps a running summary of what's been decided. Once the group decides, it texts a link that puts the trip on everyone's Google Calendar in one tap. During the trip it handles in-the-moment requests like "find us a cozy taco spot with outdoor seating nearby" and sends directions once the group picks. Once money starts moving, it tracks who paid for what (members can just text a photo of the receipt), splits shared costs, tells everyone who owes whom, and settles each payment in the chat ("@scout pay Leo") over a sandbox bank, Capital One's Nessie API.
 
 ## 2. Problem
 
@@ -31,7 +31,6 @@ Existing tools don't fix this because they live outside the conversation. Travel
 | Zero onboarding | Adding a phone number to the thread is the entire setup. No app, no accounts, works on any phone. |
 | Stay useful during the trip | Answer vibe-based "where should we go right now" questions with nearby options and directions. |
 | Make money less awkward | Log shared expenses from normal messages and settle up with the fewest possible payments, paid right from the chat. |
-| Keep the trip's photos together | One shared album with everyone in it, so photos don't stay scattered across camera rolls. |
 
 ### Non-goals
 
@@ -58,9 +57,9 @@ The core journey follows one group from "we should go somewhere" to "everyone's 
 | 1. Add scout | A member adds scout's number to the existing group text. | Introduces itself and asks everyone for dates, budget, home city, and one must-have. |
 | 2. Share preferences | Members reply casually ("mar 13–20, ~$800, flying from boston"). | Extracts constraints, finds the date overlap, and posts a summary of where everyone landed. |
 | 3. Vote on a destination | Members vote on the options. | Suggests 3 destinations that fit everyone's dates and budget, runs the poll, announces the result, and breaks ties with cost or fit. Texts a link to add the trip to Google Calendar. |
-| 4. Get the itinerary | A member asks for a plan ("not too packed pls"). | Builds a day-by-day itinerary around the group's must-haves and sends booking links for flights and lodging. Creates a shared trip album and texts everyone the link. |
-| 5. Explore on the trip | A member asks for a vibe ("cozy, outdoor seating, not touristy"). Members add photos as the trip goes. | Returns 3 nearby options with walking time and price level, then sends directions once the group picks. Adds photos members upload or text to it into the album. |
-| 6. Settle up | Members mention what they paid ("I paid the airbnb, $1,240") or text a photo of the receipt. | Reads receipts, logs each expense, calculates the fewest payments to settle up, pays each one over the Nessie sandbox when the payer says "@scout pay Leo", and shows who still owes. Reminds everyone to add their last photos to the album. |
+| 4. Get the itinerary | A member asks for a plan ("not too packed pls"). | Builds a day-by-day itinerary around the group's must-haves and sends booking links for flights and lodging. |
+| 5. Explore on the trip | A member asks for a vibe ("cozy, outdoor seating, not touristy"). | Returns 3 nearby options with walking time and price level, then sends directions once the group picks. |
+| 6. Settle up | Members mention what they paid ("I paid the airbnb, $1,240") or text a photo of the receipt. | Reads receipts, logs each expense, calculates the fewest payments to settle up, pays each one over the Nessie sandbox when the payer says "@scout pay Leo", and shows who still owes. |
 
 scout also works for smaller plans with the same building blocks: a birthday dinner for eight, tacos before a concert, a ski weekend, or splitting a cabin rental.
 
@@ -130,17 +129,9 @@ Priorities: **P0** is required for the demo, **P1** is a stretch goal, and **P2*
 | CS-9 | Keep each receipt attached to its expense so anyone can view it when checking the balance. | P1 |
 | CS-10 | Convert receipts in other currencies (for example, pesos on a Tulum trip) into the group's home currency. | P2 |
 
-### 6.7 Shared trip album
+### 6.7 Shared trip album (cut)
 
-| ID | Requirement | Priority |
-|---|---|---|
-| AL-1 | When the destination is locked in, or when a member asks ("@scout make an album"), create a shared album for the trip and add every group member by texting them the link. Nobody needs an account to view or add photos. | P0 |
-| AL-2 | Members can add photos by uploading through the album link or by texting photos directly to scout. | P0 |
-| AL-3 | If the group opts in, photos sent in the group thread during the trip dates are added to the album automatically. Receipts are recognized and routed to cost-splitting instead of the album. Any member can remove a photo they added. | P1 |
-| AL-4 | Anyone who joins the group text later is added to the album automatically. | P1 |
-| AL-5 | After the trip, remind everyone to add their photos, and let any member download the full album. | P1 |
-| AL-6 | Organize photos by itinerary day so the album reads like the trip. | P2 |
-| AL-7 | Let members save the album into their own photo library (for example, Google Photos or iCloud Photos). | P2 |
+A shared trip album (AL-1 to AL-7) was cut from the demo in October 2026. It isn't part of the demo bar in §11, and it would have needed a hosted web page and photo storage for a feature the judges would see for a few seconds. Photos texted to scout are read only as possible receipts (CS-7).
 
 ### 6.8 Google Calendar
 
@@ -186,7 +177,6 @@ Because SMS has no rich cards or buttons, structured content (summaries, polls, 
 | Places and directions | [Google Places API (New)](https://developers.google.com/maps/documentation/places/web-service/text-search) Text Search, and Google Maps directions links | Text Search takes a free-text request ("cozy tacos with outdoor seating"), which fits a vibe better than category filters, and returns each place's name, location, price level, and a short summary. scout first finds the place the group names ("near our Airbnb in Condado"), then searches near it. Walking and driving times are estimated from straight-line distance and labeled as estimates, which avoids a second, routing API. Directions links (`google.com/maps/dir/?api=1`) need no API and open with the member's own location as the start. Needs a Google Cloud key with billing on; without one, scout says recommendations aren't set up rather than inventing places. |
 | Travel prices | Flight and lodging search APIs, or cached estimates for the demo | Estimates are acceptable for the demo if clearly labeled. |
 | Payments | [Capital One's Nessie API](https://api.nessieisreal.com), a sandbox bank, as a demo payment rail | HTTPS only, with the API key as a `?key=` query parameter. Each member gets a Nessie customer and checking account with a starting sandbox balance. Nessie's transfer endpoint has no payee field, so a payment is a withdrawal from the payer's account plus a deposit into the payee's. Nessie amounts are whole dollars, so scout's own ledger keeps exact cents and stays the source of truth for who owes whom. Calls time out after a few seconds; if the key is missing or a call fails, the payment is recorded and labeled simulated. Nessie's enterprise endpoints show every team's data to anyone with a key, so scout sends it no names or phone numbers. |
-| Photo album | A scout-hosted web album backed by file storage, shared through a private link | Hosting the album keeps it account-free and works the same on iPhone and Android. Google retired its Photos API method for sharing albums in March 2025, and Apple doesn't offer a public API for iCloud Shared Albums, so building on either is unreliable. Photos texted to scout arrive as MMS attachments through the messaging provider. |
 | Calendar | "Add to Google Calendar" links (`calendar.google.com/calendar/render?action=TEMPLATE`) and .ics files at first. Later, the Google Calendar API's `freebusy.query` with the `calendar.freebusy` scope, behind a scout-hosted Google sign-in page | Links and .ics files need no API, credentials, or Google review. For an all-day trip, the link's end date is the day after the last day. Calendar scopes count as sensitive, so reading calendars beyond a small test group needs Google's OAuth app verification. |
 | Receipt reading | The same vision-capable language model reads receipt photos | The bridge forwards photos to the Python service along with the text. The model extracts merchant, date, total, and line items, and tells receipts apart from trip photos. Every extracted total is confirmed in the chat before it's logged. |
 | Storage | SQLite | Stores trips, members, preferences, polls, itineraries, expenses, payments, and the recent chat. |
@@ -208,8 +198,6 @@ Photon can only send messages from its TypeScript SDK, but scout's logic is writ
 | Expense | Payer, amount in cents, description, who it's split among, receipt image (optional) |
 | Receipt line item | Expense, item, price, who it belongs to |
 | Settlement | From, to, amount in cents, Nessie withdrawal and deposit IDs (empty when simulated). A settlement exists only once it's paid; what's still owed is worked out from expenses and settlements. |
-| Album | Trip, private share link, auto-add setting |
-| Photo | Album, uploader, timestamp, itinerary day |
 | Place suggestion | Trip, number in the list, name, Google place ID, location. Only the latest three are kept, until the group picks one. |
 | Calendar connection | Member, Google account, encrypted refresh token, connected at (P2, only for members who connect) |
 
@@ -230,7 +218,6 @@ If the project continues beyond the demo, these metrics would show whether scout
 | Share of groups that reach a decision within 48 hours of adding scout | Measures the core promise: chat turns into plans. |
 | Messages from first mention to decision, compared with groups not using scout | Shows whether it actually cuts the back-and-forth. |
 | Share of logged expenses settled within 7 days of the trip ending | Measures the cost-splitting value. |
-| Share of trips where most members add photos to the album | Shows whether the album becomes the group's real photo home. |
 | Share of groups that use scout again for another plan | Indicates real, repeat value. |
 | Share of groups that pause or remove scout | Flags when it's too noisy or not useful. |
 
@@ -239,7 +226,7 @@ If the project continues beyond the demo, these metrics would show whether scout
 | Phase | Scope | Outcome |
 |---|---|---|
 | 1. Core loop (built, not yet tested in a real group) | GC-1 to GC-4, PR-1 and PR-2, DS-1 to DS-3 | scout joins a group text, gathers preferences, and runs a destination vote. |
-| 2. Full journey | IT-1 and IT-2, OT-1 to OT-3, CS-1 to CS-4, CS-7, AL-1 and AL-2, CAL-1 | The complete six-step journey works end to end. |
+| 2. Full journey | IT-1 and IT-2, OT-1 to OT-3, CS-1 to CS-4, CS-7, CAL-1 | The complete six-step journey works end to end. |
 | 3. Polish and demo | Selected P1 items, demo script, fallback plan | A reliable live demo plus the interactive journey as backup. |
 
 ## 13. Risks and mitigations
@@ -260,11 +247,10 @@ If the project continues beyond the demo, these metrics would show whether scout
 | Other teams can read anything stored in Nessie through its shared enterprise endpoints. | Send Nessie placeholder names and addresses only, never members' names or phone numbers. |
 | A receipt is misread, so someone is charged the wrong amount. | Always show the extracted total for confirmation, ask instead of guessing when a receipt is unclear, and keep the receipt image attached so anyone can check it. |
 | Receipt photos show partial card numbers or other personal details. | Store only what's needed for the split, limit receipt images to group members, and delete them with the rest of the trip data. |
-| Someone's photo ends up in the album when they didn't want it there, or the album link spreads beyond the group. | Make automatic adding opt-in, let members remove their own photos, and use unguessable links that only group members receive. |
 | Members are uneasy giving an AI access to their calendar. | Lead with links that need no access at all. When reading calendars arrives, make it opt-in, ask only for free/busy, explain in one line what scout can and can't see, and let people disconnect any time. |
 | Google requires app verification before many people can grant calendar access, and an unverified app shows a warning screen. | Links and .ics files avoid this entirely. Treat free/busy reading as post-demo work, and start verification early if the project continues. |
 | Added events go stale when plans change, because a link can't update an event that's already on someone's calendar. | Text an updated link with a clear note about what changed (CAL-4). Revisit live sync only if groups ask for it. |
 
 ## 14. Open questions
 
-The interaction model from section 7 is decided for now; what's left is checking it with real groups. The biggest open question is how scout joins iMessage groups: local mode on a Mac, Photon's Business plan, or the Pro plan if a quick test shows it can handle existing groups (see [scout-imessage-groups.md](scout-imessage-groups.md)). Other questions to settle include how members should share their location during a trip, whether private one-on-one texting for sensitive constraints like budgets is worth building, whether groups would rather have the album live in a photo app they already use than in scout's own web album, whether enough members would connect their calendars to make reading free/busy (CAL-5, CAL-6) worth Google's verification process, and, if the project continues past the class, how scout would sustain itself (for example, booking affiliate links versus a paid tier).
+The interaction model from section 7 is decided for now; what's left is checking it with real groups. The biggest open question is how scout joins iMessage groups: local mode on a Mac, Photon's Business plan, or the Pro plan if a quick test shows it can handle existing groups (see [scout-imessage-groups.md](scout-imessage-groups.md)). Other questions to settle include how members should share their location during a trip, whether private one-on-one texting for sensitive constraints like budgets is worth building, whether enough members would connect their calendars to make reading free/busy (CAL-5, CAL-6) worth Google's verification process, and, if the project continues past the class, how scout would sustain itself (for example, booking affiliate links versus a paid tier).

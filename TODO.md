@@ -34,7 +34,7 @@ Nothing after the vote has ever run against real Claude, so expect fixes here.
 
 ## 4. Decide
 
-- [ ] The shared trip album (AL-1, AL-2): cut it from the demo, or build it? It isn't part of the §11 bar, and building it means hosting and storage. If it's cut, take it out of the script and the journey page.
+- [x] The shared trip album (AL-1, AL-2): cut from the demo. It isn't part of the §11 bar, and building it means hosting and storage.
 
 ## 5. Script and rehearsal
 

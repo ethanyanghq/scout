@@ -208,13 +208,6 @@ img,svg{max-width:100%}
 .bubble.media{padding:0;background:transparent;border-radius:16px;overflow:hidden}
 .photo{width:184px;border-radius:16px;overflow:hidden;line-height:0}
 .photo svg{display:block;width:100%;height:auto}
-.al-top{display:flex;gap:10px;align-items:center}
-.al-cover{width:56px;height:56px;border-radius:10px;overflow:hidden;flex:none}
-.al-cover svg{display:block;width:100%;height:100%}
-.al-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:9px}
-.al-avas{display:flex}
-.al-avas span{width:20px;height:20px;border-radius:50%;margin-left:-5px;box-shadow:0 0 0 2px var(--card);display:grid;place-items:center;font-size:9.5px;font-weight:700;color:#fff}
-.al-avas span:first-child{margin-left:0}
 
 /* Controls */
 .controls{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:20px}
@@ -265,7 +258,7 @@ img,svg{max-width:100%}
     <header class="hero">
       <h1>scout</h1>
       <p class="lede">A trip planner that lives in your group chat.</p>
-      <p class="sub">Add one number to the group text and it handles the rest: what everyone wants, the vote, the plan, a shared photo album, finding spots on the trip, and splitting the bill from a photo of the receipt. Follow one friend group’s spring break, step by step.</p>
+      <p class="sub">Add one number to the group text and it handles the rest: what everyone wants, the vote, the plan, finding spots on the trip, and splitting the bill from a photo of the receipt. Follow one friend group’s spring break, step by step.</p>
     </header>
 
     <nav class="trail-wrap" id="trail-wrap" aria-label="Journey steps">
@@ -310,7 +303,6 @@ img,svg{max-width:100%}
     <ul class="quests">
       <li>@scout birthday dinner for 8 on Saturday. loud, fun, under $40 each</li>
       <li>@scout we’re by the venue and need tacos before the show</li>
-      <li>@scout make an album for the lake house weekend</li>
       <li>@scout here’s the grocery receipt, split it 5 ways</li>
     </ul>
   </section>
@@ -388,11 +380,10 @@ img,svg{max-width:100%}
       ]
     },
     {
-      title: 'Get the plan and the album', short: 'Plan', desc: 'An itinerary, booking links, and a shared album.',
+      title: 'Get the plan', short: 'Plan', desc: 'An itinerary and booking links.',
       detail: [
         'Builds a day-by-day plan around the group’s must-haves: a beach for Leo, good food for Maya.',
-        'Sends booking links so the group books flights and stays themselves.',
-        'Creates a shared trip album, adds everyone, and asks before auto-adding photos from the chat.'
+        'Sends booking links so the group books flights and stays themselves.'
       ],
       script: [
         { ts: ['Thu, Jan 14', '8:47 PM'] },
@@ -400,22 +391,14 @@ img,svg{max-width:100%}
         { who: 'sq', text: 'Here’s a relaxed 6 days. One big thing a day, the rest is beach and food:', card: 'itinerary' },
         { who: 'leo', text: 'a GLOWING bay?? 🤯' },
         { who: 'maya', text: '@scout where do we book' },
-        { who: 'sq', text: 'Cheapest flights from each city, plus stays that sleep 4 for under $1,300 total. Text the price here once you book and I’ll track it.', card: 'links' },
-        { who: 'sq', text: 'I also made a shared album for the trip and added all 4 of you 📸 No account needed.', card: 'album', arg: 0 },
-        { who: 'sq', text: 'Want me to add photos you send in this chat during the trip automatically? I’ll skip receipts.' },
-        { who: 'priya', text: 'yes!!' },
-        { who: 'jordan', text: '👍' },
-        { who: 'leo', text: 'do it' },
-        { who: 'maya', text: 'yes pls' },
-        { who: 'sq', text: 'Done. Photos from Mar 14–19 go straight to the album.' }
+        { who: 'sq', text: 'Cheapest flights from each city, plus stays that sleep 4 for under $1,300 total. Text the price here once you book and I’ll track it.', card: 'links' }
       ]
     },
     {
-      title: 'Explore and share photos', short: 'Explore', desc: 'Ask for a vibe, get directions, add photos.',
+      title: 'Explore on the trip', short: 'Explore', desc: 'Ask for a vibe, get directions.',
       detail: [
         'Turns a vibe like “cozy, outdoor seating, not touristy” into a few nearby picks.',
-        'Sends walking directions as soon as the group chooses.',
-        'Adds photos sent in the chat to the album, so nobody has to chase them down later.'
+        'Sends walking directions as soon as the group chooses.'
       ],
       script: [
         { ts: ['Tue, Mar 16', '7:38 PM'] },
@@ -423,26 +406,21 @@ img,svg{max-width:100%}
         { who: 'sq', text: '3 spots near you that fit:', card: 'places' },
         { who: 'jordan', text: 'casa brisa looks perfect' },
         { who: 'priya', text: 'yes 🙌 counting this as my pick' },
-        { who: 'sq', text: 'Casa Brisa it is. 6 minutes on foot 👇', card: 'map' },
-        { ts: ['Tue, Mar 16', '9:12 PM'] },
-        { who: 'leo', photo: 'patio', alt: 'Leo’s photo of the group at a string-lit patio table at dusk' },
-        { who: 'leo', text: '10/10 patio' },
-        { who: 'sq', text: 'Added to the album 📸 That’s 47 photos so far.' }
+        { who: 'sq', text: 'Casa Brisa it is. 6 minutes on foot 👇', card: 'map' }
       ]
     },
     {
       title: 'Split the costs', short: 'Settle up', desc: 'Text a receipt, settle up in the chat.',
       detail: [
-        'Reads receipt photos for the merchant, date, and total, then confirms before logging. Receipts stay out of the album.',
-        'Works out the fewest payments to settle up, sends pay links, and nudges anyone who hasn’t paid.',
-        'Reminds everyone to add their last photos before the trip ends.'
+        'Reads receipt photos for the merchant, date, and total, then confirms before logging.',
+        'Works out the fewest payments to settle up, sends pay links, and nudges anyone who hasn’t paid.'
       ],
       script: [
         { ts: ['Fri, Mar 19', '10:05 AM'] },
         { who: 'leo', text: 'fyi I paid the airbnb, $1,240' },
         { who: 'priya', photo: 'receipt', alt: 'Priya’s photo of the Casa Brisa receipt, total $164.00' },
         { who: 'priya', text: 'casa brisa dinner 👆' },
-        { who: 'sq', text: 'From the receipt: Casa Brisa, Mar 16, $164.00 total, paid by Priya. Split it 4 ways? (I kept this one out of the album.)' },
+        { who: 'sq', text: 'From the receipt: Casa Brisa, Mar 16, $164.00 total, paid by Priya. Split it 4 ways?' },
         { who: 'priya', text: 'yep, all 4' },
         { who: 'maya', text: 'and I got the bio bay kayak, $196' },
         { who: 'jordan', text: '@scout who owes what. I’ve been scared to ask' },
@@ -451,7 +429,6 @@ img,svg{max-width:100%}
         { who: 'maya', text: 'sent 💸' },
         { who: 'sq', text: 'Got it, Maya ✅ Two payments left. I’ll remind Jordan and Priya tonight.' },
         { who: 'jordan', text: 'sending now 🫡' },
-        { who: 'sq', text: 'Before you fly: the album has 86 photos from all 4 of you. Add any last ones here 📸', card: 'album', arg: 86 },
         { who: 'leo', text: 'best trip ever. same time next year?' },
         { who: 'sq', text: 'I’ll be here 🧭' }
       ]
@@ -459,26 +436,6 @@ img,svg{max-width:100%}
   ];
 
   const PHOTOS = {
-    patio:
-      '<svg viewBox="0 0 200 150" aria-hidden="true">' +
-        '<rect width="200" height="150" fill="#2B1E5C"/>' +
-        '<rect y="52" width="200" height="98" fill="#5E2F6B"/>' +
-        '<rect y="84" width="200" height="66" fill="#A9486B"/>' +
-        '<rect y="108" width="200" height="42" fill="#E07A4F"/>' +
-        '<path d="M0 22 Q50 52 100 30 T200 34" stroke="#1B1530" stroke-width="1.2" fill="none"/>' +
-        '<g fill="#FFE08A"><circle cx="20" cy="35" r="2.6"/><circle cx="50" cy="42" r="2.6"/><circle cx="80" cy="40" r="2.6"/><circle cx="120" cy="27" r="2.6"/><circle cx="150" cy="24" r="2.6"/><circle cx="180" cy="29" r="2.6"/></g>' +
-        '<g fill="#FFE08A" opacity=".22"><circle cx="20" cy="35" r="7"/><circle cx="50" cy="42" r="7"/><circle cx="80" cy="40" r="7"/><circle cx="120" cy="27" r="7"/><circle cx="150" cy="24" r="7"/><circle cx="180" cy="29" r="7"/></g>' +
-        '<path d="M178 150 C176 118 178 92 184 70" stroke="#1B1530" stroke-width="5" fill="none"/>' +
-        '<g fill="#1B1530"><ellipse cx="168" cy="66" rx="18" ry="4.5" transform="rotate(18 168 66)"/><ellipse cx="198" cy="64" rx="18" ry="4.5" transform="rotate(-20 198 64)"/><ellipse cx="176" cy="58" rx="16" ry="4" transform="rotate(-48 176 58)"/><ellipse cx="192" cy="56" rx="16" ry="4" transform="rotate(46 192 56)"/></g>' +
-        '<g fill="#1B1530">' +
-          '<circle cx="30" cy="84" r="10"/><path d="M12 150 Q12 98 30 96 Q48 98 48 150Z"/>' +
-          '<circle cx="74" cy="80" r="9.5"/><path d="M57 150 Q57 94 74 92 Q91 94 91 150Z"/>' +
-          '<circle cx="118" cy="82" r="10"/><path d="M100 150 Q100 96 118 94 Q136 96 136 150Z"/>' +
-          '<circle cx="156" cy="88" r="9"/><path d="M140 150 Q140 100 156 98 Q172 100 172 150Z"/>' +
-          '<rect x="8" y="116" width="168" height="7" rx="2"/>' +
-        '</g>' +
-        '<g fill="#FFD9A8"><path d="M50 106h10l-5 10z"/><path d="M96 106h10l-5 10z"/><path d="M138 106h10l-5 10z"/></g>' +
-      '</svg>',
     receipt:
       '<svg viewBox="0 0 180 200" aria-hidden="true">' +
         '<rect width="180" height="200" fill="#6B4A32"/>' +
@@ -501,14 +458,6 @@ img,svg{max-width:100%}
         '</g>' +
       '</svg>'
   };
-
-  const ALBUM_COVER =
-    '<svg viewBox="0 0 64 64" aria-hidden="true">' +
-      '<rect width="64" height="64" fill="#7CC6F2"/>' +
-      '<circle cx="46" cy="18" r="8" fill="#FFD23F"/>' +
-      '<rect y="36" width="64" height="28" fill="#1E88C7"/>' +
-      '<path d="M0 50 Q16 44 32 49 T64 47 V64 H0Z" fill="#F2D49B"/>' +
-    '</svg>';
 
   const POLL_OPTS = [
     { k: 'sj',  name: 'San Juan, Puerto Rico', price: '~$720 each', note: 'Beaches and a great food scene. No passport needed.' },
@@ -614,14 +563,6 @@ img,svg{max-width:100%}
           '<g transform="translate(190 28)"><circle class="m-pin" r="8"/><circle class="m-pin-dot" r="3"/></g>' +
         '</svg>' +
         '<div class="mapfoot"><span><b>Casa Brisa</b><br><span class="pd">6 min walk</span></span><span class="chip">Open in Maps</span></div>');
-    },
-    album(count) {
-      const avas = ['maya', 'jordan', 'priya', 'leo']
-        .map((w) => `<span style="background:${PEOPLE[w].color}" aria-hidden="true">${PEOPLE[w].init}</span>`).join('');
-      return el('div', 'card',
-        `<div class="al-top"><div class="al-cover">${ALBUM_COVER}</div><div><div class="pn">San Juan ’27</div>` +
-        `<div class="pd">Mar 14–19</div><div class="pd">${count ? count + ' photos from all 4 of you' : 'No photos yet'}</div></div></div>` +
-        `<div class="al-foot"><span class="al-avas">${avas}</span><span class="sr">Shared with Maya, Jordan, Priya, and Leo.</span><span class="chip">Open album</span></div>`);
     },
     ledger() {
       const c = el('div', 'card ledger',
