@@ -26,6 +26,13 @@ class DateWindow:
 
 
 @dataclass(frozen=True)
+class MessagePhoto:
+    # One of the image types Claude reads: image/jpeg, png, gif, or webp.
+    media_type: str
+    base64_data: str
+
+
+@dataclass(frozen=True)
 class IncomingMessage:
     space_id: str
     sender_phone: str
@@ -34,6 +41,7 @@ class IncomingMessage:
     # Everyone in the chat, including people who haven't spoken yet. Empty when
     # the messaging provider can't list participants (for example, in a DM).
     participant_phones: tuple[str, ...] = ()
+    photo: MessagePhoto | None = None
 
     @property
     def mentions_scout(self) -> bool:
@@ -134,6 +142,15 @@ class Expense:
 
 
 @dataclass(frozen=True)
+class PendingReceipt:
+    """A receipt scout read and asked its payer to confirm before logging."""
+
+    payer_phone: str
+    merchant: str
+    total_cents: int
+
+
+@dataclass(frozen=True)
 class Settlement:
     """A payment one member made to another through scout to settle up."""
 
@@ -157,6 +174,7 @@ class Trip:
     itinerary: list[ItineraryDay]
     expenses: list[Expense]
     settlements: list[Settlement]
+    pending_receipt: PendingReceipt | None
 
     def find_member(self, phone: str) -> Member:
         for member in self.members:

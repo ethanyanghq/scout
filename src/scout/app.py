@@ -4,6 +4,7 @@ import logging
 import os
 from datetime import datetime
 from pathlib import Path
+from typing import Literal
 
 import anthropic
 import uvicorn
@@ -13,7 +14,7 @@ from pydantic import BaseModel
 from scout.agent import ScoutAgent
 from scout.conversation import handle_message
 from scout.nessie import connect_bank
-from scout.trip import IncomingMessage
+from scout.trip import IncomingMessage, MessagePhoto
 from scout.trip_store import TripStore
 
 # Only the bridge on this machine should reach scout, never the internet.
@@ -22,12 +23,21 @@ PORT = 8787
 DEFAULT_DB_PATH = "scout.db"
 
 
+class IncomingPhoto(BaseModel):
+    # The image types Claude can read. The bridge converts iPhone HEIC photos
+    # to JPEG before sending them.
+    media_type: Literal["image/jpeg", "image/png", "image/gif", "image/webp"]
+    base64_data: str
+
+
 class IncomingText(BaseModel):
     space_id: str
     sender_phone: str
+    # Empty when someone sends only a photo.
     text: str
     sent_at: datetime
     participant_phones: list[str] = []
+    photo: IncomingPhoto | None = None
 
 
 class Replies(BaseModel):
@@ -47,6 +57,11 @@ def create_app(store: TripStore, agent: ScoutAgent) -> FastAPI:
             text=incoming.text,
             sent_at=incoming.sent_at,
             participant_phones=tuple(incoming.participant_phones),
+            photo=(
+                MessagePhoto(incoming.photo.media_type, incoming.photo.base64_data)
+                if incoming.photo
+                else None
+            ),
         )
         return Replies(replies=handle_message(message, store, agent))
 

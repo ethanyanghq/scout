@@ -15,6 +15,7 @@ from scout.trip import (
     Expense,
     ItineraryDay,
     Member,
+    PendingReceipt,
     Poll,
     PreferenceUpdate,
     Settlement,
@@ -90,6 +91,15 @@ CREATE TABLE IF NOT EXISTS settlements (
     nessie_deposit_id    TEXT
 );
 
+-- At most one receipt per trip waits for its payer to confirm; a newer one
+-- replaces it.
+CREATE TABLE IF NOT EXISTS pending_receipts (
+    space_id    TEXT PRIMARY KEY REFERENCES trips (space_id),
+    payer_phone TEXT NOT NULL,
+    merchant    TEXT NOT NULL,
+    total_cents INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS chat_log (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     space_id     TEXT NOT NULL REFERENCES trips (space_id),
@@ -131,6 +141,7 @@ class TripStore:
                 itinerary=_load_itinerary(db, space_id),
                 expenses=_load_expenses(db, space_id),
                 settlements=_load_settlements(db, space_id),
+                pending_receipt=_load_pending_receipt(db, space_id),
             )
 
     def create_trip(self, space_id: str) -> None:
@@ -240,6 +251,18 @@ class TripStore:
                 "DELETE FROM expenses WHERE space_id = ? AND id = ?",
                 (space_id, expense_id),
             )
+
+    def save_pending_receipt(self, space_id: str, receipt: PendingReceipt) -> None:
+        with self._transaction() as db:
+            db.execute(
+                "INSERT OR REPLACE INTO pending_receipts "
+                "(space_id, payer_phone, merchant, total_cents) VALUES (?, ?, ?, ?)",
+                (space_id, receipt.payer_phone, receipt.merchant, receipt.total_cents),
+            )
+
+    def clear_pending_receipt(self, space_id: str) -> None:
+        with self._transaction() as db:
+            db.execute("DELETE FROM pending_receipts WHERE space_id = ?", (space_id,))
 
     def save_nessie_account(self, space_id: str, phone: str, account_id: str) -> None:
         with self._transaction() as db:
@@ -390,6 +413,19 @@ def _load_settlements(db: sqlite3.Connection, space_id: str) -> list[Settlement]
         )
         for row in rows
     ]
+
+
+def _load_pending_receipt(
+    db: sqlite3.Connection, space_id: str
+) -> PendingReceipt | None:
+    row = db.execute(
+        "SELECT payer_phone, merchant, total_cents FROM pending_receipts "
+        "WHERE space_id = ?",
+        (space_id,),
+    ).fetchone()
+    if row is None:
+        return None
+    return PendingReceipt(row["payer_phone"], row["merchant"], row["total_cents"])
 
 
 def _parse_date(value: str | None) -> date | None:

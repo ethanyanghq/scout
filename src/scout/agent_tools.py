@@ -232,6 +232,48 @@ TOOL_DEFINITIONS = [
         },
     },
     {
+        "name": "ask_to_confirm_receipt",
+        "description": (
+            "When the sender's photo is a clear receipt, post what you read from "
+            "it and ask them to confirm before anything is logged. Once they "
+            "confirm, call log_sender_expense with the total (or their corrected "
+            "amount). Don't use it for unclear receipts: ask for the total instead."
+        ),
+        "strict": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "merchant": {
+                    "type": "string",
+                    "description": "The business name, e.g. 'Casa Brisa'.",
+                },
+                "purchased_on": _nullable(
+                    "string", "The receipt's date as YYYY-MM-DD, if it shows one."
+                ),
+                "total_usd": {
+                    "type": "number",
+                    "description": "The final total, including tax and tip.",
+                },
+            },
+            "required": ["merchant", "purchased_on", "total_usd"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "drop_pending_receipt",
+        "description": (
+            "Forget the receipt waiting for confirmation, when its payer says not "
+            "to split it."
+        ),
+        "strict": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": False,
+        },
+    },
+    {
         "name": "remove_expense",
         "description": (
             "Remove an expense the sender logged by mistake. Only the person who "
@@ -310,6 +352,14 @@ def run_tool(actions: TripActions, name: str, tool_input: dict[str, Any]) -> str
             return actions.log_sender_expense(
                 _to_cents(tool_input["amount_usd"]), tool_input["description"]
             )
+        case "ask_to_confirm_receipt":
+            return actions.ask_to_confirm_receipt(
+                tool_input["merchant"],
+                _parse_date(tool_input["purchased_on"]),
+                _to_cents(tool_input["total_usd"]),
+            )
+        case "drop_pending_receipt":
+            return actions.drop_pending_receipt()
         case "remove_expense":
             return actions.remove_expense(tool_input["expense_number"])
         case "post_settle_up":

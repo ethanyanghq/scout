@@ -7,6 +7,7 @@ agent to read.
 """
 
 import logging
+from datetime import date
 
 from scout import polls
 from scout.booking_links import format_booking_links
@@ -25,6 +26,7 @@ from scout.trip import (
     DestinationOption,
     ItineraryDay,
     Member,
+    PendingReceipt,
     PreferenceUpdate,
     Settlement,
     Trip,
@@ -154,12 +156,43 @@ class TripActions:
             self._space_id, self._sender_phone, amount_cents, description
         )
         trip = self._load_trip()
+        if (
+            trip.pending_receipt
+            and trip.pending_receipt.payer_phone == self._sender_phone
+        ):
+            # Logging is how the payer confirms (or corrects) their receipt.
+            self._store.clear_pending_receipt(self._space_id)
         payer = trip.find_member(self._sender_phone)
         self.outbox.append(
             f"Got it: {description}, {format_usd(amount_cents)}, paid by "
             f"{payer.label}. Split {len(trip.members)} ways."
         )
         return f"Logged as expense #{expense_id}."
+
+    def ask_to_confirm_receipt(
+        self, merchant: str, purchased_on: date | None, total_cents: int
+    ) -> str:
+        """Shows what scout read from the sender's receipt, before logging it (CS-7)."""
+        if total_cents <= 0:
+            raise TripActionError("a receipt total must be more than $0")
+
+        receipt = PendingReceipt(self._sender_phone, merchant, total_cents)
+        self._store.save_pending_receipt(self._space_id, receipt)
+        trip = self._load_trip()
+        payer = trip.find_member(self._sender_phone)
+        when = f", {purchased_on:%b} {purchased_on.day}" if purchased_on else ""
+        self.outbox.append(
+            f"From the receipt: {merchant}{when}, {format_usd(total_cents)} total, "
+            f"paid by {payer.label}. Split it {len(trip.members)} ways?"
+        )
+        return f"Asked {payer.label} to confirm. Log it once they do."
+
+    def drop_pending_receipt(self) -> str:
+        """Forgets the receipt waiting for confirmation, e.g. if it isn't shared."""
+        if self._load_trip().pending_receipt is None:
+            raise TripActionError("no receipt is waiting for confirmation")
+        self._store.clear_pending_receipt(self._space_id)
+        return "Receipt dropped. Nothing was logged."
 
     def remove_expense(self, expense_id: int) -> str:
         """Removes one of the sender's own expenses, e.g. one logged by mistake."""

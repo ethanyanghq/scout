@@ -3,12 +3,19 @@ from datetime import date
 import pytest
 
 from scout.nessie import NessieError, SandboxPayment
-from scout.trip import DateWindow, DestinationOption, ItineraryDay, PreferenceUpdate
+from scout.trip import (
+    DateWindow,
+    DestinationOption,
+    ItineraryDay,
+    PendingReceipt,
+    PreferenceUpdate,
+)
 from scout.trip_actions import TripActionError, TripActions
 
 SPACE = "group-chat-1"
 MAYA = "+15550000001"
 LEO = "+15550000002"
+PRIYA = "+15550000003"
 OPTIONS = [
     DestinationOption("Tulum, Mexico", 900, "Beaches"),
     DestinationOption("San Juan, Puerto Rico", 750, "No passport"),
@@ -353,3 +360,65 @@ def test_a_refused_payment_says_who_the_sender_does_owe(store):
 
     with pytest.raises(TripActionError, match="They owe: Leo"):
         TripActions(store, SPACE, MAYA, FakeBank()).pay_from_sender("Jordan")
+
+
+def priya_texts_a_receipt(store):
+    """Returns Priya's actions after scout asked her to confirm her receipt."""
+    store.create_trip(SPACE)
+    store.add_members(SPACE, [MAYA, LEO, PRIYA])
+    store.save_preferences(SPACE, PRIYA, PreferenceUpdate(display_name="Priya"))
+    priya_actions = TripActions(store, SPACE, PRIYA)
+    priya_actions.ask_to_confirm_receipt("Casa Brisa", date(2027, 3, 16), 16_400)
+    return priya_actions
+
+
+def test_a_receipt_is_read_back_for_its_payer_to_confirm(store):
+    priya_actions = priya_texts_a_receipt(store)
+
+    assert priya_actions.outbox == [
+        "From the receipt: Casa Brisa, Mar 16, $164 total, paid by Priya. "
+        "Split it 3 ways?"
+    ]
+    assert store.get_trip(SPACE).expenses == []
+    assert store.get_trip(SPACE).pending_receipt == PendingReceipt(
+        PRIYA, "Casa Brisa", 16_400
+    )
+
+
+def test_a_receipt_without_a_date_is_read_back_without_one(maya_actions):
+    maya_actions.ask_to_confirm_receipt("Bodega", None, 1_250)
+
+    assert maya_actions.outbox[0].startswith("From the receipt: Bodega, $12.50 total")
+
+
+def test_logging_the_confirmed_receipt_clears_it(store):
+    priya_actions = priya_texts_a_receipt(store)
+
+    priya_actions.log_sender_expense(16_400, "Casa Brisa")
+
+    trip = store.get_trip(SPACE)
+    assert trip.pending_receipt is None
+    assert [e.amount_cents for e in trip.expenses] == [16_400]
+
+
+def test_someone_elses_expense_leaves_the_receipt_waiting(store):
+    priya_texts_a_receipt(store)
+
+    TripActions(store, SPACE, LEO).log_sender_expense(2_000, "Ice")
+
+    assert store.get_trip(SPACE).pending_receipt is not None
+
+
+def test_a_dropped_receipt_is_never_logged(store):
+    priya_actions = priya_texts_a_receipt(store)
+
+    priya_actions.drop_pending_receipt()
+
+    trip = store.get_trip(SPACE)
+    assert trip.pending_receipt is None
+    assert trip.expenses == []
+
+
+def test_a_receipt_total_must_be_more_than_zero(maya_actions):
+    with pytest.raises(TripActionError):
+        maya_actions.ask_to_confirm_receipt("Casa Brisa", None, 0)

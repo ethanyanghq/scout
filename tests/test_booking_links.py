@@ -32,6 +32,7 @@ def san_juan_trip(*members):
         itinerary=[],
         expenses=[],
         settlements=[],
+        pending_receipt=None,
     )
 
 
