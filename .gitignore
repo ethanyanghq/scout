@@ -1,0 +1,11 @@
+# Python
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+
+# scout's local database: real people's trip details, never commit it
+*.db
+
+# Secrets
+.env

@@ -1,0 +1,33 @@
+[project]
+name = "scout"
+version = "0.1.0"
+description = "An AI trip planner that lives in your group chat"
+authors = [
+    { name = "e-ycyang", email = "e.yang4518@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "anthropic>=1.11.0",
+    "fastapi>=0.142.2",
+    "uvicorn[standard]>=0.54.0",
+]
+
+[project.scripts]
+scout-server = "scout.app:main"
+scout-simulate = "scout.simulate:main"
+
+[build-system]
+requires = ["uv_build>=0.12.6,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.16.10",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
