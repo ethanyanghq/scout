@@ -20,7 +20,7 @@ from scout.trip_store import TripStore
 
 # Only the bridge on this machine should reach scout, never the internet.
 HOST = "127.0.0.1"
-PORT = 8787
+DEFAULT_PORT = 8787
 DEFAULT_DB_PATH = "scout.db"
 
 
@@ -74,4 +74,5 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO)
     store = TripStore(Path(os.environ.get("SCOUT_DB_PATH", DEFAULT_DB_PATH)))
     agent = ScoutAgent(anthropic.Anthropic(), store, connect_outside_services())
-    uvicorn.run(create_app(store, agent), host=HOST, port=PORT)
+    port = int(os.environ.get("SCOUT_PORT", DEFAULT_PORT))
+    uvicorn.run(create_app(store, agent), host=HOST, port=port)
