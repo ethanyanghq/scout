@@ -1,0 +1,114 @@
+"""The trip a group is planning, and the people planning it."""
+
+import re
+from dataclasses import dataclass, field
+from datetime import date, datetime
+from enum import StrEnum
+
+# Matches "@scout", "scout,", "Scout?" but not "scouting".
+SCOUT_MENTION = re.compile(r"\bscout\b", re.IGNORECASE)
+
+
+class TripStage(StrEnum):
+    COLLECTING_PREFERENCES = "collecting_preferences"
+    VOTING = "voting"
+    DESTINATION_CHOSEN = "destination_chosen"
+
+
+@dataclass(frozen=True)
+class IncomingMessage:
+    space_id: str
+    sender_phone: str
+    text: str
+    sent_at: datetime
+    # Everyone in the chat, including people who haven't spoken yet. Empty when
+    # the messaging provider can't list participants (for example, in a DM).
+    participant_phones: tuple[str, ...] = ()
+
+    @property
+    def mentions_scout(self) -> bool:
+        return SCOUT_MENTION.search(self.text) is not None
+
+
+@dataclass(frozen=True)
+class PreferenceUpdate:
+    """What a member shared in one message. None means "didn't mention it"."""
+
+    display_name: str | None = None
+    available_from: date | None = None
+    available_to: date | None = None
+    budget_usd: int | None = None
+    home_city: str | None = None
+    must_haves: list[str] | None = None
+
+
+@dataclass
+class Member:
+    phone: str
+    display_name: str | None = None
+    available_from: date | None = None
+    available_to: date | None = None
+    budget_usd: int | None = None
+    home_city: str | None = None
+    must_haves: list[str] = field(default_factory=list)
+
+    @property
+    def label(self) -> str:
+        """How scout refers to this person in the chat."""
+        return self.display_name or f"…{self.phone[-4:]}"
+
+    @property
+    def has_shared_preferences(self) -> bool:
+        # Must-haves are optional: "anything works" is a valid answer.
+        return all(
+            value is not None
+            for value in (
+                self.available_from,
+                self.available_to,
+                self.budget_usd,
+                self.home_city,
+            )
+        )
+
+    @property
+    def missing_preferences(self) -> list[str]:
+        missing = []
+        if self.display_name is None:
+            missing.append("name")
+        if self.available_from is None or self.available_to is None:
+            missing.append("dates")
+        if self.budget_usd is None:
+            missing.append("budget")
+        if self.home_city is None:
+            missing.append("home city")
+        return missing
+
+
+@dataclass(frozen=True)
+class DestinationOption:
+    name: str
+    estimated_cost_per_person_usd: int
+    reason: str
+
+
+@dataclass
+class Poll:
+    id: int
+    options: list[DestinationOption]
+    # Voter phone number -> index into options.
+    votes: dict[str, int]
+
+
+@dataclass
+class Trip:
+    space_id: str
+    stage: TripStage
+    destination: str | None
+    members: list[Member]
+    open_poll: Poll | None
+
+    def find_member(self, phone: str) -> Member:
+        for member in self.members:
+            if member.phone == phone:
+                return member
+        raise KeyError(f"{phone} is not a member of trip {self.space_id}")
