@@ -12,7 +12,7 @@ you know the thread. someone says "we should go somewhere," everyone hearts it, 
 
 here's how it goes:
 
-1. **add me.** put my number or Apple ID in the group text. no app, no accounts, nobody signs up for anything.
+1. **add me.** put my number in the group text. no app, no accounts, nobody signs up for anything.
 2. **tell me what you want.** everyone sends their dates, budget, home city, and one must-have. i confirm each one so you can catch my mistakes, and i keep track of who hasn't answered yet.
 3. **i pitch three places.** once i know where your dates overlap, i suggest three destinations that fit everyone's budget and must-haves.
 4. **you vote.** reply "2" or "tulum" and i count it. i announce the winner and send a link that puts the trip on your Google Calendar.
@@ -26,12 +26,12 @@ i never book anything or touch real money. i find the links, you book. and i sta
 ## How it fits together
 
 ```
-iMessage ⇄ Photon (spectrum-ts) ⇄ bridge/  ──HTTP──▶  src/scout/  ⇄ Claude API
-         ⇄ or a Linq line       ⇄ TypeScript          Python         + SQLite
-                                                                     + Nessie
+iMessage ⇄ Linq line (groups)    ⇄ bridge/     ──HTTP──▶  src/scout/  ⇄ Claude API
+         ⇄ Photon (spectrum-ts)  ⇄ TypeScript             Python      + SQLite
+                                                                      + Nessie
 ```
 
-Photon only sends messages from TypeScript, so `bridge/` is a thin relay. Everything I know and decide lives in the Python service:
+My number is a [Linq](https://linqapp.com) line, a real iMessage number you can add to a group. Photon's cheaper plans can't join groups, so Linq gets me in, and it's moving onto Photon's Spectrum SDK as a custom platform so every message goes through Photon ([scout-imessage-groups.md](scout-imessage-groups.md)). Photon only sends messages from TypeScript, so `bridge/` is a thin relay. Everything I know and decide lives in the Python service:
 
 | File | What it does |
 | --- | --- |
@@ -88,24 +88,24 @@ Add `--verbose` to see each tool I call.
 
 1. Start the Python service: `uv run scout-server` (listens on `127.0.0.1:8787`).
 2. Create `bridge/.env` with one of these:
-   - Local mode, which runs on this Mac's Messages account. It needs Full Disk Access for your terminal, and no Photon plan. See [scout-imessage-groups.md](scout-imessage-groups.md).
+   - A Linq line, for group chats. Each teammate gets their own free line and key with `npm i -g @linqapp/cli && linq signup`. See [scout-imessage-groups.md](scout-imessage-groups.md).
      ```
-     IMESSAGE_MODE=local
+     IMESSAGE_MODE=linq
+     LINQ_API_KEY=...
      ```
-   - A Photon cloud line:
+   - A Photon cloud line, for one-on-one chats:
      ```
      IMESSAGE_MODE=cloud
      PHOTON_PROJECT_ID=...
      PHOTON_PROJECT_SECRET=...
      ```
-   - A Linq line, which needs no Apple ID. Get a free line and key with `npm i -g @linqapp/cli && linq signup`.
+   - Local mode, which runs on this Mac's Messages account. It needs an Apple ID signed into Messages and Full Disk Access for your terminal.
      ```
-     IMESSAGE_MODE=linq
-     LINQ_API_KEY=...
+     IMESSAGE_MODE=local
      ```
 3. Start the bridge: `cd bridge && bun start`.
    - In Linq mode, also run `linq webhooks listen --forward-to http://127.0.0.1:8788/linq-events` in another terminal. It relays Linq's events to the bridge.
-4. Add my number or Apple ID to a group text and say hi.
+4. Add my number to a group text and say hi.
    - On Linq's free line, everyone in the group texts my number privately first (`linq contacts add` each of them, up to 20). I ignore those private texts.
 
 ## Development
