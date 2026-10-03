@@ -1,84 +1,62 @@
-# scout to-do
+# scout demo to-do
 
-Everything still open, grouped by what it unblocks. Requirement IDs point to [scout-PRD.md](scout-PRD.md). Check items off in the same commit that finishes them.
+scout is a hackathon demo and won't launch to real users, so this lists only what the demo needs. The bar (PRD §11) is the full journey in a real group text: add scout, share preferences, a live vote, an itinerary, an on-the-spot recommendation, and a settle-up. The Capital One prize rides on "@scout pay Leo → Paid ✓".
 
-## Version control
+Work top to bottom. Check items off in the commit or PR that finishes them.
 
-- [x] Pull with rebase instead of merge commits (`git config pull.rebase true`, set per clone).
-- [ ] Everyone on the team runs `git config pull.rebase true` in their own clone.
-- [ ] Agree to land changes through pull requests instead of pushing to `main`. GitHub can't enforce this: branch protection needs GitHub Pro or a public repo.
-- [ ] Merge the `receipts-and-photos` PR (receipt photos, bridge photo forwarding, README).
+## 1. Blockers: do these first
 
-## Before the demo: setup
+- [ ] Create scout's Apple ID (an email handle), sign it into Messages on the demo Mac, and send a test text. New Apple IDs sometimes fail to activate iMessage, so do this today ([scout-imessage-groups.md](scout-imessage-groups.md), Setup).
+- [ ] Set up the Mac: a "scout" macOS user, Full Disk Access for the terminal, and kept awake (`caffeinate -dims`).
+- [ ] Get an Anthropic API key.
+- [ ] Get a Nessie API key from nessieisreal.com.
+- [ ] Create a Google Cloud key with Places API (New) enabled and billing on, and add a budget alert.
+- [ ] Put the keys in `.env` and `bridge/.env` (copy the `.env.example` templates).
 
-- [ ] Create scout's Apple ID (an email handle) and confirm iMessage activates on the Mac. This is the step most likely to fail ([scout-imessage-groups.md](scout-imessage-groups.md), Setup).
-- [ ] Set up the Mac: a "scout" macOS user, Full Disk Access for the terminal, kept awake.
-- [ ] Get an Anthropic API key and set `ANTHROPIC_API_KEY`.
-- [ ] Get a Nessie API key from nessieisreal.com and set `NESSIE_API_KEY`.
-- [ ] Create a Google Cloud key with Places API (New) enabled and billing on, set `GOOGLE_PLACES_API_KEY`, and add a budget alert.
-- [ ] Delete any old local `scout.db`. The schema changed and there are no migrations.
+## 2. First real run
 
-## Before the demo: verify
+Nothing after the vote has ever run against real Claude, so expect fixes here.
 
-- [ ] Run a whole trip in `uv run scout-simulate maya leo jordan priya`. Steps 4–6 (itinerary, booking links, cost splitting) have never run against real Claude.
-- [ ] With a real Nessie key, check that opening a customer and account works with scout's fields (`nessie.py`).
-- [ ] With a real Nessie key, check that deposits accept the same fields as withdrawals.
-- [ ] Check that Nessie balances actually change after a withdrawal and deposit.
-- [ ] Check what Nessie does when a withdrawal is bigger than the balance.
-- [ ] Text a real receipt photo (HEIC from an iPhone) through the bridge and confirm scout reads it back.
-- [ ] Test scout in a real iMessage group end to end: join, preferences, vote, plan, expenses, "@scout pay Leo".
-- [ ] Rehearse the "@scout pay Leo → Paid ✓" moment for the Capital One prize, and the simulated fallback if Nessie is down.
-- [ ] Open everyone's Nessie accounts before going on stage, so a slow API can't stall the first payment.
+- [ ] Play the whole trip in `uv run --env-file .env scout-simulate maya leo jordan priya`: preferences, vote, "@scout plan it", "@scout where do we book", "@scout cozy taco spot near Condado", "2", "fyi I paid the airbnb, $1,240", "@scout who owes what", "@scout pay leo".
+- [ ] Fix whatever breaks.
+- [ ] With the real Nessie key, check that opening a customer and account works with scout's fields (`nessie.py`).
+- [ ] With the real Nessie key, check that deposits accept the same fields as withdrawals.
+- [ ] Check that Nessie balances actually change after a payment.
+- [ ] With the real Google key, check that a vibe search returns three real places with price levels.
+- [ ] Run the journey in a real iMessage group: at least 3 other members, all on iMessage. Include a real iPhone receipt photo.
 
-## Phase 2: still to build (P0)
+## 3. Fixes that protect the demo
 
-- [x] On-trip discovery: 3 nearby options for a vibe, with travel time and price level (OT-1).
-- [x] Work out the group's location from a place someone names (OT-2).
-- [ ] Use the lodging address on file, or a location a member shares (OT-2).
-- [x] Send a directions link once the group picks (OT-3).
-- [ ] Create the shared trip album and text everyone the link (AL-1).
-- [ ] Add photos texted to scout or uploaded through the link (AL-2).
-- [ ] Keep receipt photos out of the album once it exists (AL-3, CS-7).
-
-## Decisions needed
-
-- [x] Pick the places API for on-trip discovery (OT-1 to OT-3): Google Places API (New) Text Search.
-- [ ] Pick album hosting (AL-1, AL-2). The PRD proposes a scout-hosted web album.
-- [ ] Decide whether payments made outside scout (cash, Venmo, "sent 💸") can be recorded, or everything goes through Nessie.
-
-## Cost splitting follow-ups
-
-- [ ] Remind people who still owe on a schedule, not just when someone asks (CS-4).
-- [ ] Uneven splits, such as an activity only some members joined (CS-5).
-- [ ] Show a running balance on request (CS-6).
-- [ ] Split a receipt by item, with tax and tip shared proportionally (CS-8).
-- [ ] Keep each receipt image with its expense (CS-9).
-- [ ] Convert receipts in other currencies (CS-10, P2).
+- [ ] Check the Nessie key at startup (an empty `POST /customers` answers 401 for a bad key). Today a bad key silently turns every payment into "simulated".
+- [ ] Add a way to open everyone's Nessie accounts before going on stage, so a slow API can't stall the first payment.
 - [ ] When a photo can't be converted, still forward its caption instead of dropping the whole message (`bridge/index.ts`).
-- [ ] When a Nessie deposit fails after the withdrawal went through, say so instead of only logging it.
-- [ ] Check the Nessie key at startup (an empty `POST /customers` answers 401 for a bad key), so a bad key doesn't silently make every payment simulated.
 
-## Tests
+## 4. Decide
 
-- [ ] Add an HTTP test for the `/messages` endpoint, including photos. FastAPI's test client needs `httpx`, which isn't installed.
-- [ ] Add end-to-end tests for the critical user journeys (AGENTS.md). There are none yet.
+- [ ] The shared trip album (AL-1, AL-2): cut it from the demo, or build it? It isn't part of the §11 bar, and building it means hosting and storage. If it's cut, take it out of the script and the journey page.
 
-## Phase 3 and later (P1/P2)
+## 5. Script and rehearsal
 
-- [ ] Pause or remove scout with "@scout pause" (GC-5).
-- [ ] Cap proactive messages per day (PRD §7).
-- [ ] Nudge members who haven't shared preferences (PR-3).
-- [ ] Reuse polls for restaurants and activities (DS-4).
-- [ ] "@scout summary" for the whole trip (IT-4).
-- [ ] Opening hours and group size in recommendations (OT-4). Text Search's `openNow` filter is one field away.
-- [ ] .ics files and per-day calendar events (CAL-2, CAL-3), and updated links when plans change (CAL-4).
-- [ ] Album extras: auto-add with opt-in, late joiners, post-trip reminder, download (AL-3 to AL-5).
-- [ ] Private DMs with scout for sensitive constraints (GC-6).
-- [ ] Database migrations, so schema changes don't mean deleting `scout.db`.
+- [ ] Write the demo script: who types what on which phone, following the journey page, with San Juan as the destination.
+- [ ] Make "@scout pay Leo → Paid ✓" the high point, for the Capital One judges.
+- [ ] Line up the phones: one per member, all on iMessage.
+- [ ] Rehearse end to end at least twice, and time the replies (the PRD's target is about 10 seconds).
 
-## iMessage questions to test
+## 6. Fallbacks
 
-- [ ] Native group polls through BlueBubbles.
-- [ ] Incoming tapbacks as votes.
-- [ ] Whether Photon Pro includes Telegram.
-- [ ] Whether `photon spectrum users add` runs without prompts.
+- [ ] Rehearse a `scout-simulate` run on a laptop, ready to show if iMessage fails.
+- [ ] Keep the interactive journey page open in a tab.
+- [ ] Rehearse a payment with Nessie unreachable, so "(simulated)" doesn't surprise anyone.
+
+## 7. Day of
+
+- [ ] Delete the old `scout.db` and start a fresh group chat.
+- [ ] Mac plugged in, awake, and online. Service and bridge running.
+- [ ] Send a test text 30 minutes before going on stage.
+- [ ] Open the Nessie accounts (see section 3).
+
+## Team
+
+- [ ] Everyone runs `git config pull.rebase true` in their own clone.
+- [ ] Land changes through pull requests, not direct pushes to `main`.
+- [x] Merge PR #4 (the `.env.example` templates).
