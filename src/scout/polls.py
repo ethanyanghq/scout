@@ -21,8 +21,11 @@ class PollResult:
     tied_with: list[DestinationOption]
 
 
-def parse_vote(text: str, options: list[DestinationOption]) -> int | None:
-    """Returns the 0-based option index a message votes for, or None."""
+def parse_vote(text: str, option_names: list[str]) -> int | None:
+    """Returns the 0-based index of the option a message votes for, or None.
+
+    Works for any numbered list scout posts: destinations, or places nearby.
+    """
     vote = _normalize(text)
     for prefix in VOTE_PREFIXES:
         if vote.startswith(prefix):
@@ -31,12 +34,12 @@ def parse_vote(text: str, options: list[DestinationOption]) -> int | None:
 
     if vote.isdigit():
         number = int(vote)
-        return number - 1 if 1 <= number <= len(options) else None
+        return number - 1 if 1 <= number <= len(option_names) else None
 
-    for index, option in enumerate(options):
-        full_name = _normalize(option.name)
+    for index, name in enumerate(option_names):
+        full_name = _normalize(name)
         # "Tulum, Mexico" can be voted for as just "tulum".
-        short_name = _normalize(option.name.split(",")[0])
+        short_name = _normalize(name.split(",")[0])
         if vote in (full_name, short_name):
             return index
     return None

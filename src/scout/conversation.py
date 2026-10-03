@@ -65,7 +65,8 @@ def _respond(
     trip: Trip, message: IncomingMessage, store: TripStore, agent: Agent
 ) -> list[str]:
     if trip.open_poll is not None:
-        choice = polls.parse_vote(message.text, trip.open_poll.options)
+        option_names = [option.name for option in trip.open_poll.options]
+        choice = polls.parse_vote(message.text, option_names)
         if choice is not None:
             actions = TripActions(store, trip.space_id, message.sender_phone)
             actions.record_sender_vote(choice)
