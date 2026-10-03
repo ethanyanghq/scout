@@ -11,6 +11,7 @@ from datetime import date, datetime
 from enum import StrEnum
 
 from scout import polls
+from scout.calendar_link import format_calendar_message
 from scout.group_summary import summarize_group
 from scout.trip import DestinationOption, PreferenceUpdate
 from scout.trip_store import TripStore
@@ -83,10 +84,22 @@ def seed_trip(
 
     store.open_poll(space_id, SEED_POLL_OPTIONS)
     # The agent reads the recent chat, so it should see the poll it "posted".
-    store.log_message(
-        space_id, None, polls.format_poll(SEED_POLL_OPTIONS), datetime.now()
-    )
+    for text in polls.format_poll(SEED_POLL_OPTIONS):
+        store.log_message(space_id, None, text, datetime.now())
     if stage == SeedStage.DESTINATION_CHOSEN:
-        trip = store.get_trip(space_id)
-        dates = summarize_group(trip.members).shared_window
-        store.close_poll(trip.open_poll.id, SEED_DESTINATION.name, dates)
+        _close_poll_for_everyone(store, space_id)
+
+
+def _close_poll_for_everyone(store: TripStore, space_id: str) -> None:
+    """Closes the poll as if everyone voted for SEED_DESTINATION, and logs the
+    announcement scout would have sent."""
+    trip = store.get_trip(space_id)
+    dates = summarize_group(trip.members).shared_window
+    store.close_poll(trip.open_poll.id, SEED_DESTINATION.name, dates)
+    everyone = len(trip.members)
+    result = polls.PollResult(SEED_DESTINATION, winning_votes=everyone, tied_with=[])
+    announcements = [polls.format_result(result, everyone)]
+    if dates is not None:
+        announcements.append(format_calendar_message(SEED_DESTINATION.name, dates))
+    for text in announcements:
+        store.log_message(space_id, None, text, datetime.now())

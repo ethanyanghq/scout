@@ -79,6 +79,25 @@ def test_seeding_past_the_vote_locks_in_san_juan_and_the_shared_dates(client):
     assert trip["open_poll"] is None
 
 
+def test_a_seeded_chat_shows_the_poll_scout_posted(client):
+    seed(client, "poll-open")
+
+    messages = client.get("/dev/trips/chat-1/messages").json()
+
+    assert [message["sender_phone"] for message in messages] == [None] * 4
+    assert messages[0]["text"].startswith("🗳️ Where should we go?")
+    assert messages[2]["text"].startswith("2. San Juan, Puerto Rico")
+
+
+def test_a_chat_seeded_past_the_vote_shows_the_winner_announcement(client):
+    seed(client, "destination-chosen")
+
+    messages = client.get("/dev/trips/chat-1/messages").json()
+
+    assert messages[-2]["text"].startswith("🎉 Poll closed! San Juan, Puerto Rico wins")
+    assert messages[-1]["text"].startswith("📅 Locked in: San Juan, Puerto Rico")
+
+
 def test_seeding_never_overwrites_an_existing_trip(client):
     seed(client, "poll-open")
 

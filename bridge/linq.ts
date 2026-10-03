@@ -8,9 +8,14 @@
 // this machine, so scout needs no public URL.
 
 import { UnsupportedError, definePlatform, stream, type Content, type Message } from "spectrum-ts";
-import { asAttachment, asGroup, type ProviderMessageRecord } from "spectrum-ts/authoring";
+import {
+  asAttachment,
+  asGroup,
+  asReaction,
+  type ProviderMessageRecord,
+} from "spectrum-ts/authoring";
 import z from "zod";
-import { tapbackNamed } from "./tapbacks";
+import { isTapback, tapbackEmoji, tapbackNamed } from "./tapbacks";
 import { isSkipped, logOutcome, type Skipped } from "./trace";
 
 const PLATFORM = "linq";
@@ -34,6 +39,21 @@ type LinqHandle = { handle: string; is_me: boolean; status: string };
 type LinqPart =
   | { type: "text"; value: string }
   | { type: "media"; url: string; mime_type: string };
+
+// A reaction.added event's data.
+type AddedReaction = {
+  chat_id: string;
+  message_id: string;
+  // A tapback ("love"), "custom" for another emoji, or "sticker".
+  reaction_type: string;
+  custom_emoji: string | null;
+  is_from_me: boolean;
+  from: string;
+  reacted_at: string;
+};
+
+// The parts of a message that readParts needs, from a webhook or the API.
+type LinqMessageParts = { id: string; parts: LinqPart[] };
 
 // A message.received event's data, in Linq's 2026-02-03 webhook format.
 type ReceivedMessage = {
@@ -60,13 +80,20 @@ export function linqPlatform(connection: LinqConnection) {
       stream<ProviderMessageRecord>((emit) =>
         receiveWebhookEvents(connection.webhookPort ?? WEBHOOK_PORT, emit),
       ),
-    actions: { getMembers: async (_, space) => listMembers(api, space.id) },
+    actions: {
+      getMembers: async (_, space) => listMembers(api, space.id),
+      getMessage: async (_, __, messageId) => fetchMessage(api, messageId),
+    },
     send: async ({ space, content }) => sendContent(api, space.id, content),
   });
 }
 
 // Turns one Linq event into a message for Spectrum, or says why scout skips it.
 export function readLinqEvent(event: LinqEvent): ProviderMessageRecord | Skipped {
+  if (event.event_type === "reaction.added") return readTapback(event);
+  if (event.event_type === "reaction.removed") {
+    return { skipReason: "a removed tapback (a vote it made stays counted)" };
+  }
   if (event.event_type !== "message.received") {
     return { skipReason: `not a new message (${event.event_type})` };
   }
@@ -89,9 +116,29 @@ export function readLinqEvent(event: LinqEvent): ProviderMessageRecord | Skipped
   };
 }
 
+// The target is only an ID here: Spectrum needs no more of it, and the relay
+// looks up the message's words when it needs them.
+function readTapback(event: LinqEvent): ProviderMessageRecord | Skipped {
+  const reaction = event.data as AddedReaction;
+  if (reaction.is_from_me) return { skipReason: "scout's own tapback" };
+  const emoji = isTapback(reaction.reaction_type)
+    ? tapbackEmoji(reaction.reaction_type)
+    : reaction.custom_emoji;
+  if (!emoji) return { skipReason: `a ${reaction.reaction_type} reaction` };
+
+  const target = { id: reaction.message_id, content: { type: "text", text: "" } };
+  return {
+    id: event.event_id,
+    content: asReaction({ emoji, target: target as unknown as Message }),
+    sender: { id: reaction.from },
+    space: { id: reaction.chat_id },
+    timestamp: new Date(reaction.reacted_at),
+  };
+}
+
 // Text parts become one text, and each media part an attachment. A photo
 // sent with a caption becomes a group of the two, as in Photon's iMessage.
-function readParts(message: ReceivedMessage): Content | null {
+function readParts(message: LinqMessageParts): Content | null {
   const texts = message.parts.flatMap((part) => (part.type === "text" ? [part.value] : []));
   const media = message.parts.flatMap((part) => (part.type === "media" ? [part] : []));
   const items: Content[] = [
@@ -154,6 +201,28 @@ async function listMembers(api: LinqApi, chatId: string): Promise<{ id: string }
   return chat.handles
     .filter((member) => !member.is_me && member.status === "active")
     .map((member) => ({ id: member.handle }));
+}
+
+// Lets the relay read a message it doesn't remember, such as a poll option
+// someone tapped after the bridge restarted.
+async function fetchMessage(
+  api: LinqApi,
+  messageId: string,
+): Promise<ProviderMessageRecord | undefined> {
+  const message = (await callLinq(api, `/messages/${messageId}`)) as LinqMessageParts & {
+    chat_id: string;
+    is_from_me: boolean;
+    created_at: string;
+  };
+  const content = readParts(message);
+  if (!content) return undefined;
+  return {
+    id: message.id,
+    content,
+    direction: message.is_from_me ? "outbound" : "inbound",
+    space: { id: message.chat_id },
+    timestamp: new Date(message.created_at),
+  };
 }
 
 // Sending by chat ID keeps the reply in this exact group, from scout's number.

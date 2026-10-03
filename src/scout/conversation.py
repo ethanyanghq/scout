@@ -1,10 +1,10 @@
 """Decides what scout does with each message in a chat.
 
-Cheap, predictable cases (introducing scout, counting a plain "2" as a vote or
-a pick of a nearby place) are handled here in code. Everything that needs
-language understanding goes to the agent. Messages arrive one at a time per
-chat (the bridge waits for each reply), so two votes can't race to close the
-same poll.
+Cheap, predictable cases (introducing scout, counting a plain "2" or a 👍 on
+a poll option as a vote, a pick of a nearby place) are handled here in code.
+Everything that needs language understanding goes to the agent. Messages
+arrive one at a time per chat (the bridge waits for each reply), so two votes
+can't race to close the same poll.
 """
 
 import logging
@@ -14,7 +14,7 @@ from typing import Protocol
 
 from scout import polls
 from scout.outgoing import Outgoing, React, Say, Tapback, as_plain_text
-from scout.trip import IncomingMessage, Trip, TripStage
+from scout.trip import IncomingMessage, IncomingReaction, Trip, TripStage
 from scout.trip_actions import TripActions
 from scout.trip_store import TripStore
 
@@ -32,6 +32,8 @@ INTRODUCTION = (
     "Tag @scout anytime."
 )
 SNAG_REPLY = "Sorry, I hit a snag on my end. Mind trying that again in a minute?"
+# Tapbacks that mean "this one" on a poll option. A 😂 on Miami isn't a vote.
+VOTING_TAPBACKS = {Tapback.LIKE, Tapback.LOVE}
 
 
 class Agent(Protocol):
@@ -60,6 +62,32 @@ def handle_message(
     new_replies = _respond(trip, message, store, agent)
     _log_sent(store, message.space_id, new_replies)
     return replies + new_replies
+
+
+def handle_reaction(reaction: IncomingReaction, store: TripStore) -> list[Outgoing]:
+    """Counts a 👍 or ❤️ on an option of the open poll as a vote for it. Any
+    other reaction is just chat, so scout stays quiet."""
+    trip = store.get_trip(reaction.space_id)
+    if trip is None or trip.open_poll is None or reaction.message_text is None:
+        return []
+    if reaction.tapback not in VOTING_TAPBACKS:
+        return []
+    option_names = [option.name for option in trip.open_poll.options]
+    choice = polls.option_in_poll_message(reaction.message_text, option_names)
+    if choice is None:
+        return []
+
+    store.add_members(reaction.space_id, [reaction.sender_phone])
+    store.log_message(
+        reaction.space_id,
+        reaction.sender_phone,
+        f"({reaction.tapback} tapback on poll option {choice + 1})",
+        reaction.sent_at,
+    )
+    actions = TripActions(store, trip.space_id, reaction.sender_phone)
+    actions.record_sender_vote(choice)
+    _log_sent(store, reaction.space_id, actions.outbox)
+    return actions.outbox
 
 
 def _respond(

@@ -9,11 +9,13 @@ import { scoutUrl } from "../scout";
 import { DevChat, connectDevChat, readPhoto, type ChatEntry, type Exchange } from "./platform";
 import { parseScript, runScript, type ScriptEvent } from "./script";
 import { loadSession, saveSession, type Session } from "./session";
-import { SEED_STAGES, resetTrip, seedTrip, showTrip, type SeedStage, type TripSummary } from "./trips";
+import { TAPBACKS, isTapback } from "../tapbacks";
+import { SEED_STAGES, resetTrip, seedTrip, showMessages, showTrip, type SeedStage } from "./trips";
 
 const USAGE = `Usage (from bridge/, with the scout service running):
   bun run devchat start maya leo priya [--from ${SEED_STAGES.join("|")}]
   bun run devchat say maya "hey @scout, spring break?"
+  bun run devchat react priya like "San Juan"     (or a message ID, or scout.last)
   bun run devchat photo leo receipts/airbnb.jpg
   bun run devchat transcript
   bun run devchat state [--chat <chat id>]
@@ -33,6 +35,8 @@ async function runCommand([command, ...args]: string[]): Promise<void> {
       return start(args);
     case "say":
       return say(args);
+    case "react":
+      return react(args);
     case "photo":
       return sendPhoto(args);
     case "transcript":
@@ -62,6 +66,14 @@ async function start(args: string[]): Promise<void> {
 async function say([name, ...words]: string[]): Promise<void> {
   if (!name || words.length === 0) throw new Error(USAGE);
   await sendInSavedChat((chat) => chat.say(name, words.join(" ")));
+}
+
+async function react([name, tapback, target]: string[]): Promise<void> {
+  if (!name || !tapback || !target) throw new Error(USAGE);
+  if (!isTapback(tapback)) {
+    throw new Error(`A tapback is one of ${TAPBACKS.join(", ")}, not "${tapback}".`);
+  }
+  await sendInSavedChat((chat) => chat.react(name, target, tapback));
 }
 
 async function sendPhoto([name, path]: string[]): Promise<void> {
@@ -106,7 +118,7 @@ async function run([path]: string[]): Promise<void> {
   const script = parseScript(await file.text(), dirname(path));
 
   const session = await startChat(script.members, script.from);
-  const chat = new DevChat(session.chatId, session.members);
+  const chat = new DevChat(session.chatId, session.members, session.transcript);
   const stop = await connectDevChat(chat);
   let passed: boolean;
   try {
@@ -128,19 +140,23 @@ async function startChat(names: string[], stage: SeedStage | null): Promise<Sess
     phone: `+1555000${String(index + 1).padStart(4, "0")}`,
   }));
   const chatId = `devchat-${crypto.randomUUID().slice(0, 8)}`;
-  const trip = stage
-    ? await seedTrip(
-        chatId,
-        stage,
-        members.map((member) => ({ phone: member.phone, name: capitalize(member.name) })),
-      )
-    : null;
-  const session = { chatId, members, transcript: [] };
+  if (stage) {
+    const named = members.map((member) => ({ phone: member.phone, name: capitalize(member.name) }));
+    await seedTrip(chatId, stage, named);
+  }
+  // A seeded chat starts with what scout "said" to get there, such as the poll,
+  // so members can vote on it with a tapback.
+  const seeded = stage ? await showMessages(chatId) : [];
+  const transcript = seeded
+    .filter((message) => message.sender_phone === null)
+    .map((message, index) => ({ id: `m${index + 1}`, from: "scout", text: message.text }));
+  const session = { chatId, members, transcript };
   await saveSession(session);
 
   const roster = members.map((member) => `${member.name} (${member.phone})`).join(", ");
   console.log(`Started ${chatId} with ${roster}.`);
-  if (trip) console.log(describeSeededTrip(trip));
+  if (stage) console.log(`It starts at ${stage}, where scout has already said:`);
+  transcript.forEach(printEntry);
   return session;
 }
 
@@ -188,18 +204,6 @@ function printScriptEvent(event: ScriptEvent): void {
 
 function printEntry(entry: ChatEntry): void {
   console.log(`[${entry.id}] ${entry.from}: ${entry.text}`);
-}
-
-function describeSeededTrip(trip: TripSummary): string {
-  if (trip.open_poll) {
-    const options = trip.open_poll.options.map(
-      (option, index) =>
-        `  ${index + 1}. ${option.name} (~$${option.estimated_cost_per_person_usd}/person)`,
-    );
-    return ["The destination poll is open. Members vote by number:", ...options].join("\n");
-  }
-  const dates = trip.dates ? `, ${trip.dates.start} to ${trip.dates.end}` : "";
-  return `The destination is chosen: ${trip.destination}${dates}.`;
 }
 
 function readStage(value: string): SeedStage {

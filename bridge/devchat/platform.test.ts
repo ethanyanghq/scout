@@ -8,12 +8,14 @@ const staysQuiet = () => Response.json({ actions: [] });
 const scoutSays = (...texts: string[]) =>
   Response.json({ actions: texts.map((text) => ({ type: "say", text })) });
 let received: IncomingText[] = [];
+let receivedPaths: string[] = [];
 let respond: () => Response = staysQuiet;
 const stubScout = Bun.serve({
   hostname: "127.0.0.1",
   port: 0,
   async fetch(request) {
     received.push((await request.json()) as IncomingText);
+    receivedPaths.push(new URL(request.url).pathname);
     return respond();
   },
 });
@@ -33,6 +35,7 @@ const PRIYA = { name: "priya", phone: "+15550000003" };
 
 beforeEach(() => {
   received = [];
+  receivedPaths = [];
   respond = staysQuiet;
 });
 
@@ -134,6 +137,35 @@ describe("the developer console's group chat", () => {
     const exchange = await inChat([MAYA, LEO], (chat) => chat.say("maya", "2"));
 
     expect(exchange.replies).toEqual([{ id: "m2", from: "scout", text: "Got it" }]);
+  });
+
+  test("sends a member's tapback to scout with the words of the message it's on", async () => {
+    const poll = [
+      { id: "m1", from: "scout", text: "🗳️ Where should we go?" },
+      { id: "m2", from: "scout", text: "1. Tulum, Mexico (~$900/person est.): Beaches" },
+      { id: "m3", from: "scout", text: "2. San Juan, Puerto Rico (~$750/person est.): No passport" },
+    ];
+
+    const exchange = await inChat(
+      [MAYA, LEO],
+      (chat) => chat.react("leo", "San Juan", "like"),
+      poll,
+    );
+
+    expect(exchange.sent).toEqual({ id: "m4", from: "leo", text: "👍 on m3", tapback: "like", on: "m3" });
+    expect(receivedPaths).toEqual(["/reactions"]);
+    expect(received[0]).toMatchObject({
+      space_id: "chat-1",
+      sender_phone: LEO.phone,
+      tapback: "like",
+      message_text: "2. San Juan, Puerto Rico (~$750/person est.): No passport",
+    });
+  });
+
+  test("refuses a tapback on words scout never sent", async () => {
+    const tapping = inChat([MAYA], (chat) => chat.react("maya", "Paris", "like"));
+
+    await expect(tapping).rejects.toThrow('scout hasn\'t sent a message matching "Paris".');
   });
 
   test("numbers new messages after a reopened chat's earlier ones", async () => {

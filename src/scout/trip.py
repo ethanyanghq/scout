@@ -58,6 +58,19 @@ class IncomingMessage:
 
 
 @dataclass(frozen=True)
+class IncomingReaction:
+    """A tapback (or other reaction) a member added to a message in the chat."""
+
+    space_id: str
+    sender_phone: str
+    # A tapback's name ("like"), or the emoji of any other reaction.
+    tapback: str
+    # The words of the message it's on, when the bridge can find them.
+    message_text: str | None
+    sent_at: datetime
+
+
+@dataclass(frozen=True)
 class PreferenceUpdate:
     """What a member shared in one message. None means "didn't mention it"."""
 

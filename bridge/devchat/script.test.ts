@@ -35,6 +35,18 @@ describe("reading a console script", () => {
     ]);
   });
 
+  test("reads tapbacks on scout's latest message or on one with given words", () => {
+    const script = parseScript(
+      'members maya leo\nmaya react like "San Juan"\nleo react love scout.last',
+      FOLDER,
+    );
+
+    expect(script.steps.map(({ line, source, ...step }) => step)).toEqual([
+      { kind: "react", member: "maya", tapback: "like", target: "San Juan" },
+      { kind: "react", member: "leo", tapback: "love", target: "scout.last" },
+    ]);
+  });
+
   test("keeps colons inside a message", () => {
     const script = parseScript("members maya\nmaya: @scout plan it: not too packed", FOLDER);
 
