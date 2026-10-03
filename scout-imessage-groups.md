@@ -1,21 +1,22 @@
-# iMessage group chats without Photon Business
+# iMessage group chats through Linq and Photon
 
 | | |
 | --- | --- |
-| **Question** | How does scout work in iMessage group chats when we're on Photon's Pro plan, not Business? |
-| **Decision** | A bridge program on a Mac signs into an Apple ID created just for scout, joins groups as that account and relays them to scout's agent on Photon Pro. The agent controls the group through commands the bridge carries out. |
-| **Docs version** | Photon Stable docs, read October 2, 2026 |
+| **Question** | How does scout join iMessage group chats when we're on Photon's Pro plan, not Business, and can't get an Apple ID for scout? |
+| **Decision** | scout's iMessage number is a Linq line, and members add it to their group like any person. The bridge plugs Linq into Photon's Spectrum SDK as a custom platform, so every group message still goes through Photon. This replaces the October 2 plan, which ran scout's own Apple ID on a Mac with BlueBubbles. |
+| **Docs version** | spectrum-ts 12.10.1 and Linq Partner API v3, read October 3, 2026 |
 | **Related** | [scout-PRD.md](scout-PRD.md): GC-1, GC-4, GC-6, DS-1 to DS-3, AL-4, and the messaging risks in the risks table |
 
 ## Summary
 
-Photon Pro can't do iMessage group chats. Business can, at $250 per number per month. We get groups anyway by giving scout a real iMessage account on a Mac we control:
+Photon Pro can't do iMessage group chats, and Business costs $250 per number per month. The earlier workaround needed an Apple ID created just for scout, and we can't get one. So:
 
-- **In the group.** scout has its own Apple ID, and members add it to their group like any person. BlueBubbles Server, running on that Mac, gives the bridge nearly every native iMessage feature: tapbacks, typing indicators, threaded replies and more.
-- **Bridge to agent.** The bridge passes group messages to scout's agent on Photon Pro and carries out the commands the agent sends back.
-- **Private chats.** Scout's private DMs with members go straight through Photon Pro's iMessage line, which fully supports one-to-one chats, native polls included.
+- **In the group.** A [Linq](https://linqapp.com) line is a real iMessage phone number. Members add it to their group. Linq reports every message as a webhook and sends scout's replies by chat ID.
+- **Through Photon.** The bridge registers Linq as a custom Spectrum platform (`definePlatform`), next to Photon's built-in providers. The hackathon requires Photon in the message path, and this keeps it there. It also gives the bridge one message loop for every line.
+- **Native features.** Linq's API covers tapbacks, threaded replies, typing indicators, member changes, native polls, message effects and link cards. Each maps once onto Spectrum's content types, so scout's features don't depend on which line carries them.
+- **Testing without phones.** A second custom platform, the developer console, plays a whole group in the terminal. Developers and AI agents script group conversations with it, and it shows link cards the way iMessage will.
 
-The demo needs build steps 1–3. Steps 4–5 add features.
+The build plan and its checklist are in [scout-group-chat-plan.md](scout-group-chat-plan.md).
 
 ## Why Pro blocks groups
 
@@ -31,171 +32,200 @@ From Photon's [iMessage connection and routing](https://photon.codes/docs/spectr
 | Pro (ours) | $25/month | Shared pool | Limited |
 | Business | $250 per number per month | One dedicated number | Full |
 
-A program can't join an iMessage group by itself either: Apple has no join link and no API for it. The only way in is for a member to add an iMessage account. So scout needs a real iMessage account, signed in on a device we control.
+Apple has no join link and no API for joining a group. The only way in is for a member to add an iMessage account, so scout needs a real iMessage number of its own. Linq provides one without an Apple ID.
 
 ## Architecture
 
 ```
-iMessage group (A, B, C) ◀──────▶ scout's account on a dedicated Mac
-                                     │  BlueBubbles + Private API: native features in the group
-                                     │  imessage-kit: backup if the Private API breaks
-                                     ▼
-                                   Bridge: groups only, group tags, message IDs,
-                                     │     events, runs or mimics each command
-                                     │  JSON commands and events
-                                     ▼
-                                   Photon Pro (Telegram link) ──▶ scout agent (each command is an AI tool)
-                                                                       │
-                     Members' private DMs ◀── Photon Pro iMessage line ┘ (native polls, tapbacks, typing)
+iMessage group (Maya, Leo, Priya + scout's Linq number)
+        │ webhooks                   ▲ send, react, reply, typing
+        ▼                            │
+      Linq (Partner API v3)  ────────┘
+        │ linq webhooks listen --forward-to relays events to this Mac
+        ▼
+      bridge/: one Spectrum app (Photon's SDK)
+        │  providers: linq (custom) · devchat (custom, the developer console) · imessage (Photon line)
+        │  HTTP: events in, actions out
+        ▼
+      src/scout/: conversation rules, Claude agent, SQLite
 ```
 
-### 1. Identity: a dedicated Apple ID named "scout"
+### 1. scout's number: a Linq line
 
-- We create a new Apple ID only for scout. Its Messages database holds no one's private chats. If Apple flags it, nobody loses their own iMessage.
-- Creating the account needs a trusted phone number for two-factor authentication. A teammate's number works. It only receives sign-in codes and never becomes scout's iMessage address.
-- On a Mac, iMessage uses the Apple ID's email address. Only an iPhone with a SIM can register a phone number to the account. The email address is enough, because members can add an email address to a group. If we want a number later, a prepaid SIM in a spare iPhone can register one.
-- The account runs in its own macOS user on an always-on Mac, because Messages allows only one iMessage account per macOS user.
-- Turn on **Messages → Settings → Share Name and Photo** with the name "scout" and an icon.
-- Members add scout to their group by the account's email address.
+- **One line per teammate.** Each developer runs `linq signup` and gets their own number and API key, so teammates never receive each other's webhooks.
+- **Free line limits.** A free line takes up to 20 contacts, and each contact must text the line before it can message them. So every member texts scout's number privately once (after `linq contacts add`). scout ignores those private texts.
+- **Groups.** Group chats take up to 31 handles and must be iMessage (or RCS), not SMS.
+- **Rate limits.** 7,000 messages per line per day, and 30 per minute between scout and any one person. Going over returns HTTP 429.
+- **Delivery.** Webhooks arrive at least once, so the bridge skips repeats by `event_id`. Deliveries are signed (Standard Webhooks headers).
+- **No public URL.** In development, `linq webhooks listen --forward-to` relays events to the bridge on `127.0.0.1`. The bridge runs on a Mac because it converts iPhone photos to JPEG with macOS's `sips`.
 
-### 2. Native group features: BlueBubbles with the Private API
+### 2. Linq inside Photon: a custom Spectrum platform
 
-[BlueBubbles Server](https://bluebubbles.app) (open source, Apache-2.0) has an optional Private API mode. It loads a helper inside the Messages app and calls the same internal functions the app uses when someone taps a button. That unlocks what Apple's public scripting can't do:
+spectrum-ts exports `definePlatform` from `spectrum-ts/authoring` ([Building a custom platform](https://photon.codes/docs/spectrum-ts/custom-platforms.md)). A platform supplies a config schema, `user.resolve`, `space.create`, a client, a `messages` generator for inbound messages, and one `send` function that handles every outbound content type. For webhook platforms, Spectrum's `fusor` turns each delivery into an inbound message. Custom platforms run in the same `Spectrum()` app as built-in ones and need no Photon cloud credentials.
 
-- tapbacks, typing indicators, threaded replies
-- edit, unsend, message effects, read receipts
-- renaming the group, changing its photo, adding and removing members, creating groups
+| Linq | Spectrum |
+| --- | --- |
+| `message.received` (text and media parts) | Inbound message: text, attachment, or a group of both |
+| `reaction.added`, `reaction.removed` | Inbound reaction |
+| `participant.added`, `participant.removed` | Member events, if a custom platform can raise them (to test) |
+| Send a message to a chat ID | `send` with text, or a reply to a message ID |
+| React to a message | `send` with a reaction |
+| Typing indicator | `send` with typing start and stop |
+| A chat's handles | `space.getMembers()` |
 
-**Backup:** keep Photon's [`imessage-kit`](https://github.com/photon-hq/imessage-kit) (MIT) installed. It reads the Messages database and sends through AppleScript, so it handles text, photos and links with no Private API. If a macOS update breaks the Private API helper, the bridge drops to `imessage-kit` without going offline.
+Once Linq is a platform, `bridge/index.ts` goes back to one `for await (… of app.messages)` loop, and `IMESSAGE_MODE` only chooses which providers to register. Photon's cloud line stays available for one-on-one chats. Local mode stays in the code, but it needs an Apple ID signed into Messages on the Mac.
 
-### 3. The bridge
+### 3. Bridge to scout: events in, actions out
 
-The bridge runs in scout's macOS user and is the core of the system.
+Today the bridge posts one text (and maybe a photo) and gets back a list of strings. That can't carry tapback votes, threaded replies or anything else iMessage does. Each Spectrum message has an ID, so the bridge and scout exchange events and actions that refer to messages by ID:
 
-- **Groups only.** Private chats go through the Photon Pro line (see [Private DMs](#6-private-dms-gc-6-the-photon-pro-imessage-line)), so the bridge ignores direct messages to scout's account. The account belongs to scout alone, so every group it's in is one somebody added it to, and the bridge forwards all of them without an allow list.
-- **Routing.** It tags each group with a short ID, gives every message an ID, and ignores scout's own outgoing messages so it never loops.
-- **Events.** It passes reactions, people joining or leaving, and photos up to the agent, not only text.
-- **Commands.** It carries out each agent command natively where it can and mimics it where it can't (see [Commands](#commands)).
-- **Capability report.** At startup it tells the agent which commands work right now. If the Private API breaks, the agent stops asking for native features without any change to its code.
+```json
+{"event": "message", "chat": "c1", "id": "m42", "from": "+15551234567", "text": "2", "reply_to": null}
+{"event": "reaction", "chat": "c1", "on": "m40", "from": "+15551234567", "tapback": "like", "removed": false}
+{"event": "member_joined", "chat": "c1", "member": "+15557654321"}
+{"action": "say", "text": "Got it, Leo votes San Juan", "reply_to": "m42"}
+{"action": "react", "on": "m42", "tapback": "like"}
+{"action": "say", "text": "🎉 San Juan wins!", "effect": "confetti"}
+{"action": "link", "url": "https://scout.example/trips/c1/poll"}
+```
 
-### 4. Bridge to agent: Photon Pro over Telegram
+- **Capabilities, later.** Once two lines in use support different actions (local mode has no reactions, for example), the bridge will tell scout which actions work so the agent only offers those. Linq and the developer console support the same actions, so this waits.
+- **Link cards.** A `link` action sends one URL as a message of its own, which Linq requires. iMessage shows it as a card built from the page's Open Graph tags, and tapping it opens the page in Safari. iMessage never runs HTML or JavaScript in the chat, so anything interactive (a live poll board, the itinerary with a map, the album) lives on a page scout hosts. The card is a snapshot from when it was sent, so scout sends a new link to show new state.
+- **The agent never writes this format.** Each action is an agent tool (`say`, `react`, `reply_to`), and the bridge turns each into one Spectrum `send`.
+- **Typing** has to start before scout's reply is ready, so it needs either a streamed response or a second call from the service. Decide this when building it.
 
-The bridge talks to scout's agent through Photon Pro's Telegram provider rather than by iMessage DM. Every group message would otherwise create a second iMessage from scout's account. That doubles the bot-like traffic Apple filters for, on a new account with no history to vouch for it. Telegram also carries JSON without the risk of iMessage turning links into preview cards.
+### 4. Testing without phones: the developer console
 
-A Telegram bot can't message another bot, so the bridge uses a Telegram *user* account (through a library such as [gramjs](https://gram.js.org)) to message scout's Photon bot.
+The developer console is a second custom Spectrum platform (`devchat`) that plays a whole group in the terminal. Messages go through the same bridge, service and agent as a real group; only Linq is swapped out. Unlike `scout-simulate`, which calls the Python service directly, it tests the bridge too. It shows everything a group would see: text, photos, tapbacks, threaded replies, effects, polls and link cards.
 
-### 5. The agent
+#### Scripts
 
-Each command is an AI tool: `say`, `poll`, `react`, `reply_to`, `send_photo` and so on. When the agent calls one, the call becomes a single JSON command. The model never writes command syntax by hand, so it can't produce a malformed command.
+A script is a plain-text file that reads like the chat it plays. People and AI agents write it the same way. A sketch (syntax not final):
 
-### 6. Private DMs (GC-6): the Photon Pro iMessage line
+```
+# The group votes, and scout announces the winner with a link card.
+members maya leo priya
+from poll-open
 
-Pro fully supports one-to-one iMessage, including native polls, tapbacks, typing indicators and contact cards, which is more than anything inside the group.
+maya: 1
+leo: 2
+priya: 1
+leo react like scout.last
+maya reply scout.last: tulum!!
 
-- **Registration.** Pro only messages registered users. Photon's CLI has `photon spectrum users add`, so the bridge could register members automatically as they appear in groups.
-- **Capacity.** The 100-user cap covers about 20 groups of five.
-- **Trade-off.** Private chats come from a Photon number, not the email address scout uses in groups. Scout explains this once ("for private stuff, text me here") and sends its contact card.
+expect state destination = "Tulum, Mexico"
+expect scout ~ "Tulum"
+expect card title ~ "Tulum"
+```
+
+- **`name: text`** sends a message. `react`, `reply` and `photo` send a tapback, a threaded reply or a photo.
+- **`from`** starts the chat at a seeded stage, such as `poll-open` or `destination-chosen`, so a script about voting doesn't replay preference collection through Claude.
+- **Messages are named, never numbered.** A script points at `scout.last` or a label, because message IDs change between runs.
+- **`expect` checks the trip and scout's replies.** Claude's wording changes between runs, so scripts check the trip's state, a word a reply must contain (`~`), or a link card's fields, never whole replies.
+- **Two ways to run them.** `devchat run <script>` replays a script and prints the transcript. `bun test` runs every script in `e2e/` as the E2E tests for the critical user journeys in `AGENTS.md`. Scripts call the real Claude API, so seeded stages also keep them short and cheap.
+
+#### One command at a time, for agents
+
+The same steps also run as separate shell commands, so an AI agent can explore without writing a script first. Each command waits until scout has finished replying, then prints the replies with their message IDs. A message is finished when the bridge asks the console for the next message, so commands never wait a fixed time.
+
+```sh
+devchat start maya leo priya --from poll-open
+devchat say leo "2"
+devchat react priya scout.last like
+devchat state          # the trip: stage, members, preferences, poll and votes, expenses
+devchat transcript
+devchat reset          # clears this chat's trip, without deleting all of scout.db
+```
+
+`state`, `reset` and the seeded stages need a few dev-only endpoints on the Python service. `reset` also works on a real group's chat ID.
+
+#### Link cards
+
+When scout sends a link, the console builds the card the way Linq does: from `og:title`, `og:description` and `og:image`, then Twitter Card tags, then the page's `<title>` and first image. It prints the card's text, saves the card image as a file a person or agent can open, and warns about anything Linq would refuse or show badly:
+
+- the link shares its message with text or other parts;
+- the URL isn't HTTPS, or is longer than 2,048 characters;
+- the page has no title or no image.
+
+```
+scout [m12] link card  http://127.0.0.1:8787/trips/c1/poll
+  title        Tulum wins 🌴
+  description  2 of 3 votes · Mar 14–20 · ~$900/person
+  image        .devchat/cards/m12.png (1200×630)
+  ⚠ Not HTTPS: Linq only builds previews for https:// links.
+```
+
+In development, scout's pages are served by the local service, so cards and the pages behind them can be built and checked before any public hosting exists. The developer opens the URL in a browser to try the page itself.
+
+**Nothing ships that the console can't show.** Each new action lands together with how the console displays it and a script that uses it.
 
 ## Feature sources
 
 | Feature | Source |
 | --- | --- |
-| Real iMessage group, blue bubbles | scout's Apple ID on the Mac |
-| Tapbacks, typing, threaded replies, edit/unsend, effects | BlueBubbles Private API |
-| Rename, group photo, add/remove members | BlueBubbles Private API |
-| Group polls (DS-1 to DS-3) | Native if BlueBubbles supports them, otherwise 👍 voting on one message per option |
-| Join/leave events (AL-4), incoming tapbacks, photos (CS-7, AL-3) | Bridge events |
-| Who said what (GC-4) | Sender's phone number on every forwarded message |
-| Private DMs with native polls and contact cards (GC-6) | Photon Pro iMessage line |
-| Message history for context | The Mac's Messages database |
-
-## Commands
-
-The agent sends commands and the bridge sends events, both as JSON. Every message carries its group tag in `g`.
-
-```json
-{"g": "a1b2c3", "cmd": "poll", "question": "Where to?", "options": ["Tulum", "Miami", "Austin"]}
-{"g": "a1b2c3", "event": "message", "id": "m42", "from": "+15551234567", "text": "@scout tacos nearby?"}
-{"g": "a1b2c3", "event": "reaction", "on": "m40", "from": "+15551234567", "tapback": "like"}
-{"event": "hello", "capabilities": {"poll": "emulated", "react": "native", "typing": "native"}}
-```
-
-How the bridge handles each command, depending on whether the Private API is working:
-
-| Command | With BlueBubbles Private API | Backup (`imessage-kit`) |
-| --- | --- | --- |
-| `say` | Native | Native |
-| `send_photo` | Native | Native (download the file first; `imessage-kit` only sends local files) |
-| `link` (album, directions, booking) | Native, with Messages' link preview | Native, with Messages' link preview |
-| `poll` | Native if supported, otherwise 👍 voting | 👍 voting: one message per option, bridge counts tapbacks |
-| `react` | Native tapback | Short text such as "✅ logged" |
-| `reply_to` | Native threaded reply | Quote: "↪ Maya: 'tacos?' …" |
-| `typing` | Native | Skipped |
-| `rename_group`, `add_member` | Native | Not possible |
+| Real iMessage group, blue bubbles | scout's Linq line |
+| Who said what (GC-4) | The sender's handle on each Linq message |
+| Quiet members (people who haven't texted) | The Linq chat's handles |
+| Tapbacks in and out | Linq reactions, as Spectrum reactions |
+| Threaded replies | Linq replies, as Spectrum replies |
+| Typing indicator | Linq's typing indicator |
+| Receipt photos (CS-7) | Linq media URLs, converted to JPEG by the bridge |
+| Members joining or leaving (AL-4) | Linq participant events |
+| Native group polls (DS-2) | Linq poll events (untested); numbered replies until then |
+| Link cards for scout's pages (live poll board, itinerary, album) | Linq `link` parts, as Spectrum rich links; the pages are hosted by scout |
+| Message effects (confetti for the winner) | Linq message effects |
+| Pictures scout makes (an itinerary card, poll results) | Linq media uploads |
+| Chat background, group name and photo | Linq (renaming and the group photo to confirm) |
+| Private chats (GC-6) | Not decided: Photon's cloud line or the Linq line's private chats |
 
 ## Setup
 
-### Mac and account
-
-1. Create scout's Apple ID at [account.apple.com](https://account.apple.com), with a teammate's phone number for two-factor codes.
-2. On an always-on Mac, create a macOS user called "scout."
-3. Log in as "scout," sign into Messages with scout's Apple ID, and set Share Name and Photo to "scout."
-4. Send a test message to a teammate right away. New Apple IDs sometimes fail to activate iMessage on a Mac. If it won't activate, fix that before building anything else, through Apple Support if needed.
-5. Grant Full Disk Access to Terminal (and later to BlueBubbles and the bridge) under **System Settings → Privacy & Security**.
-6. Switch back to another user from Control Center *without logging scout out*. Scout's session keeps running in the background.
-7. Keep the Mac awake and set it to restart after a power cut. A sleeping Mac stops receiving messages. For a quick test, `caffeinate -dims` in scout's session is enough.
+1. Install the CLI and get a line: `npm i -g @linqapp/cli && linq signup`. It prints scout's number and an API key.
+2. In `bridge/.env`, set `IMESSAGE_MODE=linq` and `LINQ_API_KEY`.
+3. Add each tester with `linq contacts add`, and have each one text scout's number once.
+4. Start the service (`uv run --env-file .env scout-server`), the bridge (`cd bridge && bun start`), and the relay (`linq webhooks listen --forward-to http://127.0.0.1:8788/linq-events`).
+5. Keep the Mac awake (`caffeinate -dims`). A sleeping Mac stops relaying.
 
 ### Getting scout into a group
 
-From an iPhone in the group, tap the group's name, then **Add Member**, and enter scout's email address.
+From an iPhone in the group, tap the group's name, then **Add Member**, and enter scout's number.
 
 - Every member must be on iMessage (blue bubbles). SMS groups don't allow adding people.
 - Apple may only allow adding people to a group that already has at least three other members. If the group is smaller, start a new group that includes scout.
 
-### Keeping it running
-
-- Run the bridge and BlueBubbles as macOS background services (launchd) that restart automatically if they crash.
-- Turn off automatic macOS updates once BlueBubbles works on the current version.
-- Have a scheduled check text scout from a test account and alert us if no reply comes.
-
 ## Build order
 
-1. **Set up the account and test the Mac (one afternoon).** Create scout's Apple ID and confirm iMessage activates on the Mac. This is the step most likely to fail, so do it first. Then install BlueBubbles, turn on the Private API, and check each feature in a test group: tapback, typing, threaded reply, rename, add member, native poll. The results decide which commands can be native.
-2. **Basic bridge.** Use `imessage-kit` only: forward group messages to the agent, ignore direct messages, tag groups, route replies back.
-3. **Protocol.** Add the JSON commands and events, the agent's tools and the capability report.
-4. **Native features.** Switch the bridge's in-group actions to BlueBubbles, with `imessage-kit` as the backup.
-5. **Private DMs.** Add Pro DMs and automatic user registration.
-
-Steps 1–3 are enough for the demo.
+The milestones and their checklist are in [scout-group-chat-plan.md](scout-group-chat-plan.md). Today the bridge relays Linq group chats beside Spectrum, not inside it (`bridge/linq.ts`).
 
 ## Open questions to test
 
-- **Native group polls.** iMessage polls are new in iOS 26. Photon's paid server can create them, but nothing in BlueBubbles' public issues or releases shows it can.
-- **Incoming tapbacks.** `imessage-kit`'s `Message` type has a `reaction` field, so 👍 voting should work in backup mode. Test it.
-- **Telegram on Pro.** Photon's Telegram setup docs ask only for a bot token and project credentials, but nothing says which plans include it.
-- **Registering users from code.** Check whether `photon spectrum users add` can run without prompts so the bridge can call it.
+- **Free-line features.** Do reactions, threaded replies, typing, polls, effects and link cards work on Linq's free line, or only on paid lines? Can scout rename the group and set its photo?
+- **Hosting scout's pages.** Link cards need a public HTTPS URL, but the bridge and service run on a Mac. Should that be a tunnel from the Mac, or a separate host?
+- **Payload shapes.** What do `reaction.added` and `participant.added` look like, and does `message.received` say which message it replies to? Record real payloads as test fixtures.
+- **Photo format.** Do iPhone photos arrive from Linq as HEIC, or already as JPEG?
+- **Spectrum events.** Can a custom platform raise member joins and leaves, or only messages?
+- **Private chats (GC-6).** Photon's cloud line, or the Linq line's private chats?
 
 ## Risks
 
 | Risk | Mitigation |
 | --- | --- |
-| The new Apple ID won't activate iMessage on the Mac. | Create the account and sign into Messages before building anything that depends on it. Contact Apple Support if activation fails. |
-| Apple flags scout's Apple ID as a bot. A new account has no history, which makes this more likely, and there's no recovery process like Photon offers Business customers. | Keep machine traffic off iMessage (Telegram link), have people message scout first, pace replies, no late-night messages, no more than 2–3 follow-ups. See Photon's [deliverability guide](https://photon.codes/docs/best-practices/imessage-deliverability.md). If the account is banned anyway, create a new one. No one's personal account is affected. |
-| A macOS update breaks the BlueBubbles Private API. | Turn off automatic updates. The bridge falls back to `imessage-kit` and reports reduced capabilities. |
-| Private API mode weakens macOS security on that Mac (System Integrity Protection is partly turned off). | Use a dedicated Mac with nothing personal on it, never a daily laptop. |
-| The Mac sleeps, restarts or loses Wi-Fi, and scout goes offline. | Background services, sleep disabled, health check alerts, and the PRD's fallback demo ready. |
+| The free line's 20-contact cap and texted-first rule block a demo phone. | Add every demo phone and have it text scout days ahead. Each teammate has their own line, so their testers don't share one cap. |
+| Apple flags scout's number for automated messaging. | Follow Photon's [deliverability guide](https://photon.codes/docs/best-practices/imessage-deliverability.md): people text scout first (the free line requires it anyway), no cold outreach, no bursts, and stay well under Linq's limits. |
+| Linq, the CLI relay, or the Mac goes down during the demo. | Keep the Mac awake and plugged in, send a test text 30 minutes before, and keep the developer console, `scout-simulate` and the journey page ready as fallbacks. |
+| A spectrum-ts update changes the custom platform API. | Upgrade spectrum-ts on purpose, never in the week of the demo, and keep the console's scripts as the check that nothing broke. |
 | An Android member turns the group into SMS, which this setup can't handle. | Out of scope: we're targeting iMessage only. |
 
 ## Options considered
 
 | Option | Why not chosen |
 | --- | --- |
+| scout's own Apple ID on a Mac, with BlueBubbles (the October 2 plan) | We can't get an Apple ID for scout. It also needed a dedicated Mac with System Integrity Protection partly turned off for BlueBubbles' Private API. |
+| Linq on its own, outside Spectrum | It's how the bridge works today, but the hackathon needs Photon in the message path. It also means a second message loop, with every rich feature built twice. |
 | Buy Photon Business | $250 per number per month. |
-| Use a teammate's personal Apple ID | Its Messages database holds their private chats, so the bridge would need an allow list to keep those away from the AI. A ban would cost them their own iMessage. People who have them saved as a contact would see their name instead of "scout," and their iPhone would show every scout group. |
-| Test whether Pro handles existing groups | The docs hint that Pro can "reference an existing group," but every member would need registering, membership changes aren't reported, and the number is shared. Worth a 15-minute test, not a foundation. |
-| Mac with `imessage-kit` only | Works, and it's our backup mode, but there are no tapbacks, typing indicators, threaded replies or native polls in the group. |
+| Use a teammate's personal Apple ID | Its Messages database holds their private chats, and a ban would cost them their own iMessage. People who have them saved as a contact would see their name instead of "scout." |
 | Fake a group with DMs from Pro | Loses the main selling point: adding scout to the group text you already have. |
-| Move groups to Telegram | Telegram bots join groups natively and it's free, but friends would have to plan outside their existing group text. Kept as a fallback if Apple flags the account. |
+| Move groups to Telegram | Telegram bots join groups natively and it's free, but friends would have to plan outside their existing group text. |
 | WhatsApp Business | Photon's WhatsApp provider supports one-to-one chats only. |
 
 ## Sources
@@ -204,10 +234,9 @@ Steps 1–3 are enough for the demo.
 - [iMessage connection and routing](https://photon.codes/docs/spectrum-ts/providers/imessage/connection-and-routing.md)
 - [iMessage troubleshooting](https://photon.codes/docs/spectrum-ts/troubleshooting/imessage.md)
 - [iMessage deliverability](https://photon.codes/docs/best-practices/imessage-deliverability.md)
-- [Telegram setup](https://photon.codes/docs/spectrum-ts/providers/telegram/setup.md) and [conversations](https://photon.codes/docs/spectrum-ts/providers/telegram/conversations-and-features.md)
-- [WhatsApp Business conversations](https://photon.codes/docs/spectrum-ts/providers/whatsapp-business/conversations.md)
-- [Photon CLI: Spectrum commands](https://photon.codes/docs/cli/spectrum.md)
 - [Building a custom platform](https://photon.codes/docs/spectrum-ts/custom-platforms.md)
-- [imessage-kit on GitHub](https://github.com/photon-hq/imessage-kit)
-- [advanced-imessage-kit on GitHub](https://github.com/photon-hq/advanced-imessage-kit)
-- [BlueBubbles Server on GitHub](https://github.com/BlueBubblesApp/bluebubbles-server)
+- [Linq CLI](https://linqapp.com/cli)
+- [Linq key concepts](https://docs.linqapp.com/channel/imessage/getting-started/key-concepts/)
+- [Linq webhook events](https://docs.linqapp.com/api/resources/webhook_subscriptions/)
+- [Linq iMessage capabilities](https://docs.linqapp.com/channel/imessage/index.md)
+- [Linq rich link previews](https://docs.linqapp.com/guides/messaging/rich-link-previews/)
