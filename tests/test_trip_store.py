@@ -6,6 +6,7 @@ from scout.trip import (
     DateWindow,
     DestinationOption,
     Expense,
+    ItineraryDay,
     PendingReceipt,
     PreferenceUpdate,
     Settlement,
@@ -197,3 +198,42 @@ def test_cleared_place_suggestions_are_gone(store):
     store.clear_place_suggestions(SPACE)
 
     assert store.get_trip(SPACE).place_suggestions == []
+
+
+def test_a_deleted_trip_starts_over_with_nothing_left(store):
+    store.create_trip(SPACE)
+    store.add_members(SPACE, [MAYA, LEO])
+    store.open_poll(SPACE, OPTIONS)
+    store.record_vote(store.get_trip(SPACE).open_poll.id, MAYA, 1)
+    store.replace_itinerary(SPACE, [ItineraryDay(date(2027, 3, 14), "Old San Juan")])
+    store.add_expense(SPACE, LEO, 124_000, "Airbnb")
+    store.add_settlement(SPACE, Settlement(MAYA, LEO, 5_000, False), None)
+    store.save_pending_receipt(SPACE, PendingReceipt(MAYA, "Casa Brisa", 16_400))
+    tacos = Place("place-1", "Lote 23", Coordinates(18.45, -66.07), "$$", None)
+    store.replace_place_suggestions(SPACE, [tacos])
+    store.log_message(SPACE, MAYA, "hey @scout", datetime(2026, 10, 2, 9, 0))
+
+    store.delete_trip(SPACE)
+    store.create_trip(SPACE)
+
+    trip = store.get_trip(SPACE)
+    assert trip.stage == TripStage.COLLECTING_PREFERENCES
+    assert trip.members == []
+    assert trip.open_poll is None
+    assert trip.itinerary == []
+    assert trip.expenses == []
+    assert trip.settlements == []
+    assert trip.pending_receipt is None
+    assert trip.place_suggestions == []
+    assert store.recent_messages(SPACE, limit=10) == []
+
+
+def test_deleting_a_trip_leaves_other_chats_alone(store):
+    store.create_trip(SPACE)
+    store.create_trip("other-chat")
+    store.add_members("other-chat", [MAYA])
+
+    store.delete_trip(SPACE)
+
+    assert store.get_trip(SPACE) is None
+    assert [member.phone for member in store.get_trip("other-chat").members] == [MAYA]
