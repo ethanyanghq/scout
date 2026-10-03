@@ -26,6 +26,7 @@ export type Step = StepSource &
   (
     | { kind: "say"; member: string; text: string }
     | { kind: "react"; member: string; tapback: Tapback; target: string }
+    | { kind: "reply"; member: string; target: string; text: string }
     | { kind: "photo"; member: string; path: string }
     | Expectation
   );
@@ -33,6 +34,7 @@ export type Expectation =
   | { kind: "expect-reply"; contains: string }
   | { kind: "expect-quiet" }
   | { kind: "expect-tapback"; tapback: Tapback }
+  | { kind: "expect-thread"; contains: string }
   | { kind: "expect-state"; path: string; matcher: "=" | "~"; expected: unknown };
 
 // What the checks look at: scout's replies to the latest message, and the trip.
@@ -50,6 +52,8 @@ const STEP_PATTERNS = {
   photo: /^(\w+)\s+photo\s+(.+)$/,
   // The target is "scout.last" or quoted words from one of scout's messages.
   react: /^(\w+)\s+react\s+(\S+)\s+(scout\.last|".*")$/,
+  reply: /^(\w+)\s+reply\s+(scout\.last|".*?"):\s*(.+)$/,
+  expectThread: /^expect\s+thread\s+~\s+(".*")$/,
   expectQuiet: /^expect\s+scout\s+quiet$/,
   expectTapback: /^expect\s+scout\s+reacted\s+(\S+)$/,
   expectReply: /^expect\s+scout\s+~\s+(".*")$/,
@@ -81,7 +85,7 @@ export async function runScript(
 ): Promise<boolean> {
   let latestReplies: ChatEntry[] = [];
   for (const step of script.steps) {
-    if (step.kind === "say" || step.kind === "react" || step.kind === "photo") {
+    if (step.kind === "say" || step.kind === "react" || step.kind === "reply" || step.kind === "photo") {
       const exchange = await send(chat, step);
       report({ kind: "exchange", exchange });
       if (exchange.outcome.kind === "failed") return false;
@@ -103,6 +107,8 @@ function send(chat: DevChat, step: Step): Promise<Exchange> {
       return chat.say(step.member, step.text);
     case "react":
       return chat.react(step.member, step.target, step.tapback);
+    case "reply":
+      return chat.reply(step.member, step.target, step.text);
     case "photo":
       return readPhoto(step.path).then((photo) => chat.sendPhoto(step.member, photo));
     default:
@@ -120,6 +126,12 @@ export function checkExpectation(expectation: Expectation, context: CheckContext
     case "expect-tapback": {
       const reacted = context.replies.some((reply) => reply.tapback === expectation.tapback);
       return { passed: reacted, detail: whatScoutSaid };
+    }
+    case "expect-thread": {
+      const wanted = expectation.contains.toLowerCase();
+      const threaded = context.replies.filter((reply) => reply.replyTo !== undefined);
+      const passed = threaded.some((reply) => reply.text.toLowerCase().includes(wanted));
+      return { passed, detail: whatScoutSaid };
     }
     case "expect-reply": {
       const wanted = expectation.contains.toLowerCase();
@@ -150,6 +162,8 @@ function readLine(script: Script, at: StepSource, scriptFolder: string): void {
     script.steps.push({ ...at, kind: "expect-quiet" });
   } else if ((match = source.match(STEP_PATTERNS.expectTapback))) {
     script.steps.push({ ...at, kind: "expect-tapback", tapback: readTapback(match[1]!) });
+  } else if ((match = source.match(STEP_PATTERNS.expectThread))) {
+    script.steps.push({ ...at, kind: "expect-thread", contains: readQuoted(match[1]!) });
   } else if ((match = source.match(STEP_PATTERNS.expectReply))) {
     script.steps.push({ ...at, kind: "expect-reply", contains: readQuoted(match[1]!) });
   } else if ((match = source.match(STEP_PATTERNS.expectState))) {
@@ -164,6 +178,15 @@ function readLine(script: Script, at: StepSource, scriptFolder: string): void {
       member: readMember(script, name),
       tapback: readTapback(tapback),
       target: target === "scout.last" ? target : readQuoted(target),
+    });
+  } else if ((match = source.match(STEP_PATTERNS.reply))) {
+    const [, name, target, text] = match as [string, string, string, string];
+    script.steps.push({
+      ...at,
+      kind: "reply",
+      member: readMember(script, name),
+      target: target === "scout.last" ? target : readQuoted(target),
+      text,
     });
   } else if ((match = source.match(STEP_PATTERNS.photo))) {
     const member = readMember(script, match[1]!);

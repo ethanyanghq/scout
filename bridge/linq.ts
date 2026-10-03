@@ -15,6 +15,7 @@ import {
   type ProviderMessageRecord,
 } from "spectrum-ts/authoring";
 import z from "zod";
+import { threadedReplySchema } from "./spectrum";
 import { isTapback, tapbackEmoji, tapbackNamed } from "./tapbacks";
 import { isSkipped, logOutcome, type Skipped } from "./trace";
 
@@ -63,12 +64,15 @@ type ReceivedMessage = {
   sender_handle: LinqHandle;
   parts: LinqPart[];
   sent_at: string;
+  // Set when the message is a threaded reply.
+  reply_to?: { message_id: string } | null;
 };
 
 export function linqPlatform(connection: LinqConnection) {
   const api = { apiKey: connection.apiKey, apiUrl: connection.apiUrl ?? LINQ_API_URL };
   return definePlatform(PLATFORM, {
     config: z.object({}),
+    message: { schema: threadedReplySchema },
     user: { resolve: async ({ input }) => ({ id: input.userID }) },
     space: {
       create: async (): Promise<{ id: string }> => {
@@ -113,6 +117,7 @@ export function readLinqEvent(event: LinqEvent): ProviderMessageRecord | Skipped
     sender: { id: message.sender_handle.handle },
     space: { id: message.chat.id },
     timestamp: new Date(message.sent_at),
+    ...(message.reply_to ? { replyTo: { messageId: message.reply_to.message_id } } : {}),
   };
 }
 
@@ -232,9 +237,15 @@ async function sendContent(
   content: Content,
 ): Promise<ProviderMessageRecord> {
   if (content.type === "reaction") return sendTapback(api, chatId, content);
-  if (content.type !== "text") throw UnsupportedError.content(content.type, PLATFORM);
+  const threadUnder = content.type === "reply" ? content.target.id : null;
+  const words = content.type === "reply" ? content.content : content;
+  if (words.type !== "text") throw UnsupportedError.content(content.type, PLATFORM);
+
   const sent = (await callLinq(api, `/chats/${chatId}/messages`, {
-    message: { parts: [{ type: "text", value: content.text }] },
+    message: {
+      parts: [{ type: "text", value: words.text }],
+      ...(threadUnder ? { reply_to: { message_id: threadUnder, part_index: 0 } } : {}),
+    },
   })) as { message: { id: string } };
   return { id: sent.message.id, content, space: { id: chatId }, timestamp: new Date() };
 }

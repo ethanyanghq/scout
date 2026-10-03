@@ -11,20 +11,22 @@ import {
   type ProviderMessageRecord,
 } from "spectrum-ts/authoring";
 import z from "zod";
-import { relaySpectrumMessages } from "../spectrum";
+import { relaySpectrumMessages, threadedReplySchema } from "../spectrum";
 import { tapbackEmoji, tapbackNamed, type Tapback } from "../tapbacks";
 import type { MessageOutcome } from "../trace";
 
 export type ChatMember = { name: string; phone: string };
 
 // One line of the chat. `from` is a member's name, or "scout". A tapback also
-// names which one it was and the message it's on.
+// names which one it was and the message it's on, and a threaded reply the
+// message it's under.
 export type ChatEntry = {
   id: string;
   from: string;
   text: string;
   tapback?: string;
   on?: string;
+  replyTo?: string;
 };
 
 // What happened to one member's message: the bridge's outcome, and scout's
@@ -39,7 +41,9 @@ type InboundRecord = {
   sender: { id: string };
   space: { id: string };
   timestamp: Date;
+  replyTo?: { messageId: string };
 };
+
 type Deliver = (record: InboundRecord) => Promise<void>;
 
 export class DevChat {
@@ -75,6 +79,14 @@ export class DevChat {
     return this.send(memberName, { text: `[photo] ${photo.fileName}` }, content);
   }
 
+  // A threaded reply under `target`, which works as it does for react().
+  reply(memberName: string, target: string, text: string): Promise<Exchange> {
+    const under = this.findEntry(target);
+    return this.send(memberName, { text, replyTo: under.id }, { type: "text", text }, {
+      replyTo: { messageId: under.id },
+    });
+  }
+
   // The rest is called by the Spectrum platform below, not by commands.
 
   connect(deliver: Deliver): void {
@@ -99,18 +111,7 @@ export class DevChat {
   }
 
   recordScoutMessage(content: Content): ProviderMessageRecord {
-    const entry =
-      content.type === "reaction"
-        ? this.addEntry({
-            from: "scout",
-            text: `${content.emoji} on ${content.target.id}`,
-            tapback: tapbackNamed(content.emoji) ?? content.emoji,
-            on: content.target.id,
-          })
-        : this.addEntry({
-            from: "scout",
-            text: content.type === "text" ? content.text : `[${content.type}]`,
-          });
+    const entry = this.addEntry({ from: "scout", ...describeScoutContent(content) });
     return { id: entry.id, content, space: { id: this.chatId }, timestamp: new Date() };
   }
 
@@ -120,6 +121,7 @@ export class DevChat {
     memberName: string,
     shownAs: Omit<ChatEntry, "id" | "from">,
     content: Content,
+    extras: Pick<InboundRecord, "replyTo"> = {},
   ): Promise<Exchange> {
     const member = this.findMember(memberName);
     const deliver = await this.connection.promise;
@@ -132,6 +134,7 @@ export class DevChat {
       sender: { id: member.phone },
       space: { id: this.chatId },
       timestamp: new Date(),
+      ...extras,
     });
     const outcome = await finished;
     this.waitingFor.delete(sent.id);
@@ -180,6 +183,23 @@ export async function readPhoto(path: string): Promise<Photo> {
   return { fileName: basename(path), mimeType, bytes: Buffer.from(await file.arrayBuffer()) };
 }
 
+function describeScoutContent(content: Content): Omit<ChatEntry, "id" | "from"> {
+  switch (content.type) {
+    case "text":
+      return { text: content.text };
+    case "reaction":
+      return {
+        text: `${content.emoji} on ${content.target.id}`,
+        tapback: tapbackNamed(content.emoji) ?? content.emoji,
+        on: content.target.id,
+      };
+    case "reply":
+      return { ...describeScoutContent(content.content), replyTo: content.target.id };
+    default:
+      return { text: `[${content.type}]` };
+  }
+}
+
 // Spectrum only needs a message's id and content to aim a tapback at it.
 function asMessageStub(entry: ChatEntry): Message {
   return { id: entry.id, content: { type: "text", text: entry.text } } as unknown as Message;
@@ -201,6 +221,7 @@ export async function connectDevChat(chat: DevChat): Promise<() => Promise<void>
 function devchatPlatform(chat: DevChat) {
   return definePlatform("devchat", {
     config: z.object({}),
+    message: { schema: threadedReplySchema },
     user: { resolve: async ({ input }) => ({ id: input.userID }) },
     space: { create: async () => ({ id: chat.chatId }) },
     lifecycle: { createClient: async () => chat },

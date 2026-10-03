@@ -117,6 +117,8 @@ class ScoutAgent:
         )
         if message.photo is not None:
             tagged += " It comes with the photo above."
+        if message.reply_to_text is not None:
+            tagged += f' It replies in a thread to: "{message.reply_to_text}".'
         today = date.today()
         return (
             f"Today is {today:%A, %B} {today.day}, {today.year}.\n\n"

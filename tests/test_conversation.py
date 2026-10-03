@@ -354,11 +354,12 @@ def test_numbers_are_just_chat_once_a_place_is_picked(store):
     assert agent.messages_seen == []
 
 
-def tapback(store, sender, on_text, kind="like"):
+def tapback(store, sender, on_text, kind="like", on_id="option-message"):
     reaction = IncomingReaction(
         space_id=SPACE,
         sender_phone=sender,
         tapback=kind,
+        message_id=on_id,
         message_text=on_text,
         sent_at=datetime(2026, 10, 2, 9, 0),
     )
@@ -371,10 +372,15 @@ POLL_QUESTION, TULUM_OPTION, SAN_JUAN_OPTION, MIAMI_OPTION = format_poll(OPTIONS
 def test_a_thumbs_up_on_a_poll_option_counts_as_a_vote(store):
     start_voting(store)
 
-    replies = tapback(store, LEO, SAN_JUAN_OPTION)
+    replies = tapback(store, LEO, SAN_JUAN_OPTION, on_id="san-juan-option")
 
     assert store.get_trip(SPACE).open_poll.votes == {LEO: 1}
-    assert said(replies) == ["Got it, …0002 → San Juan, Puerto Rico (1 of 3 voted)"]
+    assert replies == [
+        Say(
+            "Got it, …0002 → San Juan, Puerto Rico (1 of 3 voted)",
+            reply_to="san-juan-option",
+        )
+    ]
 
 
 def test_a_heart_on_a_poll_option_counts_as_a_vote(store):
@@ -422,3 +428,45 @@ def test_the_last_tapback_vote_closes_the_poll(store):
 
     assert store.get_trip(SPACE).destination == "San Juan, Puerto Rico"
     assert said(replies)[0].startswith("🎉 Poll closed! San Juan, Puerto Rico wins")
+
+
+def reply_in_thread(store, agent, sender, text, replying_to):
+    message = IncomingMessage(
+        space_id=SPACE,
+        sender_phone=sender,
+        text=text,
+        sent_at=datetime(2026, 10, 2, 9, 0),
+        participant_phones=EVERYONE,
+        message_id="reply-message",
+        reply_to_text=replying_to,
+    )
+    return handle_message(message, store, agent)
+
+
+def test_a_threaded_reply_under_a_poll_option_reaches_the_agent_untagged(store):
+    start_voting(store)
+    agent = FakeAgent()
+
+    reply_in_thread(store, agent, LEO, "this one!", replying_to=SAN_JUAN_OPTION)
+
+    assert agent.messages_seen == ["this one!"]
+
+
+def test_a_threaded_reply_under_anything_else_stays_untagged_chatter(store):
+    start_voting(store)
+    agent = FakeAgent()
+
+    reply_in_thread(store, agent, LEO, "lol same", replying_to="who's driving?")
+
+    assert agent.messages_seen == []
+
+
+def test_the_chat_log_shows_what_a_threaded_reply_answers(store):
+    start_voting(store)
+
+    reply_in_thread(
+        store, FakeAgent(replies=[]), LEO, "this one!", replying_to=SAN_JUAN_OPTION
+    )
+
+    logged = store.recent_messages(SPACE, limit=1)[0]
+    assert logged.text == f'(replying to "{SAN_JUAN_OPTION}") this one!'

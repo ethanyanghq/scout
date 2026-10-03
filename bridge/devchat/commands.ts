@@ -15,7 +15,8 @@ import { SEED_STAGES, resetTrip, seedTrip, showMessages, showTrip, type SeedStag
 const USAGE = `Usage (from bridge/, with the scout service running):
   bun run devchat start maya leo priya [--from ${SEED_STAGES.join("|")}]
   bun run devchat say maya "hey @scout, spring break?"
-  bun run devchat react priya like "San Juan"     (or a message ID, or scout.last)
+  bun run devchat react priya like "2. San Juan"  (or a message ID, or scout.last)
+  bun run devchat reply maya "2. San Juan" this one!
   bun run devchat photo leo receipts/airbnb.jpg
   bun run devchat transcript
   bun run devchat state [--chat <chat id>]
@@ -37,6 +38,8 @@ async function runCommand([command, ...args]: string[]): Promise<void> {
       return say(args);
     case "react":
       return react(args);
+    case "reply":
+      return replyInThread(args);
     case "photo":
       return sendPhoto(args);
     case "transcript":
@@ -74,6 +77,11 @@ async function react([name, tapback, target]: string[]): Promise<void> {
     throw new Error(`A tapback is one of ${TAPBACKS.join(", ")}, not "${tapback}".`);
   }
   await sendInSavedChat((chat) => chat.react(name, target, tapback));
+}
+
+async function replyInThread([name, target, ...words]: string[]): Promise<void> {
+  if (!name || !target || words.length === 0) throw new Error(USAGE);
+  await sendInSavedChat((chat) => chat.reply(name, target, words.join(" ")));
 }
 
 async function sendPhoto([name, path]: string[]): Promise<void> {
@@ -203,7 +211,8 @@ function printScriptEvent(event: ScriptEvent): void {
 }
 
 function printEntry(entry: ChatEntry): void {
-  console.log(`[${entry.id}] ${entry.from}: ${entry.text}`);
+  const thread = entry.replyTo ? ` ↪ ${entry.replyTo}` : "";
+  console.log(`[${entry.id}] ${entry.from}${thread}: ${entry.text}`);
 }
 
 function readStage(value: string): SeedStage {

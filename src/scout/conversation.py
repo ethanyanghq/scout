@@ -85,7 +85,10 @@ def handle_reaction(reaction: IncomingReaction, store: TripStore) -> list[Outgoi
         reaction.sent_at,
     )
     actions = TripActions(store, trip.space_id, reaction.sender_phone)
-    actions.record_sender_vote(choice)
+    # Threaded under the option they tapped, so the main chat stays clear.
+    actions.record_sender_vote(
+        choice, confirm=lambda text: Say(text, reply_to=reaction.message_id)
+    )
     _log_sent(store, reaction.space_id, actions.outbox)
     return actions.outbox
 
@@ -134,6 +137,9 @@ def _needs_agent_untagged(trip: Trip, message: IncomingMessage) -> bool:
     """Whether an untagged message might be something scout should act on."""
     if trip.stage == TripStage.COLLECTING_PREFERENCES:
         return True
+    # A threaded reply under a poll option ("this one!") is about the vote.
+    if _replies_to_poll_option(trip, message):
+        return True
     # Before the destination is chosen, dollar amounts and photos are budgets,
     # price talk, and memes, not expenses.
     if trip.destination is None:
@@ -147,13 +153,25 @@ def _needs_agent_untagged(trip: Trip, message: IncomingMessage) -> bool:
     return receipt is not None and receipt.payer_phone == message.sender_phone
 
 
+def _replies_to_poll_option(trip: Trip, message: IncomingMessage) -> bool:
+    if trip.open_poll is None or message.reply_to_text is None:
+        return False
+    option_names = [option.name for option in trip.open_poll.options]
+    return polls.option_in_poll_message(message.reply_to_text, option_names) is not None
+
+
 def _log_sent(store: TripStore, space_id: str, sent: list[Outgoing]) -> None:
     for outgoing in sent:
         store.log_message(space_id, None, as_plain_text(outgoing), datetime.now())
 
 
 def _chat_log_text(message: IncomingMessage) -> str:
+    """How a member's message reads in the chat log the agent sees."""
+    text = message.text
     # The photo itself isn't kept, but later turns should know one was sent.
-    if message.photo is None:
-        return message.text
-    return f"[photo] {message.text}".strip()
+    if message.photo is not None:
+        text = f"[photo] {text}".strip()
+    # A threaded reply makes sense only next to what it answers.
+    if message.reply_to_text is not None:
+        text = f'(replying to "{message.reply_to_text}") {text}'
+    return text

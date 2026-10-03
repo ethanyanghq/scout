@@ -47,6 +47,9 @@ class IncomingMessage:
     # The line's ID for this message, so scout can react or reply to it. None
     # where there's no line, as in scout-simulate.
     message_id: str | None = None
+    # The words of the message this one is a threaded reply to, if it is one
+    # and the bridge could find them.
+    reply_to_text: str | None = None
 
     @property
     def mentions_scout(self) -> bool:
@@ -65,7 +68,9 @@ class IncomingReaction:
     sender_phone: str
     # A tapback's name ("like"), or the emoji of any other reaction.
     tapback: str
-    # The words of the message it's on, when the bridge can find them.
+    # The line's ID for the message it's on, and that message's words when the
+    # bridge can find them.
+    message_id: str
     message_text: str | None
     sent_at: datetime
 

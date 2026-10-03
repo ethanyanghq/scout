@@ -27,11 +27,14 @@ export type IncomingText = {
   photo: IncomingPhoto | null;
   // The line's ID for this message, so scout can react or reply to it.
   message_id: string;
+  // The words of the message this one is a threaded reply to, if it is one.
+  reply_to_text: string | null;
 };
 
 // What scout asks the bridge to send (src/scout/outgoing.py).
 export type ScoutAction =
-  | { type: "say"; text: string }
+  // reply_to threads the text under that message.
+  | { type: "say"; text: string; reply_to: string | null }
   | { type: "react"; message_id: string; tapback: Tapback; fallback_text: string };
 
 // Read on each call, so tests and the end-to-end runner can point the bridge
@@ -46,7 +49,8 @@ export type IncomingTapback = {
   sender_phone: string;
   // A tapback's name ("like"), or the emoji of any other reaction.
   tapback: string;
-  // The words of the message it's on: a poll option's text says which option.
+  // The message it's on, and its words: a poll option's text says which one.
+  message_id: string;
   message_text: string | null;
   sent_at: string;
 };

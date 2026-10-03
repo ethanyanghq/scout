@@ -93,6 +93,13 @@ describe("reading a Linq event", () => {
     });
   });
 
+  test("marks a threaded reply with the message it answers", () => {
+    const event = messageReceived({});
+    const threaded = { ...event, data: { ...(event.data as object), reply_to: { message_id: "poll-option-2" } } };
+
+    expect(readLinqEvent(threaded)).toMatchObject({ replyTo: { messageId: "poll-option-2" } });
+  });
+
   test("skips private chats with scout", () => {
     expect(readLinqEvent(messageReceived({ isGroup: false }))).toEqual({
       skipReason: "a private chat, not a group",
@@ -238,6 +245,24 @@ describe("a Linq group chat through Spectrum", () => {
       tapback: "like",
       message_text: SAN_JUAN_OPTION,
     });
+  });
+
+  test("threads scout's reply under the message it answers", async () => {
+    scoutActions = [{ type: "say", text: "Got it", reply_to: "message-1" }];
+
+    await deliver(messageReceived({}));
+
+    expect(linqReceived).toEqual([
+      {
+        path: "/chats/group-chat-1/messages",
+        body: {
+          message: {
+            parts: [{ type: "text", value: "Got it" }],
+            reply_to: { message_id: "message-1", part_index: 0 },
+          },
+        },
+      },
+    ]);
   });
 
   test("sends scout's tapback to Linq on the member's message", async () => {

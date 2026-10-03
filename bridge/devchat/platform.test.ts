@@ -162,6 +162,30 @@ describe("the developer console's group chat", () => {
     });
   });
 
+  test("shows scout's reply threaded under the message it answers", async () => {
+    respond = () => Response.json({ actions: [{ type: "say", text: "Got it", reply_to: "m1" }] });
+
+    const exchange = await inChat([MAYA], (chat) => chat.say("maya", "2"));
+
+    expect(exchange.replies).toEqual([{ id: "m2", from: "scout", text: "Got it", replyTo: "m1" }]);
+  });
+
+  test("sends a member's threaded reply to scout with the words it answers", async () => {
+    const poll = [{ id: "m1", from: "scout", text: "2. San Juan, Puerto Rico (~$750/person est.)" }];
+
+    const exchange = await inChat(
+      [MAYA],
+      (chat) => chat.reply("maya", "2. San Juan", "this one!"),
+      poll,
+    );
+
+    expect(exchange.sent).toEqual({ id: "m2", from: "maya", text: "this one!", replyTo: "m1" });
+    expect(received[0]).toMatchObject({
+      text: "this one!",
+      reply_to_text: "2. San Juan, Puerto Rico (~$750/person est.)",
+    });
+  });
+
   test("refuses a tapback on words scout never sent", async () => {
     const tapping = inChat([MAYA], (chat) => chat.react("maya", "Paris", "like"));
 

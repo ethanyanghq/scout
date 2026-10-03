@@ -54,13 +54,14 @@ def test_a_vote_with_a_message_id_comes_back_as_a_tapback_on_it(client):
     }
 
 
-def test_a_tapback_on_a_poll_option_comes_back_as_a_confirmation(client):
+def test_a_tapback_on_a_poll_option_comes_back_as_a_threaded_confirmation(client):
     response = client.post(
         "/reactions",
         json={
             "space_id": SPACE,
             "sender_phone": LEO,
             "tapback": "like",
+            "message_id": "tulum-option",
             "message_text": format_poll(OPTIONS)[1],
             "sent_at": "2026-10-03T12:00:00Z",
         },
@@ -71,7 +72,7 @@ def test_a_tapback_on_a_poll_option_comes_back_as_a_confirmation(client):
             {
                 "type": "say",
                 "text": "Got it, …0002 → Tulum, Mexico (1 of 2 voted)",
-                "reply_to": None,
+                "reply_to": "tulum-option",
             }
         ]
     }

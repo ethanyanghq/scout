@@ -4,6 +4,7 @@
 import {
   UnsupportedError,
   reaction,
+  reply,
   type Content,
   type ContentInput,
   type Message,
@@ -11,6 +12,7 @@ import {
   type SpectrumInstance,
 } from "spectrum-ts";
 import { imessage } from "spectrum-ts/providers/imessage";
+import z from "zod";
 import { localIMessage } from "@spectrum-ts/imessage-local";
 import { askScout, tellScoutAboutTapback, toJpeg, type ScoutAction } from "./scout";
 import { tapbackEmoji, tapbackNamed } from "./tapbacks";
@@ -20,7 +22,11 @@ type PhotoAttachment = Extract<Content, { type: "attachment" }>;
 
 // What scout can use from one message: its words and its first photo.
 type ReadableParts = { text: string; photo: PhotoAttachment | null };
-type ScoutMessage = ReadableParts & { kind: "message"; senderPhone: string };
+type ScoutMessage = ReadableParts & {
+  kind: "message";
+  senderPhone: string;
+  replyToId: string | null;
+};
 type ScoutTapback = { kind: "tapback"; senderPhone: string; tapback: string; targetId: string };
 
 // Spectrum reacts and replies to a Message, not an ID, so the relay keeps the
@@ -52,6 +58,7 @@ export async function relaySpectrumMessages(
               space_id: space.id,
               sender_phone: readable.senderPhone,
               tapback: readable.tapback,
+              message_id: readable.targetId,
               message_text: await findText(space, readable.targetId, recent),
               sent_at: message.timestamp.toISOString(),
             })
@@ -63,6 +70,9 @@ export async function relaySpectrumMessages(
               participant_phones: await listParticipants(space, message),
               photo: readable.photo ? await toJpeg(await readable.photo.read()) : null,
               message_id: message.id,
+              reply_to_text: readable.replyToId
+                ? await findText(space, readable.replyToId, recent)
+                : null,
             });
       for (const action of actions) {
         await perform(space, action, recent);
@@ -82,9 +92,11 @@ export async function relaySpectrumMessages(
 
 async function perform(space: Space, action: ScoutAction, recent: RecentMessages): Promise<void> {
   switch (action.type) {
-    case "say":
-      recent.remember(await space.send(action.text));
+    case "say": {
+      const thread = action.reply_to ? await findMessage(space, action.reply_to, recent) : undefined;
+      await sendOrFallBack(space, thread ? reply(action.text, thread) : null, action.text, recent);
       return;
+    }
     case "react": {
       const target = recent.find(action.message_id);
       const tapback = target ? reaction(tapbackEmoji(action.tapback), target) : null;
@@ -137,20 +149,40 @@ function readForScout(space: Space, message: Message): ScoutMessage | ScoutTapba
   // Typing indicators, voice memos and the like aren't for scout.
   const parts = readableParts(message.content);
   if (!parts) return { skipReason: `nothing scout can read (${message.content.type})` };
-  return { kind: "message", ...parts, senderPhone };
+  return { kind: "message", ...parts, senderPhone, replyToId: repliedToId(message) };
 }
 
-// The words of the message a tapback is on, from the messages the relay
-// remembers or else from the line itself. Null if neither has them.
-async function findText(space: Space, messageId: string, recent: RecentMessages): Promise<string | null> {
-  let message = recent.find(messageId);
-  if (!message) {
-    try {
-      message = await space.getMessage(messageId);
-    } catch (error) {
-      if (!(error instanceof UnsupportedError)) throw error;
-    }
+// Linq and the console mark a threaded reply with the ID of the message it
+// answers, as Photon's terminal provider does. Declaring this as a platform's
+// message schema makes Spectrum keep it on the message.
+export const threadedReplySchema = z.object({
+  replyTo: z.object({ messageId: z.string() }).optional(),
+});
+
+function repliedToId(message: Message): string | null {
+  const { replyTo } = message as { replyTo?: { messageId?: string } };
+  return replyTo?.messageId ?? null;
+}
+
+// A message by its ID, from the messages the relay remembers or else from the
+// line itself. Undefined if neither has it.
+async function findMessage(
+  space: Space,
+  messageId: string,
+  recent: RecentMessages,
+): Promise<Message | undefined> {
+  const remembered = recent.find(messageId);
+  if (remembered) return remembered;
+  try {
+    return await space.getMessage(messageId);
+  } catch (error) {
+    if (error instanceof UnsupportedError) return undefined;
+    throw error;
   }
+}
+
+async function findText(space: Space, messageId: string, recent: RecentMessages): Promise<string | null> {
+  const message = await findMessage(space, messageId, recent);
   return message?.content.type === "text" ? message.content.text : null;
 }
 
