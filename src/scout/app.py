@@ -43,6 +43,7 @@ class IncomingText(BaseModel):
     participant_phones: list[str] = []
     photo: IncomingPhoto | None = None
     message_id: str | None = None
+    reply_to_text: str | None = None
 
 
 class IncomingTapback(BaseModel):
@@ -50,7 +51,9 @@ class IncomingTapback(BaseModel):
     sender_phone: str
     # A tapback's name ("like"), or the emoji of any other reaction.
     tapback: str
-    # The words of the message it's on, or None if the bridge can't find them.
+    # The line's ID for the message it's on, and its words, or None if the
+    # bridge can't find them.
+    message_id: str
     message_text: str | None
     sent_at: datetime
 
@@ -80,6 +83,7 @@ def create_app(store: TripStore, agent: ScoutAgent) -> FastAPI:
                 else None
             ),
             message_id=incoming.message_id,
+            reply_to_text=incoming.reply_to_text,
         )
         return _as_actions(handle_message(message, store, agent))
 

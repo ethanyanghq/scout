@@ -1,5 +1,6 @@
 """The agent loop, with a scripted stand-in for the Claude API."""
 
+from dataclasses import replace
 from datetime import date, datetime
 from types import SimpleNamespace
 
@@ -149,6 +150,18 @@ def test_tells_claude_whether_it_was_tagged(store):
     situation = situation_text(claude)
     assert "It tags or addresses you." in situation
     assert "[…0001] @scout hi" in situation
+
+
+def test_tells_claude_which_message_a_threaded_reply_answers(store):
+    trip, said_this = maya_says(store, "this one!")
+    message = replace(said_this, reply_to_text="2. San Juan, Puerto Rico")
+    claude = ScriptedClaude(response("end_turn", text("NO_REPLY")))
+
+    ScoutAgent(claude, store).respond(trip, message)
+
+    assert 'It replies in a thread to: "2. San Juan, Puerto Rico".' in situation_text(
+        claude
+    )
 
 
 def test_shows_claude_the_locked_in_dates_and_plan(store):

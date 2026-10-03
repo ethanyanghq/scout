@@ -47,6 +47,19 @@ describe("reading a console script", () => {
     ]);
   });
 
+  test("reads threaded replies and checks on them", () => {
+    const script = parseScript(
+      'members maya\nmaya reply "2. San Juan": this one: for real\nmaya reply scout.last: ok\nexpect thread ~ "Got it"',
+      FOLDER,
+    );
+
+    expect(script.steps.map(({ line, source, ...step }) => step)).toEqual([
+      { kind: "reply", member: "maya", target: "2. San Juan", text: "this one: for real" },
+      { kind: "reply", member: "maya", target: "scout.last", text: "ok" },
+      { kind: "expect-thread", contains: "Got it" },
+    ]);
+  });
+
   test("keeps colons inside a message", () => {
     const script = parseScript("members maya\nmaya: @scout plan it: not too packed", FOLDER);
 
@@ -138,6 +151,15 @@ describe("checking what scout did", () => {
 
     expect(liked.passed).toBe(true);
     expect(loved).toEqual({ passed: false, detail: "scout said: 👍 on m1" });
+  });
+
+  test("a thread check only counts replies scout threaded under a message", () => {
+    const loose = { id: "m2", from: "scout", text: "Got it, Maya" };
+    const threaded = { ...loose, replyTo: "m1" };
+    const expectation: Expectation = { kind: "expect-thread", contains: "got it" };
+
+    expect(checkExpectation(expectation, { replies: [threaded], trip: null }).passed).toBe(true);
+    expect(checkExpectation(expectation, { replies: [loose], trip: null }).passed).toBe(false);
   });
 
   test("an exact state check follows a dotted path into the trip", () => {
