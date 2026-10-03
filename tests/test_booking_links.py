@@ -31,6 +31,7 @@ def san_juan_trip(*members):
         open_poll=None,
         itinerary=[],
         expenses=[],
+        settlements=[],
     )
 
 

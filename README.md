@@ -27,6 +27,7 @@ Photon only sends messages from TypeScript, so `bridge/` is a thin relay. Everyt
 | `calendar_link.py` | The "Add to Google Calendar" link sent once the trip is locked in. |
 | `money.py` | How amounts of money read in the chat. |
 | `settle_up.py` | Who owes whom: each person's share and the fewest payments to settle up. |
+| `nessie.py` | Paying members back with sandbox money over Capital One's Nessie API. |
 | `trip_store.py` | Saving everything to SQLite. |
 | `simulate.py` | A fake group chat in your terminal for testing without phones. |
 
@@ -38,7 +39,12 @@ You need [uv](https://docs.astral.sh/uv/), [Bun](https://bun.sh), and an Anthrop
 uv sync
 cd bridge && bun install && cd ..
 export ANTHROPIC_API_KEY=sk-ant-...
+export NESSIE_API_KEY=...   # optional; without it, payments are simulated
 ```
+
+Settling up pays members back over [Nessie](https://api.nessieisreal.com), Capital One's sandbox bank, so no real money moves. scout opens a Nessie account for each member on their first payment. If `NESSIE_API_KEY` isn't set, or Nessie is down, scout still records the payment and says in the chat that it was simulated.
+
+There are no database migrations yet. After pulling a change to the database layout, delete your local `scout.db`.
 
 ## Try it without phones
 

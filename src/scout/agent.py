@@ -9,6 +9,8 @@ import anthropic
 from scout.agent_tools import TOOL_DEFINITIONS, run_tool
 from scout.group_summary import DateWindow, format_window, summarize_group
 from scout.money import format_usd
+from scout.nessie import NessieBank
+from scout.settle_up import plan_payments
 from scout.trip import IncomingMessage, Member, Trip
 from scout.trip_actions import TripActionError, TripActions
 from scout.trip_store import TripStore
@@ -31,13 +33,21 @@ SYSTEM_PROMPT = (Path(__file__).parent / "system_prompt.md").read_text()
 
 
 class ScoutAgent:
-    def __init__(self, client: anthropic.Anthropic, store: TripStore):
+    def __init__(
+        self,
+        client: anthropic.Anthropic,
+        store: TripStore,
+        bank: NessieBank | None = None,
+    ):
         self._client = client
         self._store = store
+        self._bank = bank
 
     def respond(self, trip: Trip, message: IncomingMessage) -> list[str]:
         """Returns the texts scout should send in reply, possibly none."""
-        actions = TripActions(self._store, trip.space_id, message.sender_phone)
+        actions = TripActions(
+            self._store, trip.space_id, message.sender_phone, self._bank
+        )
         conversation = [
             {"role": "user", "content": self._describe_situation(trip, message)}
         ]
@@ -138,6 +148,12 @@ def _describe_trip(trip: Trip) -> str:
             f"{format_usd(expense.amount_cents)}, paid by "
             f"{trip.find_member(expense.payer_phone).label}"
             for expense in trip.expenses
+        )
+        lines.append("Payments still owed:")
+        lines.extend(
+            f"  {payment.payer.label} → {payment.payee.label} "
+            f"{format_usd(payment.amount_cents)}"
+            for payment in plan_payments(trip)
         )
     return "\n".join(lines)
 

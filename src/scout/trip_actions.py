@@ -6,15 +6,32 @@ chat messages it produces to `outbox`, and returns a short status for the
 agent to read.
 """
 
+import logging
+
 from scout import polls
 from scout.booking_links import format_booking_links
 from scout.calendar_link import format_calendar_message
 from scout.group_summary import format_group_summary, summarize_group
 from scout.itinerary import format_itinerary
 from scout.money import format_usd
-from scout.settle_up import format_settle_up
-from scout.trip import DestinationOption, ItineraryDay, PreferenceUpdate, Trip
+from scout.nessie import NessieBank, NessieError, SandboxPayment
+from scout.settle_up import (
+    Payment,
+    format_payments_left,
+    format_settle_up,
+    plan_payments,
+)
+from scout.trip import (
+    DestinationOption,
+    ItineraryDay,
+    Member,
+    PreferenceUpdate,
+    Settlement,
+    Trip,
+)
 from scout.trip_store import TripStore
+
+logger = logging.getLogger(__name__)
 
 DESTINATION_OPTION_COUNT = 3
 
@@ -24,10 +41,19 @@ class TripActionError(Exception):
 
 
 class TripActions:
-    def __init__(self, store: TripStore, space_id: str, sender_phone: str):
+    def __init__(
+        self,
+        store: TripStore,
+        space_id: str,
+        sender_phone: str,
+        bank: NessieBank | None = None,
+    ):
         self._store = store
         self._space_id = space_id
         self._sender_phone = sender_phone
+        # None means payments are simulated: scout records them but no sandbox
+        # money moves.
+        self._bank = bank
         self.outbox: list[str] = []
 
     def save_sender_preferences(self, update: PreferenceUpdate) -> str:
@@ -161,6 +187,58 @@ class TripActions:
         self.outbox.append(format_settle_up(trip))
         return "Settle-up posted."
 
+    def pay_from_sender(self, payee_label: str) -> str:
+        """Pays what the sender owes one person, over Nessie when it's up."""
+        trip = self._load_trip()
+        payment = _find_sender_payment(trip, self._sender_phone, payee_label)
+        nessie_ids = self._send_through_nessie(payment)
+        self._store.add_settlement(
+            self._space_id,
+            Settlement(
+                payer_phone=payment.payer.phone,
+                payee_phone=payment.payee.phone,
+                amount_cents=payment.amount_cents,
+                went_through_nessie=nessie_ids is not None,
+            ),
+            nessie_ids,
+        )
+
+        paid = (
+            f"Paid ✓ {payment.payer.label} → {payment.payee.label} "
+            f"{format_usd(payment.amount_cents)}"
+        )
+        if nessie_ids is None:
+            paid += " (simulated: no money moved in the Capital One sandbox)"
+        else:
+            paid += " through Capital One's Nessie sandbox (not real money)"
+        self.outbox.append(f"{paid}\n{format_payments_left(self._load_trip())}")
+        return "Paid." if nessie_ids else "Recorded as a simulated payment."
+
+    def _send_through_nessie(self, payment: Payment) -> SandboxPayment | None:
+        """Moves the sandbox money. None if there's no bank or Nessie failed."""
+        if self._bank is None:
+            return None
+        try:
+            return self._bank.move_money(
+                self._nessie_account_id(payment.payer),
+                self._nessie_account_id(payment.payee),
+                payment.amount_cents,
+            )
+        except NessieError as error:
+            # The ledger is the source of truth, so the group can still settle
+            # up when Nessie is down. The chat message says it was simulated.
+            # If only the withdrawal went through, Nessie stays half-paid, but
+            # the ledger still counts the payment exactly once.
+            logger.warning("Nessie payment failed in %s: %s", self._space_id, error)
+            return None
+
+    def _nessie_account_id(self, member: Member) -> str:
+        if member.nessie_account_id is not None:
+            return member.nessie_account_id
+        account_id = self._bank.open_account()
+        self._store.save_nessie_account(self._space_id, member.phone, account_id)
+        return account_id
+
     def _close(self, trip: Trip) -> str:
         result = polls.decide_winner(trip.open_poll)
         if result is None:
@@ -196,3 +274,17 @@ class TripActions:
         if trip is None:
             raise LookupError(f"no trip for space {self._space_id}")
         return trip
+
+
+def _find_sender_payment(trip: Trip, sender_phone: str, payee_label: str) -> Payment:
+    """The planned payment from the sender to the person they named."""
+    sender_owes = [p for p in plan_payments(trip) if p.payer.phone == sender_phone]
+    for payment in sender_owes:
+        if payment.payee.label.casefold() == payee_label.strip().casefold():
+            return payment
+    payees = ", ".join(p.payee.label for p in sender_owes)
+    sender = trip.find_member(sender_phone)
+    raise TripActionError(
+        f"{sender.label} doesn't owe {payee_label} anything. "
+        f"They owe: {payees or 'nobody'}"
+    )

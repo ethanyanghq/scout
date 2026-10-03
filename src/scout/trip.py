@@ -65,6 +65,8 @@ class Member:
     budget_usd: int | None = None
     home_city: str | None = None
     must_haves: list[str] = field(default_factory=list)
+    # Their Capital One Nessie sandbox account, opened on their first payment.
+    nessie_account_id: str | None = None
 
     @property
     def label(self) -> str:
@@ -131,6 +133,17 @@ class Expense:
     description: str
 
 
+@dataclass(frozen=True)
+class Settlement:
+    """A payment one member made to another through scout to settle up."""
+
+    payer_phone: str
+    payee_phone: str
+    amount_cents: int
+    # False when Nessie was unreachable or not set up, so no sandbox money moved.
+    went_through_nessie: bool
+
+
 @dataclass
 class Trip:
     space_id: str
@@ -143,6 +156,7 @@ class Trip:
     open_poll: Poll | None
     itinerary: list[ItineraryDay]
     expenses: list[Expense]
+    settlements: list[Settlement]
 
     def find_member(self, phone: str) -> Member:
         for member in self.members:

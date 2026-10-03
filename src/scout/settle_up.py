@@ -1,4 +1,4 @@
-"""Who owes whom once the trip's shared costs are in (CS-2)."""
+"""Who owes whom once the trip's shared costs are in (CS-2, CS-4)."""
 
 from dataclasses import dataclass
 
@@ -25,7 +25,17 @@ def format_settle_up(trip: Trip) -> str:
         return f"{lead_in} Everyone's already even."
     lines = [f"{lead_in} Fewest payments to settle up:"]
     lines.extend(_format_payment(payment) for payment in payments)
+    lines.append(f'To pay, text "@scout pay {payments[0].payee.label}".')
     return "\n".join(lines)
+
+
+def format_payments_left(trip: Trip) -> str:
+    """One line on what's still owed, for after someone pays."""
+    payments = plan_payments(trip)
+    if not payments:
+        return "Everyone's settled up 🎉"
+    count = "1 payment" if len(payments) == 1 else f"{len(payments)} payments"
+    return f"{count} left: {', '.join(_format_payment(p) for p in payments)}"
 
 
 def plan_payments(trip: Trip) -> list[Payment]:
@@ -52,7 +62,10 @@ def plan_payments(trip: Trip) -> list[Payment]:
 
 
 def _net_balances(trip: Trip) -> dict[str, int]:
-    """What each member paid minus their share, in cents. Positive means owed."""
+    """What each member paid minus their share, after settlements, in cents.
+
+    Positive means the group owes them.
+    """
     total_cents = sum(expense.amount_cents for expense in trip.expenses)
     base_share, leftover_cents = divmod(total_cents, len(trip.members))
     balances = {}
@@ -63,6 +76,9 @@ def _net_balances(trip: Trip) -> dict[str, int]:
         balances[member.phone] = -share
     for expense in trip.expenses:
         balances[expense.payer_phone] += expense.amount_cents
+    for settlement in trip.settlements:
+        balances[settlement.payer_phone] += settlement.amount_cents
+        balances[settlement.payee_phone] -= settlement.amount_cents
     return balances
 
 

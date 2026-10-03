@@ -1,10 +1,12 @@
 from datetime import date, datetime
 
+from scout.nessie import SandboxPayment
 from scout.trip import (
     DateWindow,
     DestinationOption,
     Expense,
     PreferenceUpdate,
+    Settlement,
     TripStage,
 )
 
@@ -133,3 +135,23 @@ def test_removing_an_expense_keeps_the_others(store):
     store.remove_expense(SPACE, airbnb)
 
     assert [e.id for e in store.get_trip(SPACE).expenses] == [kayaks]
+
+
+def test_settlements_remember_whether_sandbox_money_moved(store):
+    store.create_trip(SPACE)
+    through_nessie = Settlement(MAYA, LEO, 5_000, went_through_nessie=True)
+    simulated = Settlement(MAYA, LEO, 1_000, went_through_nessie=False)
+
+    store.add_settlement(SPACE, through_nessie, SandboxPayment("w-1", "d-1"))
+    store.add_settlement(SPACE, simulated, None)
+
+    assert store.get_trip(SPACE).settlements == [through_nessie, simulated]
+
+
+def test_a_members_nessie_account_is_saved(store):
+    store.create_trip(SPACE)
+    store.add_members(SPACE, [MAYA])
+
+    store.save_nessie_account(SPACE, MAYA, "account-1")
+
+    assert store.get_trip(SPACE).find_member(MAYA).nessie_account_id == "account-1"

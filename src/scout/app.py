@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 from scout.agent import ScoutAgent
 from scout.conversation import handle_message
+from scout.nessie import connect_bank
 from scout.trip import IncomingMessage
 from scout.trip_store import TripStore
 
@@ -55,5 +56,5 @@ def create_app(store: TripStore, agent: ScoutAgent) -> FastAPI:
 def main() -> None:
     logging.basicConfig(level=logging.INFO)
     store = TripStore(Path(os.environ.get("SCOUT_DB_PATH", DEFAULT_DB_PATH)))
-    agent = ScoutAgent(anthropic.Anthropic(), store)
+    agent = ScoutAgent(anthropic.Anthropic(), store, connect_bank())
     uvicorn.run(create_app(store, agent), host=HOST, port=PORT)

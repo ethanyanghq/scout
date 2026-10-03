@@ -1,5 +1,5 @@
-from scout.settle_up import format_settle_up, plan_payments
-from scout.trip import Expense, Member, Trip, TripStage
+from scout.settle_up import format_payments_left, format_settle_up, plan_payments
+from scout.trip import Expense, Member, Settlement, Trip, TripStage
 
 MAYA = Member("+15550000001", "Maya")
 LEO = Member("+15550000002", "Leo")
@@ -20,6 +20,7 @@ def trip_with(members, *expenses):
             Expense(number, payer.phone, cents, description)
             for number, (payer, cents, description) in enumerate(expenses, start=1)
         ],
+        settlements=[],
     )
 
 
@@ -83,7 +84,8 @@ def test_settle_up_message_shows_the_total_share_and_payments():
         "💸 Shared costs: $1,600, so $400 each. Fewest payments to settle up:\n"
         "Jordan → Leo $400\n"
         "Priya → Leo $236\n"
-        "Maya → Leo $204"
+        "Maya → Leo $204\n"
+        'To pay, text "@scout pay Leo".'
     )
 
 
@@ -99,3 +101,33 @@ def test_settle_up_message_says_when_everyone_is_even():
     trip = trip_with([MAYA, LEO], (MAYA, 5_000, "Lunch"), (LEO, 5_000, "Dinner"))
 
     assert format_settle_up(trip).endswith("Everyone's already even.")
+
+
+def paid(trip, payer, payee, cents):
+    trip.settlements.append(Settlement(payer.phone, payee.phone, cents, True))
+    return trip
+
+
+def test_payments_already_made_drop_out_of_the_plan():
+    trip = paid(spring_break_trip(), MAYA, LEO, 20_400)
+
+    assert summarize(plan_payments(trip)) == [
+        ("Jordan", "Leo", 40_000),
+        ("Priya", "Leo", 23_600),
+    ]
+
+
+def test_payments_left_lists_who_still_owes():
+    trip = paid(spring_break_trip(), MAYA, LEO, 20_400)
+
+    assert format_payments_left(trip) == (
+        "2 payments left: Jordan → Leo $400, Priya → Leo $236"
+    )
+
+
+def test_payments_left_celebrates_when_everyone_is_settled():
+    trip = spring_break_trip()
+    for payer, cents in ((JORDAN, 40_000), (PRIYA, 23_600), (MAYA, 20_400)):
+        paid(trip, payer, LEO, cents)
+
+    assert format_payments_left(trip) == "Everyone's settled up 🎉"

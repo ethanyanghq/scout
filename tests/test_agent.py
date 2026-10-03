@@ -165,3 +165,15 @@ def test_shows_claude_each_expense_with_its_number_and_payer(store):
 
     situation = claude.requests[0]["messages"][0]["content"]
     assert f"#{expense_id} Bio bay kayaks: $196, paid by Maya" in situation
+
+
+def test_shows_claude_the_payments_still_owed(store):
+    trip, message = maya_says(store, "@scout who do i owe?")
+    store.add_members(SPACE, ["+15550000002"])
+    store.add_expense(SPACE, "+15550000002", 10_000, "Groceries")
+    claude = ScriptedClaude(response("end_turn", text("You owe Leo $50.")))
+
+    ScoutAgent(claude, store).respond(store.get_trip(SPACE), message)
+
+    situation = claude.requests[0]["messages"][0]["content"]
+    assert "Payments still owed:\n  …0001 → …0002 $50" in situation
