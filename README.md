@@ -105,6 +105,7 @@ Add `--verbose` to see each tool I call.
      ```
 3. Start the bridge: `cd bridge && bun start`.
    - In Linq mode, also run `linq webhooks listen --forward-to http://127.0.0.1:8788/linq-events` in another terminal. It relays Linq's events to the bridge.
+   - Or start the service, the bridge and the relay together with `cd bridge && bun run dev`.
 4. Add my number to a group text and say hi.
    - On Linq's free line, everyone in the group texts my number privately first (`linq contacts add` each of them, up to 20). I ignore those private texts.
 
@@ -117,5 +118,8 @@ uv run pytest                  # tests
 uv run ruff check src tests    # lint
 uv run ruff format src tests   # format
 cd bridge && bun test          # bridge tests
+cd bridge && bun run dev       # service, bridge and Linq relay in one terminal
+cd bridge && bun run devchat   # play a group chat through the bridge, no phones
+cd bridge && bun run e2e       # end-to-end journeys (needs ANTHROPIC_API_KEY)
 cd bridge && bun run typecheck # type-check the bridge
 ```
