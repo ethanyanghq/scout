@@ -10,6 +10,10 @@ export type MessageOutcome = { id: string; chatId: string | null } & (
 // Returned instead of a message when scout shouldn't see it.
 export type Skipped = { skipReason: string };
 
+export function isSkipped(value: object): value is Skipped {
+  return typeof (value as Partial<Skipped>).skipReason === "string";
+}
+
 export function logOutcome(outcome: MessageOutcome): void {
   const where = outcome.chatId ? ` in ${outcome.chatId}` : "";
   switch (outcome.kind) {

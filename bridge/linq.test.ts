@@ -1,8 +1,13 @@
-import { describe, expect, test } from "bun:test";
-import { readGroupMessage, type LinqEvent } from "./linq";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { Spectrum } from "spectrum-ts";
+import { linqPlatform, readLinqEvent, type LinqEvent } from "./linq";
+import type { IncomingText } from "./scout";
+import { relaySpectrumMessages } from "./spectrum";
+import type { MessageOutcome } from "./trace";
 
 const SCOUT = { handle: "+12055550100", is_me: true, status: "active" };
 const MAYA = { handle: "+16075550123", is_me: false, status: "active" };
+const LEO = { handle: "+16075550124", is_me: false, status: "active" };
 
 function messageReceived(overrides: {
   isGroup?: boolean;
@@ -14,6 +19,7 @@ function messageReceived(overrides: {
     event_type: "message.received",
     event_id: "event-1",
     data: {
+      id: "message-1",
       chat: { id: "group-chat-1", is_group: overrides.isGroup ?? true },
       direction: overrides.direction ?? "inbound",
       sender_handle: overrides.sender ?? MAYA,
@@ -23,66 +29,145 @@ function messageReceived(overrides: {
   };
 }
 
-describe("reading a Linq event as a group message", () => {
-  test("reads the chat, sender, text and time of a group text", () => {
-    expect(readGroupMessage(messageReceived({}))).toEqual({
-      chatId: "group-chat-1",
-      senderPhone: MAYA.handle,
-      text: "@scout spring break?",
-      sentAt: "2026-10-03T20:37:25.714Z",
-      photoUrl: null,
+const RECEIPT = { type: "media", url: "https://cdn.example/receipt.jpeg", mime_type: "image/jpeg" };
+
+describe("reading a Linq event", () => {
+  test("reads the id, chat, sender, text and time of a group text", () => {
+    expect(readLinqEvent(messageReceived({}))).toEqual({
+      id: "message-1",
+      content: { type: "text", text: "@scout spring break?" },
+      sender: { id: MAYA.handle },
+      space: { id: "group-chat-1" },
+      timestamp: new Date("2026-10-03T20:37:25.714Z"),
+    });
+  });
+
+  test("joins a message's text parts", () => {
+    const parts = [
+      { type: "text", value: "paid the airbnb" },
+      { type: "text", value: "$1,240" },
+    ];
+
+    expect(readLinqEvent(messageReceived({ parts }))).toMatchObject({
+      content: { type: "text", text: "paid the airbnb\n$1,240" },
     });
   });
 
   test("keeps a photo's caption alongside the photo", () => {
-    const message = readGroupMessage(
-      messageReceived({
-        parts: [
-          { type: "text", value: "paid the airbnb" },
-          { type: "media", url: "https://cdn.example/receipt.jpeg", mime_type: "image/jpeg" },
-        ],
-      }),
+    const record = readLinqEvent(
+      messageReceived({ parts: [{ type: "text", value: "paid the airbnb" }, RECEIPT] }),
     );
-    expect(message).toMatchObject({
-      text: "paid the airbnb",
-      photoUrl: "https://cdn.example/receipt.jpeg",
+
+    expect(record).toMatchObject({
+      content: {
+        type: "group",
+        items: [
+          { content: { type: "text", text: "paid the airbnb" } },
+          { content: { type: "attachment", mimeType: "image/jpeg" } },
+        ],
+      },
     });
   });
 
   test("reads a photo sent without a caption", () => {
-    const message = readGroupMessage(
-      messageReceived({
-        parts: [{ type: "media", url: "https://cdn.example/receipt.jpeg", mime_type: "image/jpeg" }],
-      }),
-    );
-    expect(message).toMatchObject({ text: "", photoUrl: "https://cdn.example/receipt.jpeg" });
+    expect(readLinqEvent(messageReceived({ parts: [RECEIPT] }))).toMatchObject({
+      content: { type: "attachment", name: "receipt.jpeg", mimeType: "image/jpeg" },
+    });
   });
 
-  test("ignores private chats with scout", () => {
-    expect(readGroupMessage(messageReceived({ isGroup: false }))).toEqual({
+  test("skips private chats with scout", () => {
+    expect(readLinqEvent(messageReceived({ isGroup: false }))).toEqual({
       skipReason: "a private chat, not a group",
     });
   });
 
-  test("ignores scout's own messages", () => {
+  test("skips scout's own messages", () => {
     const ownMessage = { skipReason: "scout's own message" };
-    expect(readGroupMessage(messageReceived({ sender: SCOUT }))).toEqual(ownMessage);
-    expect(readGroupMessage(messageReceived({ direction: "outbound" }))).toEqual(ownMessage);
+    expect(readLinqEvent(messageReceived({ sender: SCOUT }))).toEqual(ownMessage);
+    expect(readLinqEvent(messageReceived({ direction: "outbound" }))).toEqual(ownMessage);
   });
 
-  test("ignores events that aren't new messages", () => {
+  test("skips events that aren't new messages", () => {
     const typing = { ...messageReceived({}), event_type: "chat.typing_indicator.started" };
-    expect(readGroupMessage(typing)).toEqual({
+
+    expect(readLinqEvent(typing)).toEqual({
       skipReason: "not a new message (chat.typing_indicator.started)",
     });
   });
+});
 
-  test("ignores messages with nothing scout can read", () => {
-    const voiceMemo = messageReceived({
-      parts: [{ type: "media", url: "https://cdn.example/memo.caf", mime_type: "audio/x-caf" }],
+// Linq's API and the scout service are the outside boundaries here, so stubs
+// stand in for both. Spectrum and the bridge's relay loop are real.
+describe("a Linq group chat through Spectrum", () => {
+  const scoutReceived: IncomingText[] = [];
+  const linqReceived: { path: string; body: unknown }[] = [];
+  const stubScout = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    async fetch(request) {
+      scoutReceived.push((await request.json()) as IncomingText);
+      return Response.json({ replies: ["hey Maya 👋"] });
+    },
+  });
+  const stubLinq = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    async fetch(request) {
+      const path = new URL(request.url).pathname;
+      if (request.method === "GET") return Response.json({ handles: [SCOUT, MAYA, LEO] });
+      linqReceived.push({ path, body: await request.json() });
+      return Response.json({ chat_id: "group-chat-1", message: { id: "sent-1" } });
+    },
+  });
+  let realScoutUrl: string | undefined;
+  beforeAll(() => {
+    realScoutUrl = process.env.SCOUT_URL;
+    process.env.SCOUT_URL = `http://127.0.0.1:${stubScout.port}`;
+  });
+  afterAll(() => {
+    process.env.SCOUT_URL = realScoutUrl;
+    stubScout.stop(true);
+    stubLinq.stop(true);
+  });
+
+  test("hands a group text to scout with the group's members, and sends the reply to that group", async () => {
+    const webhookPort = findFreePort();
+    const platform = linqPlatform({
+      apiKey: "test-key",
+      apiUrl: `http://127.0.0.1:${stubLinq.port}`,
+      webhookPort,
     });
-    expect(readGroupMessage(voiceMemo)).toEqual({
-      skipReason: "nothing scout can read (no text or photo)",
+    const app = await Spectrum({ providers: [platform.config({})] });
+    const finished = new Promise<MessageOutcome>((resolve) => {
+      relaySpectrumMessages(app, resolve);
     });
+
+    await fetch(`http://127.0.0.1:${webhookPort}/linq-events`, {
+      method: "POST",
+      body: JSON.stringify(messageReceived({})),
+    });
+    const outcome = await finished;
+    await app.stop();
+
+    expect(outcome).toMatchObject({ id: "message-1", chatId: "group-chat-1", kind: "handled" });
+    expect(scoutReceived[0]).toMatchObject({
+      space_id: "group-chat-1",
+      sender_phone: MAYA.handle,
+      text: "@scout spring break?",
+      participant_phones: [MAYA.handle, LEO.handle],
+    });
+    expect(linqReceived).toEqual([
+      {
+        path: "/chats/group-chat-1/messages",
+        body: { message: { parts: [{ type: "text", value: "hey Maya 👋" }] } },
+      },
+    ]);
   });
 });
+
+function findFreePort(): number {
+  const probe = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response() });
+  const port = probe.port!;
+  probe.stop(true);
+  return port;
+}
