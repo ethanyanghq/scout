@@ -12,13 +12,13 @@ from datetime import date
 
 from scout import polls
 from scout.booking_links import format_booking_links
-from scout.calendar_link import format_calendar_message
+from scout.calendar_link import format_calendar_message, google_calendar_link
 from scout.group_summary import format_group_summary, summarize_group
 from scout.itinerary import format_itinerary
 from scout.money import format_usd
-from scout.nearby import format_directions, format_nearby_places
+from scout.nearby import directions_link, format_directions, format_nearby_places
 from scout.nessie import NessieError, SandboxPayment
-from scout.outgoing import Outgoing, Say
+from scout.outgoing import Link, Outgoing, Say
 from scout.outside_services import NO_OUTSIDE_SERVICES, OutsideServices
 from scout.places import Coordinates, GooglePlaces, PlacesError
 from scout.settle_up import (
@@ -326,7 +326,10 @@ class TripActions:
 
         # Once the group has picked, a later "2" is just chat again.
         self._store.clear_place_suggestions(self._space_id)
-        self.outbox.append(Say(format_directions(suggestions[option_index])))
+        place = suggestions[option_index]
+        self.outbox.extend(
+            [Say(format_directions(place)), Link(directions_link(place))]
+        )
         return "Directions sent."
 
     def _close(self, trip: Trip) -> str:
@@ -344,7 +347,12 @@ class TripActions:
                 f"Poll closed. Destination is now {result.winner.name}, "
                 "but no dates work for everyone, so the trip has no dates."
             )
-        self.outbox.append(Say(format_calendar_message(result.winner.name, dates)))
+        self.outbox.extend(
+            [
+                Say(format_calendar_message(result.winner.name, dates)),
+                Link(google_calendar_link(result.winner.name, dates)),
+            ]
+        )
         return f"Poll closed. Destination is now {result.winner.name}."
 
     def _load_locked_in_trip(self) -> Trip:

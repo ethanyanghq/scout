@@ -12,7 +12,7 @@ from scout.conversation import (
     handle_message,
     handle_reaction,
 )
-from scout.outgoing import React, Say, Tapback
+from scout.outgoing import Link, React, Say, Tapback
 from scout.places import Coordinates, Place
 from scout.polls import format_poll
 from scout.trip import (
@@ -206,10 +206,14 @@ def test_last_vote_also_sends_a_calendar_link_for_the_shared_dates(store):
 
     send(store, agent, MAYA, "2")
     send(store, agent, LEO, "2")
-    replies = send(store, agent, PRIYA, "2")
+    replies = send_from_line(store, agent, PRIYA, "2", message_id="priya-vote")
 
-    assert replies[0] == "🎉 Poll closed! San Juan, Puerto Rico wins with 3 of 3 votes."
-    assert replies[1].startswith("📅 Locked in: San Juan, Puerto Rico, Mar 14–19.")
+    winner, lead_in, link = replies
+    assert winner == Say(
+        "🎉 Poll closed! San Juan, Puerto Rico wins with 3 of 3 votes."
+    )
+    assert lead_in.text.startswith("📅 Locked in: San Juan, Puerto Rico, Mar 14–19.")
+    assert link.url.startswith("https://calendar.google.com/calendar/render?")
 
 
 def test_scout_apologizes_when_it_fails_on_a_message_addressed_to_it(store):
@@ -327,25 +331,26 @@ def test_a_plain_pick_sends_directions_without_the_agent(store):
     store.replace_place_suggestions(SPACE, TACO_SPOTS)
     agent = FakeAgent()
 
-    replies = send(store, agent, LEO, "2")
+    replies = send_from_line(store, agent, LEO, "2", message_id="leo-pick")
 
     assert agent.messages_seen == []
-    assert replies[0].startswith("🧭 Directions to Taco Bar:")
+    assert replies[0] == Say("🧭 Directions to Taco Bar:")
+    assert isinstance(replies[1], Link)
 
 
 def test_a_pick_by_name_sends_directions_too(store):
     choose_san_juan(store)
     store.replace_place_suggestions(SPACE, TACO_SPOTS)
 
-    replies = send(store, FakeAgent(), MAYA, "lote 23!")
+    replies = send_from_line(store, FakeAgent(), MAYA, "lote 23!", message_id="pick")
 
-    assert replies[0].startswith("🧭 Directions to Lote 23:")
+    assert replies[0] == Say("🧭 Directions to Lote 23:")
 
 
 def test_numbers_are_just_chat_once_a_place_is_picked(store):
     choose_san_juan(store)
     store.replace_place_suggestions(SPACE, TACO_SPOTS)
-    send(store, FakeAgent(), LEO, "2")
+    send_from_line(store, FakeAgent(), LEO, "2", message_id="leo-pick")
     agent = FakeAgent()
 
     replies = send(store, agent, MAYA, "1")

@@ -237,13 +237,25 @@ async function sendContent(
   content: Content,
 ): Promise<ProviderMessageRecord> {
   if (content.type === "reaction") return sendTapback(api, chatId, content);
+  if (content.type === "richlink") return sendParts(api, chatId, content, [{ type: "link", value: content.url }]);
   const threadUnder = content.type === "reply" ? content.target.id : null;
   const words = content.type === "reply" ? content.content : content;
   if (words.type !== "text") throw UnsupportedError.content(content.type, PLATFORM);
+  return sendParts(api, chatId, content, [{ type: "text", value: words.text }], threadUnder);
+}
 
+// A link part must be the only part in its message, which is why links are
+// their own action.
+async function sendParts(
+  api: LinqApi,
+  chatId: string,
+  content: Content,
+  parts: { type: "text" | "link"; value: string }[],
+  threadUnder: string | null = null,
+): Promise<ProviderMessageRecord> {
   const sent = (await callLinq(api, `/chats/${chatId}/messages`, {
     message: {
-      parts: [{ type: "text", value: words.text }],
+      parts,
       ...(threadUnder ? { reply_to: { message_id: threadUnder, part_index: 0 } } : {}),
     },
   })) as { message: { id: string } };

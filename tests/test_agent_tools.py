@@ -3,7 +3,7 @@ from datetime import date
 import pytest
 
 from scout.agent_tools import run_tool
-from scout.outgoing import Say
+from scout.outgoing import Link, Say
 from scout.places import Coordinates, Place
 from scout.trip import DateWindow, DestinationOption, ItineraryDay
 from scout.trip_actions import TripActionError, TripActions
@@ -120,4 +120,6 @@ def test_agent_picks_use_the_numbers_shown_in_the_list(maya_actions, store):
 
     run_tool(maya_actions, "send_directions", {"option_number": 2})
 
-    assert said(maya_actions.outbox)[0].startswith("🧭 Directions to Taco Bar:")
+    lead_in, link = maya_actions.outbox
+    assert lead_in == Say("🧭 Directions to Taco Bar:")
+    assert isinstance(link, Link)

@@ -2,7 +2,7 @@
 // group from the terminal. Messages go through the bridge's real relay loop
 // (spectrum.ts) to the real scout service. Only the iMessage line is fake.
 
-import { basename } from "node:path";
+import { basename, join } from "node:path";
 import { Spectrum, definePlatform, stream, type Content, type Message } from "spectrum-ts";
 import {
   asAttachment,
@@ -13,13 +13,14 @@ import {
 import z from "zod";
 import { relaySpectrumMessages, threadedReplySchema } from "../spectrum";
 import { tapbackEmoji, tapbackNamed, type Tapback } from "../tapbacks";
+import { previewLinkCard, type LinkCard } from "./link-card";
 import type { MessageOutcome } from "../trace";
 
 export type ChatMember = { name: string; phone: string };
 
 // One line of the chat. `from` is a member's name, or "scout". A tapback also
-// names which one it was and the message it's on, and a threaded reply the
-// message it's under.
+// names which one it was and the message it's on, a threaded reply the
+// message it's under, and a link the card iMessage would show for it.
 export type ChatEntry = {
   id: string;
   from: string;
@@ -27,7 +28,12 @@ export type ChatEntry = {
   tapback?: string;
   on?: string;
   replyTo?: string;
+  card?: LinkCard;
 };
+
+// Where the console saves link cards' pictures, inside the git-ignored
+// bridge/.devchat.
+const CARDS_FOLDER = join(import.meta.dir, "..", ".devchat", "cards");
 
 // What happened to one member's message: the bridge's outcome, and scout's
 // replies to it.
@@ -108,6 +114,13 @@ export class DevChat {
       space: { id: this.chatId },
       timestamp: new Date(),
     };
+  }
+
+  async recordLinkCard(url: string, content: Content): Promise<ProviderMessageRecord> {
+    const id = `m${this.transcript.length + 1}`;
+    const card = await previewLinkCard(url, join(CARDS_FOLDER, `${this.chatId}-${id}`));
+    const entry = this.addEntry({ from: "scout", text: url, card });
+    return { id: entry.id, content, space: { id: this.chatId }, timestamp: new Date() };
   }
 
   recordScoutMessage(content: Content): ProviderMessageRecord {
@@ -235,6 +248,9 @@ function devchatPlatform(chat: DevChat) {
       getMembers: async () => chat.members.map((member) => ({ id: member.phone })),
       getMessage: async (_, __, messageId) => chat.recordedMessage(messageId),
     },
-    send: async ({ content }) => chat.recordScoutMessage(content),
+    send: async ({ content }) =>
+      content.type === "richlink"
+        ? chat.recordLinkCard(content.url, content)
+        : chat.recordScoutMessage(content),
   });
 }

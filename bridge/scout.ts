@@ -35,7 +35,9 @@ export type IncomingText = {
 export type ScoutAction =
   // reply_to threads the text under that message.
   | { type: "say"; text: string; reply_to: string | null }
-  | { type: "react"; message_id: string; tapback: Tapback; fallback_text: string };
+  | { type: "react"; message_id: string; tapback: Tapback; fallback_text: string }
+  // A link sent on its own, so iMessage shows it as a card.
+  | { type: "link"; url: string };
 
 // Read on each call, so tests and the end-to-end runner can point the bridge
 // at their own service.

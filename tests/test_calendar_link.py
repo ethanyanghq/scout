@@ -36,8 +36,6 @@ def test_trip_ending_on_the_last_day_of_a_month_rolls_into_the_next():
 def test_message_says_what_was_locked_in_before_the_link():
     message = format_calendar_message("San Juan, Puerto Rico", SPRING_BREAK)
 
-    first_line, link = message.split("\n")
-    assert first_line == (
+    assert message == (
         "📅 Locked in: San Juan, Puerto Rico, Mar 14–19. Add it to your calendar:"
     )
-    assert link.startswith("https://calendar.google.com/calendar/render?")

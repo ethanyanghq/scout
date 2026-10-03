@@ -60,6 +60,19 @@ describe("reading a console script", () => {
     ]);
   });
 
+  test("reads checks on a link card", () => {
+    const script = parseScript(
+      'members maya\nexpect card title ~ "San Juan"\nexpect card url ~ "calendar.google.com"\nexpect card no warnings',
+      FOLDER,
+    );
+
+    expect(script.steps.map(({ line, source, ...step }) => step)).toEqual([
+      { kind: "expect-card", field: "title", contains: "San Juan" },
+      { kind: "expect-card", field: "url", contains: "calendar.google.com" },
+      { kind: "expect-card-clean" },
+    ]);
+  });
+
   test("keeps colons inside a message", () => {
     const script = parseScript("members maya\nmaya: @scout plan it: not too packed", FOLDER);
 
@@ -160,6 +173,26 @@ describe("checking what scout did", () => {
 
     expect(checkExpectation(expectation, { replies: [threaded], trip: null }).passed).toBe(true);
     expect(checkExpectation(expectation, { replies: [loose], trip: null }).passed).toBe(false);
+  });
+
+  test("card checks look at the link card scout sent", () => {
+    const card = {
+      url: "https://example.com/trip",
+      title: "San Juan wins",
+      description: null,
+      imageUrl: null,
+      imageFile: null,
+      warnings: ["No image: the card would have no picture."],
+    };
+    const replies = [{ id: "m2", from: "scout", text: card.url, card }];
+
+    const title = checkExpectation({ kind: "expect-card", field: "title", contains: "san juan" }, { replies, trip: null });
+    const clean = checkExpectation({ kind: "expect-card-clean" }, { replies, trip: null });
+    const noCard = checkExpectation({ kind: "expect-card-clean" }, { replies: [], trip: null });
+
+    expect(title.passed).toBe(true);
+    expect(clean).toEqual({ passed: false, detail: "warnings: No image: the card would have no picture." });
+    expect(noCard).toEqual({ passed: false, detail: "scout sent no link card. scout didn't reply" });
   });
 
   test("an exact state check follows a dotted path into the trip", () => {
