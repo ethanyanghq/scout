@@ -299,3 +299,32 @@ def test_numbers_are_just_chat_once_a_place_is_picked(store):
 
     assert replies == []
     assert agent.messages_seen == []
+
+
+def send_unreadable_photo(store, agent, sender, caption):
+    message = IncomingMessage(
+        space_id=SPACE,
+        sender_phone=sender,
+        text=caption,
+        sent_at=datetime(2026, 10, 2, 9, 0),
+        participant_phones=EVERYONE,
+        has_unreadable_photo=True,
+    )
+    return handle_message(message, store, agent)
+
+
+def test_a_photo_that_could_not_be_read_still_reaches_the_agent(store):
+    choose_san_juan(store)
+    agent = FakeAgent()
+
+    send_unreadable_photo(store, agent, PRIYA, "casa brisa dinner")
+
+    assert agent.messages_seen == ["casa brisa dinner"]
+
+
+def test_the_chat_log_notes_a_photo_that_could_not_be_read(store):
+    choose_san_juan(store)
+
+    send_unreadable_photo(store, FakeAgent(replies=[]), PRIYA, "")
+
+    assert store.recent_messages(SPACE, limit=1)[0].text == "[photo]"

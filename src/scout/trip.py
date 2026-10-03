@@ -44,6 +44,13 @@ class IncomingMessage:
     # the messaging provider can't list participants (for example, in a DM).
     participant_phones: tuple[str, ...] = ()
     photo: MessagePhoto | None = None
+    # True when the sender attached a photo the bridge couldn't convert, so
+    # scout knows to ask about it instead of seeing only the caption.
+    has_unreadable_photo: bool = False
+
+    @property
+    def has_photo(self) -> bool:
+        return self.photo is not None or self.has_unreadable_photo
 
     @property
     def mentions_scout(self) -> bool:
