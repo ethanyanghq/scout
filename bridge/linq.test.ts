@@ -43,8 +43,10 @@ describe("reading a Linq event as a group message", () => {
         ],
       }),
     );
-    expect(message?.text).toBe("paid the airbnb");
-    expect(message?.photoUrl).toBe("https://cdn.example/receipt.jpeg");
+    expect(message).toMatchObject({
+      text: "paid the airbnb",
+      photoUrl: "https://cdn.example/receipt.jpeg",
+    });
   });
 
   test("reads a photo sent without a caption", () => {
@@ -53,28 +55,34 @@ describe("reading a Linq event as a group message", () => {
         parts: [{ type: "media", url: "https://cdn.example/receipt.jpeg", mime_type: "image/jpeg" }],
       }),
     );
-    expect(message?.text).toBe("");
-    expect(message?.photoUrl).toBe("https://cdn.example/receipt.jpeg");
+    expect(message).toMatchObject({ text: "", photoUrl: "https://cdn.example/receipt.jpeg" });
   });
 
   test("ignores private chats with scout", () => {
-    expect(readGroupMessage(messageReceived({ isGroup: false }))).toBeNull();
+    expect(readGroupMessage(messageReceived({ isGroup: false }))).toEqual({
+      skipReason: "a private chat, not a group",
+    });
   });
 
   test("ignores scout's own messages", () => {
-    expect(readGroupMessage(messageReceived({ sender: SCOUT }))).toBeNull();
-    expect(readGroupMessage(messageReceived({ direction: "outbound" }))).toBeNull();
+    const ownMessage = { skipReason: "scout's own message" };
+    expect(readGroupMessage(messageReceived({ sender: SCOUT }))).toEqual(ownMessage);
+    expect(readGroupMessage(messageReceived({ direction: "outbound" }))).toEqual(ownMessage);
   });
 
   test("ignores events that aren't new messages", () => {
     const typing = { ...messageReceived({}), event_type: "chat.typing_indicator.started" };
-    expect(readGroupMessage(typing)).toBeNull();
+    expect(readGroupMessage(typing)).toEqual({
+      skipReason: "not a new message (chat.typing_indicator.started)",
+    });
   });
 
   test("ignores messages with nothing scout can read", () => {
     const voiceMemo = messageReceived({
       parts: [{ type: "media", url: "https://cdn.example/memo.caf", mime_type: "audio/x-caf" }],
     });
-    expect(readGroupMessage(voiceMemo)).toBeNull();
+    expect(readGroupMessage(voiceMemo)).toEqual({
+      skipReason: "nothing scout can read (no text or photo)",
+    });
   });
 });

@@ -20,6 +20,7 @@ import { localIMessage } from "@spectrum-ts/imessage-local";
 import { relayLinqGroupMessages } from "./linq";
 import { SCOUT_URL } from "./scout";
 import { relaySpectrumMessages } from "./spectrum";
+import { logOutcome } from "./trace";
 
 const mode = process.env.IMESSAGE_MODE ?? "local";
 if (mode === "linq") {
@@ -27,7 +28,7 @@ if (mode === "linq") {
 } else {
   const app = await connectToIMessage(mode);
   console.log(`scout bridge is listening for texts, forwarding to ${SCOUT_URL}`);
-  await relaySpectrumMessages(app);
+  await relaySpectrumMessages(app, logOutcome);
 }
 
 async function connectToIMessage(mode: string) {
