@@ -2,6 +2,7 @@
 // group from the terminal. Messages go through the bridge's real relay loop
 // (spectrum.ts) to the real scout service. Only the iMessage line is fake.
 
+import { basename } from "node:path";
 import { Spectrum, definePlatform, stream, type Content } from "spectrum-ts";
 import { asAttachment, setLogLevel, type ProviderMessageRecord } from "spectrum-ts/authoring";
 import z from "zod";
@@ -102,6 +103,14 @@ export class DevChat {
     }
     return member;
   }
+}
+
+export async function readPhoto(path: string): Promise<Photo> {
+  const file = Bun.file(path);
+  if (!(await file.exists())) throw new Error(`There's no photo at ${path}.`);
+  // Bun doesn't know iPhone photos' type from the file name.
+  const mimeType = path.toLowerCase().endsWith(".heic") ? "image/heic" : file.type;
+  return { fileName: basename(path), mimeType, bytes: Buffer.from(await file.arrayBuffer()) };
 }
 
 // Starts a Spectrum app whose only line is this chat, and runs the bridge's

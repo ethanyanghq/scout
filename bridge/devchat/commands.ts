@@ -3,11 +3,12 @@
 // command runs on its own, so an AI agent can drive it one shell command at a
 // time. See DEVELOPING.md.
 
-import { basename } from "node:path";
+import { basename, dirname } from "node:path";
 import { parseArgs } from "node:util";
 import { scoutUrl } from "../scout";
-import { DevChat, connectDevChat, type ChatEntry, type Exchange } from "./platform";
-import { loadSession, saveSession } from "./session";
+import { DevChat, connectDevChat, readPhoto, type ChatEntry, type Exchange } from "./platform";
+import { parseScript, runScript, type ScriptEvent } from "./script";
+import { loadSession, saveSession, type Session } from "./session";
 import { SEED_STAGES, resetTrip, seedTrip, showTrip, type SeedStage, type TripSummary } from "./trips";
 
 const USAGE = `Usage (from bridge/, with the scout service running):
@@ -16,7 +17,8 @@ const USAGE = `Usage (from bridge/, with the scout service running):
   bun run devchat photo leo receipts/airbnb.jpg
   bun run devchat transcript
   bun run devchat state [--chat <chat id>]
-  bun run devchat reset [--chat <chat id>]`;
+  bun run devchat reset [--chat <chat id>]
+  bun run devchat run e2e/vote.chat`;
 
 try {
   await runCommand(process.argv.slice(2));
@@ -39,6 +41,8 @@ async function runCommand([command, ...args]: string[]): Promise<void> {
       return printTrip(args);
     case "reset":
       return reset(args);
+    case "run":
+      return run(args);
     default:
       throw new Error(USAGE);
   }
@@ -51,26 +55,8 @@ async function start(args: string[]): Promise<void> {
     allowPositionals: true,
   });
   if (names.length === 0) throw new Error(`Name at least one member.\n\n${USAGE}`);
-
-  // The same numbers scout-simulate uses, so transcripts read alike.
-  const members = names.map((name, index) => ({
-    name: name.toLowerCase(),
-    phone: `+1555000${String(index + 1).padStart(4, "0")}`,
-  }));
-  const chatId = `devchat-${crypto.randomUUID().slice(0, 8)}`;
   const stage = values.from === undefined ? null : readStage(values.from);
-  const trip = stage
-    ? await seedTrip(
-        chatId,
-        stage,
-        members.map((member) => ({ phone: member.phone, name: capitalize(member.name) })),
-      )
-    : null;
-  await saveSession({ chatId, members, transcript: [] });
-
-  const roster = members.map((member) => `${member.name} (${member.phone})`).join(", ");
-  console.log(`Started ${chatId} with ${roster}.`);
-  if (trip) console.log(describeSeededTrip(trip));
+  await startChat(names, stage);
 }
 
 async function say([name, ...words]: string[]): Promise<void> {
@@ -80,11 +66,7 @@ async function say([name, ...words]: string[]): Promise<void> {
 
 async function sendPhoto([name, path]: string[]): Promise<void> {
   if (!name || !path) throw new Error(USAGE);
-  const file = Bun.file(path);
-  if (!(await file.exists())) throw new Error(`There's no photo at ${path}.`);
-  // Bun doesn't know iPhone photos' type from the file name.
-  const mimeType = path.toLowerCase().endsWith(".heic") ? "image/heic" : file.type;
-  const photo = { fileName: basename(path), mimeType, bytes: Buffer.from(await file.arrayBuffer()) };
+  const photo = await readPhoto(path);
   await sendInSavedChat((chat) => chat.sendPhoto(name, photo));
 }
 
@@ -115,6 +97,53 @@ async function reset(args: string[]): Promise<void> {
   console.log(`Reset ${session.chatId}: its trip and transcript are cleared.`);
 }
 
+// Plays a script in a new chat and saves the chat afterwards, so transcript
+// and state can show what happened.
+async function run([path]: string[]): Promise<void> {
+  if (!path) throw new Error(USAGE);
+  const file = Bun.file(path);
+  if (!(await file.exists())) throw new Error(`There's no script at ${path}.`);
+  const script = parseScript(await file.text(), dirname(path));
+
+  const session = await startChat(script.members, script.from);
+  const chat = new DevChat(session.chatId, session.members);
+  const stop = await connectDevChat(chat);
+  let passed: boolean;
+  try {
+    passed = await runScript(script, chat, printScriptEvent);
+  } finally {
+    await stop();
+    await saveSession({ ...session, transcript: chat.transcript });
+  }
+  console.log(passed ? `✓ ${basename(path)} passed` : `✗ ${basename(path)} failed`);
+  if (!passed) process.exitCode = 1;
+}
+
+// Starts a new chat, seeded at a stage if one is given, and saves it as the
+// console's current chat.
+async function startChat(names: string[], stage: SeedStage | null): Promise<Session> {
+  // The same numbers scout-simulate uses, so transcripts read alike.
+  const members = names.map((name, index) => ({
+    name: name.toLowerCase(),
+    phone: `+1555000${String(index + 1).padStart(4, "0")}`,
+  }));
+  const chatId = `devchat-${crypto.randomUUID().slice(0, 8)}`;
+  const trip = stage
+    ? await seedTrip(
+        chatId,
+        stage,
+        members.map((member) => ({ phone: member.phone, name: capitalize(member.name) })),
+      )
+    : null;
+  const session = { chatId, members, transcript: [] };
+  await saveSession(session);
+
+  const roster = members.map((member) => `${member.name} (${member.phone})`).join(", ");
+  console.log(`Started ${chatId} with ${roster}.`);
+  if (trip) console.log(describeSeededTrip(trip));
+  return session;
+}
+
 // Reopens the saved chat, sends one message through the bridge, prints what
 // happened, and saves the chat again.
 async function sendInSavedChat(send: (chat: DevChat) => Promise<Exchange>): Promise<void> {
@@ -141,6 +170,19 @@ function printExchange({ sent, outcome, replies }: Exchange): void {
     process.exitCode = 1;
   } else if (replies.length === 0) {
     console.log("(scout stayed quiet)");
+  }
+}
+
+function printScriptEvent(event: ScriptEvent): void {
+  if (event.kind === "exchange") {
+    printExchange(event.exchange);
+    return;
+  }
+  const { step, result } = event;
+  if (result.passed) {
+    console.log(`  ✓ ${step.source}`);
+  } else {
+    console.log(`  ✗ ${step.source} (line ${step.line})\n    ${result.detail}`);
   }
 }
 
