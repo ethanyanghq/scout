@@ -46,6 +46,9 @@ export async function askScout(text: IncomingText): Promise<string[]> {
 // iPhones send HEIC, which Claude can't read, so every photo goes through
 // macOS's built-in `sips` to become a downsized JPEG.
 export async function toJpeg(photoBytes: Buffer): Promise<IncomingPhoto> {
+  if (!Bun.which("sips")) {
+    throw new Error("Photos need macOS's sips to become JPEGs, so they only work on a Mac.");
+  }
   const folder = await mkdtemp(join(tmpdir(), "scout-photo-"));
   try {
     // sips reads the format from the file's contents, so the name doesn't matter.
