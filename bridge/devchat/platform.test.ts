@@ -112,6 +112,30 @@ describe("the developer console's group chat", () => {
     ]);
   });
 
+  test("shows scout's tapback on the member's message", async () => {
+    respond = () =>
+      Response.json({
+        actions: [{ type: "react", message_id: "m1", tapback: "like", fallback_text: "Got it" }],
+      });
+
+    const exchange = await inChat([MAYA, LEO], (chat) => chat.say("maya", "2"));
+
+    expect(exchange.replies).toEqual([
+      { id: "m2", from: "scout", text: "👍 on m1", tapback: "like", on: "m1" },
+    ]);
+  });
+
+  test("sends the text instead of a tapback on a message the bridge hasn't seen", async () => {
+    respond = () =>
+      Response.json({
+        actions: [{ type: "react", message_id: "gone", tapback: "like", fallback_text: "Got it" }],
+      });
+
+    const exchange = await inChat([MAYA, LEO], (chat) => chat.say("maya", "2"));
+
+    expect(exchange.replies).toEqual([{ id: "m2", from: "scout", text: "Got it" }]);
+  });
+
   test("numbers new messages after a reopened chat's earlier ones", async () => {
     const earlier = [{ id: "m1", from: "maya", text: "hey" }];
 

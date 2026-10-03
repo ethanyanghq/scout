@@ -7,7 +7,7 @@ store, polls, and summaries are all real.
 from datetime import date, datetime
 
 from scout.conversation import INTRODUCTION, SNAG_REPLY, handle_message
-from scout.outgoing import Say
+from scout.outgoing import React, Say, Tapback
 from scout.places import Coordinates, Place
 from scout.trip import (
     DestinationOption,
@@ -65,6 +65,19 @@ def send(store, agent, sender, text, photo=None):
     return said(handle_message(message, store, agent))
 
 
+def send_from_line(store, agent, sender, text, message_id):
+    """Sends a message the way a real line does: with the line's ID for it."""
+    message = IncomingMessage(
+        space_id=SPACE,
+        sender_phone=sender,
+        text=text,
+        sent_at=datetime(2026, 10, 2, 9, 0),
+        participant_phones=EVERYONE,
+        message_id=message_id,
+    )
+    return handle_message(message, store, agent)
+
+
 def start_voting(store):
     store.create_trip(SPACE)
     store.add_members(SPACE, list(EVERYONE))
@@ -119,7 +132,32 @@ def test_tagged_messages_always_reach_the_agent(store):
     assert replies == ["agent reply"]
 
 
+def test_a_plain_vote_gets_a_thumbs_up_instead_of_a_line_in_the_chat(store):
+    start_voting(store)
+
+    replies = send_from_line(store, FakeAgent(), LEO, "2", message_id="leo-vote")
+
+    assert replies == [
+        React(
+            "leo-vote",
+            Tapback.LIKE,
+            fallback_text="Got it, …0002 → San Juan, Puerto Rico (1 of 3 voted)",
+        )
+    ]
+
+
+def test_the_vote_that_closes_the_poll_gets_the_announcement_not_a_tapback(store):
+    start_voting(store)
+    send_from_line(store, FakeAgent(), MAYA, "1", message_id="maya-vote")
+    send_from_line(store, FakeAgent(), LEO, "1", message_id="leo-vote")
+
+    replies = send_from_line(store, FakeAgent(), PRIYA, "3", message_id="priya-vote")
+
+    assert replies[0] == Say("🎉 Poll closed! Tulum, Mexico wins with 2 of 3 votes.")
+
+
 def test_a_plain_vote_is_counted_without_the_agent(store):
+    # Without the line's message IDs, as in scout-simulate, scout confirms in text.
     start_voting(store)
     agent = FakeAgent()
 

@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { Spectrum } from "spectrum-ts";
 import { linqPlatform, readLinqEvent, type LinqEvent } from "./linq";
 import type { IncomingText } from "./scout";
@@ -99,14 +99,15 @@ describe("reading a Linq event", () => {
 // Linq's API and the scout service are the outside boundaries here, so stubs
 // stand in for both. Spectrum and the bridge's relay loop are real.
 describe("a Linq group chat through Spectrum", () => {
-  const scoutReceived: IncomingText[] = [];
-  const linqReceived: { path: string; body: unknown }[] = [];
+  let scoutReceived: IncomingText[] = [];
+  let linqReceived: { path: string; body: unknown }[] = [];
+  let scoutActions: object[] = [];
   const stubScout = Bun.serve({
     hostname: "127.0.0.1",
     port: 0,
     async fetch(request) {
       scoutReceived.push((await request.json()) as IncomingText);
-      return Response.json({ actions: [{ type: "say", text: "hey Maya 👋" }] });
+      return Response.json({ actions: scoutActions });
     },
   });
   const stubLinq = Bun.serve({
@@ -130,7 +131,14 @@ describe("a Linq group chat through Spectrum", () => {
     stubLinq.stop(true);
   });
 
-  test("hands a group text to scout with the group's members, and sends the reply to that group", async () => {
+  beforeEach(() => {
+    scoutReceived = [];
+    linqReceived = [];
+  });
+
+  // Sends one Linq event through Spectrum and the relay, and waits until scout
+  // has finished with it.
+  async function deliver(event: LinqEvent): Promise<MessageOutcome> {
     const webhookPort = findFreePort();
     const platform = linqPlatform({
       apiKey: "test-key",
@@ -141,13 +149,19 @@ describe("a Linq group chat through Spectrum", () => {
     const finished = new Promise<MessageOutcome>((resolve) => {
       relaySpectrumMessages(app, resolve);
     });
-
     await fetch(`http://127.0.0.1:${webhookPort}/linq-events`, {
       method: "POST",
-      body: JSON.stringify(messageReceived({})),
+      body: JSON.stringify(event),
     });
     const outcome = await finished;
     await app.stop();
+    return outcome;
+  }
+
+  test("hands a group text to scout with the group's members, and sends the reply to that group", async () => {
+    scoutActions = [{ type: "say", text: "hey Maya 👋" }];
+
+    const outcome = await deliver(messageReceived({}));
 
     expect(outcome).toMatchObject({ id: "message-1", chatId: "group-chat-1", kind: "handled" });
     expect(scoutReceived[0]).toMatchObject({
@@ -162,6 +176,16 @@ describe("a Linq group chat through Spectrum", () => {
         path: "/chats/group-chat-1/messages",
         body: { message: { parts: [{ type: "text", value: "hey Maya 👋" }] } },
       },
+    ]);
+  });
+
+  test("sends scout's tapback to Linq on the member's message", async () => {
+    scoutActions = [{ type: "react", message_id: "message-1", tapback: "like", fallback_text: "Got it" }];
+
+    await deliver(messageReceived({ parts: [{ type: "text", value: "2" }] }));
+
+    expect(linqReceived).toEqual([
+      { path: "/messages/message-1/reactions", body: { operation: "add", type: "like" } },
     ]);
   });
 });
