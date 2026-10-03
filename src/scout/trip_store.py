@@ -124,6 +124,20 @@ CREATE TABLE IF NOT EXISTS chat_log (
 );
 """
 
+# Every table with a space_id column, with trips last because the others refer
+# to it. delete_trip clears each one, so a new table belongs here too.
+TABLES_BY_SPACE = (
+    "members",
+    "polls",
+    "itinerary_days",
+    "expenses",
+    "settlements",
+    "pending_receipts",
+    "place_suggestions",
+    "chat_log",
+    "trips",
+)
+
 
 @dataclass(frozen=True)
 class LoggedMessage:
@@ -170,6 +184,18 @@ class TripStore:
                     datetime.now().isoformat(),
                 ),
             )
+
+    def delete_trip(self, space_id: str) -> None:
+        """Forgets everything about one chat, so its next message starts over."""
+        with self._transaction() as db:
+            db.execute(
+                "DELETE FROM votes WHERE poll_id IN "
+                "(SELECT id FROM polls WHERE space_id = ?)",
+                (space_id,),
+            )
+            # Table names come from TABLES_BY_SPACE, never from user input.
+            for table in TABLES_BY_SPACE:
+                db.execute(f"DELETE FROM {table} WHERE space_id = ?", (space_id,))
 
     def add_members(self, space_id: str, phones: list[str]) -> None:
         """Adds anyone not already on the trip. Existing members are untouched."""
