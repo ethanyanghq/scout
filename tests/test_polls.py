@@ -7,6 +7,7 @@ TULUM = DestinationOption("Tulum, Mexico", 900, "Beaches and cenotes")
 SAN_JUAN = DestinationOption("San Juan, Puerto Rico", 750, "No passport needed")
 MIAMI = DestinationOption("Miami, Florida", 800, "Easy flights from everywhere")
 OPTIONS = [TULUM, SAN_JUAN, MIAMI]
+OPTION_NAMES = [option.name for option in OPTIONS]
 
 
 @pytest.mark.parametrize(
@@ -24,7 +25,7 @@ OPTIONS = [TULUM, SAN_JUAN, MIAMI]
     ],
 )
 def test_reads_votes_by_number_or_name(text, expected):
-    assert parse_vote(text, OPTIONS) == expected
+    assert parse_vote(text, OPTION_NAMES) == expected
 
 
 @pytest.mark.parametrize(
@@ -38,7 +39,7 @@ def test_reads_votes_by_number_or_name(text, expected):
     ],
 )
 def test_ignores_chatter_and_numbers_that_are_not_options(text):
-    assert parse_vote(text, OPTIONS) is None
+    assert parse_vote(text, OPTION_NAMES) is None
 
 
 def test_most_votes_wins():
