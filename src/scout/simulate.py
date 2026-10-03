@@ -16,6 +16,7 @@ import anthropic
 
 from scout.agent import ScoutAgent
 from scout.conversation import handle_message
+from scout.nessie import connect_bank
 from scout.trip import IncomingMessage
 from scout.trip_store import TripStore
 
@@ -37,7 +38,7 @@ def main() -> None:
     }
     with tempfile.TemporaryDirectory() as scratch:
         store = TripStore(Path(scratch) / "simulated.db")
-        agent = ScoutAgent(anthropic.Anthropic(), store)
+        agent = ScoutAgent(anthropic.Anthropic(), store, connect_bank())
         print(f"Group chat with {', '.join(args.people)}. Ctrl-D to quit.")
         _chat(phones, store, agent)
 

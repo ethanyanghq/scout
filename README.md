@@ -1,17 +1,37 @@
+<p align="center">
+  <img src="assets/banner.svg" alt="scout: trips that make it out of the group chat" width="100%">
+</p>
+
 # scout
 
-An AI trip planner that lives in your group chat. Add scout to a group text and it collects everyone's dates, budget, and must-haves, suggests three destinations, and runs the vote. See [scout-PRD.md](scout-PRD.md) for the full product.
+**trips that make it out of the group chat.**
 
-**Status:** Phase 1 (the core loop: join, collect preferences, vote on a destination).
+hi, i'm scout.
+
+you know the thread. someone says "we should go somewhere," everyone hearts it, and six hundred messages later nobody has booked a thing. add me to that chat and i'll get you from "we should go somewhere" to an actual trip.
+
+here's how it goes:
+
+1. **add me.** put my number or Apple ID in the group text. no app, no accounts, nobody signs up for anything.
+2. **tell me what you want.** everyone sends their dates, budget, home city, and one must-have. i confirm each one so you can catch my mistakes, and i keep track of who hasn't answered yet.
+3. **i pitch three places.** once i know where your dates overlap, i suggest three destinations that fit everyone's budget and must-haves.
+4. **you vote.** reply "2" or "tulum" and i count it. i announce the winner and send a link that puts the trip on your Google Calendar.
+5. **i plan the days.** ask for a plan and i'll send a day-by-day itinerary, plus Google Flights links from each person's home city and an Airbnb search for the group.
+6. **we settle up.** tell me what you paid ("i got the airbnb, $1,240") or text me a photo of the receipt. i split it, work out the fewest payments to square everyone up, and pay people back in sandbox money, so nothing real moves.
+
+i never book anything or touch real money. i find the links, you book. and i stay quiet unless you tag me or tell me something about the trip, because a scout that talks too much gets kicked out of the chat.
+
+**where i'm at:** joining, collecting preferences, and running the vote all work (phase 1). phase 2 so far has the itinerary, booking links, the calendar link, and cost splitting. on-trip recommendations and a shared photo album are next. the full plan lives in [scout-PRD.md](scout-PRD.md).
 
 ## How it fits together
 
 ```
 iMessage ⇄ Photon (spectrum-ts) ⇄ bridge/  ──HTTP──▶  src/scout/  ⇄ Claude API
                                   TypeScript          Python         + SQLite
+                                                                     + Nessie
 ```
 
-Photon only sends messages from TypeScript, so `bridge/` is a thin relay. Everything scout knows and decides lives in the Python service:
+Photon only sends messages from TypeScript, so `bridge/` is a thin relay. Everything I know and decide lives in the Python service:
 
 | File | What it does |
 | --- | --- |
@@ -22,6 +42,12 @@ Photon only sends messages from TypeScript, so `bridge/` is a thin relay. Everyt
 | `trip_actions.py` | The changes scout can make to a trip (save preferences, post a poll, record a vote). |
 | `group_summary.py` | Date overlap, budget range, and who hasn't replied. |
 | `polls.py` | Reading "2" or "tulum" as a vote, and picking the winner. |
+| `itinerary.py` | How the day-by-day plan reads in the chat. |
+| `booking_links.py` | Google Flights links from each home city and an Airbnb link for the group. |
+| `calendar_link.py` | The "Add to Google Calendar" link sent once the trip is locked in. |
+| `money.py` | How amounts of money read in the chat. |
+| `settle_up.py` | Who owes whom: each person's share and the fewest payments to settle up. |
+| `nessie.py` | Paying members back with sandbox money over Capital One's Nessie API. |
 | `trip_store.py` | Saving everything to SQLite. |
 | `simulate.py` | A fake group chat in your terminal for testing without phones. |
 
@@ -33,9 +59,14 @@ You need [uv](https://docs.astral.sh/uv/), [Bun](https://bun.sh), and an Anthrop
 uv sync
 cd bridge && bun install && cd ..
 export ANTHROPIC_API_KEY=sk-ant-...
+export NESSIE_API_KEY=...   # optional; without it, payments are simulated
 ```
 
-## Try it without phones
+Settling up pays members back over [Nessie](https://api.nessieisreal.com), Capital One's sandbox bank, so no real money moves. I open a Nessie account for each member on their first payment. If `NESSIE_API_KEY` isn't set, or Nessie is down, I still record the payment and say in the chat that it was simulated.
+
+There are no database migrations yet. After pulling a change to the database layout, delete your local `scout.db`.
+
+## Take me for a spin (no phones needed)
 
 Run a whole group chat in your terminal, playing every person yourself:
 
@@ -46,25 +77,27 @@ uv run scout-simulate maya leo jordan priya
 > leo: leo here, mar 14-22, 600, nyc
 ...
 > leo: 2
+> leo: fyi I paid the airbnb, $1,240
+> jordan: @scout who owes what
+> jordan: @scout pay leo
 ```
 
-Add `--verbose` to see each tool scout calls.
+Add `--verbose` to see each tool I call.
 
-## Run it on iMessage
+## Put me in a real group chat
 
-scout needs its own iMessage account. In local mode that's an Apple ID signed into Messages on a Mac, ideally in a separate macOS user called "scout" so it never sees your own chats. The Mac has to stay on and awake, with the scout user logged in (switch users from the menu bar; don't log out).
-
-1. In the scout user, sign into Messages with scout's Apple ID and set **Messages → Settings → Share Name and Photo** to "scout".
-2. Give Terminal Full Disk Access (**System Settings → Privacy & Security**) so the bridge can read Messages.
-3. Install [uv](https://docs.astral.sh/uv/) and [Bun](https://bun.sh), clone this repo, then run `uv sync` and `cd bridge && bun install`.
-4. Create `.env` in the repo root with your Anthropic key:
+1. Give your terminal Full Disk Access (**System Settings → Privacy & Security**) if you're using local mode, so the bridge can read Messages.
+2. Create `.env` in the repo root with your Anthropic key:
    ```
    ANTHROPIC_API_KEY=sk-ant-...
    ```
-5. Create `bridge/.env` with one of these:
-   - Local mode, which runs on this Mac's Messages account and needs no Photon plan. See [scout-imessage-groups.md](scout-imessage-groups.md). scout only reads and replies in the one group chat named here, which must match the group's name in Messages exactly:
+3. Create `bridge/.env` with one of these:
+   - Local mode, which runs on this Mac's Messages account and needs no Photon plan. See [scout-imessage-groups.md](scout-imessage-groups.md).
      ```
      IMESSAGE_MODE=local
+     ```
+     If that account is a real person's rather than mine, lock me to one group chat. I'll ignore every other chat, and the name has to match the group's name in Messages exactly:
+     ```
      SCOUT_GROUP_NAME="BRH Spring Break Trip"
      ```
    - A Photon cloud line:
@@ -73,10 +106,10 @@ scout needs its own iMessage account. In local mode that's an Apple ID signed in
      PHOTON_PROJECT_ID=...
      PHOTON_PROJECT_SECRET=...
      ```
-6. Run `./start.sh`. It starts the Python service, waits for it, then starts the bridge, and keeps the Mac awake until you press Ctrl-C. On a MacBook, closing the lid still sleeps it: leave the lid open, or run `sudo pmset -a disablesleep 1` (and `sudo pmset -a disablesleep 0` afterwards).
-7. Add scout's Apple ID or number to a group text and say "hi scout".
+4. Run `./start.sh`. It starts the Python service, waits for it, then starts the bridge, and keeps the Mac awake until you press Ctrl-C. On a MacBook, closing the lid still sleeps it: leave the lid open, or run `sudo pmset -a disablesleep 1` (and `sudo pmset -a disablesleep 0` afterwards).
+5. Add my number or Apple ID to a group text and say hi.
 
-In local mode scout ignores every chat except `SCOUT_GROUP_NAME`, so it can run on a real person's Messages account. It also ignores messages sent from that account, so whoever owns it shouldn't type in the group while scout is running. On a cloud line scout plans in any group chat and ignores one-on-one texts.
+I ignore anything sent from the account I'm running on, so if that's your account, don't type in the group while I'm running.
 
 ## Development
 

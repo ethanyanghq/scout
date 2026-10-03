@@ -48,7 +48,7 @@ def handle_message(
         message.space_id, [message.sender_phone, *message.participant_phones]
     )
     store.log_message(
-        message.space_id, message.sender_phone, message.text, message.sent_at
+        message.space_id, message.sender_phone, _chat_log_text(message), message.sent_at
     )
     # Log the introduction before the agent runs so the agent can see it.
     for reply in replies:
@@ -71,8 +71,7 @@ def _respond(
             actions.record_sender_vote(choice)
             return actions.outbox
 
-    is_collecting = trip.stage == TripStage.COLLECTING_PREFERENCES
-    if not (message.mentions_scout or is_collecting):
+    if not (message.mentions_scout or _needs_agent_untagged(trip, message)):
         return []
 
     try:
@@ -82,3 +81,27 @@ def _respond(
         # but scout shouldn't apologize for messages it was never asked about.
         logger.exception("Agent failed on message in %s", message.space_id)
         return [SNAG_REPLY] if message.mentions_scout else []
+
+
+def _needs_agent_untagged(trip: Trip, message: IncomingMessage) -> bool:
+    """Whether an untagged message might be something scout should act on."""
+    if trip.stage == TripStage.COLLECTING_PREFERENCES:
+        return True
+    # Before the destination is chosen, dollar amounts and photos are budgets,
+    # price talk, and memes, not expenses.
+    if trip.destination is None:
+        return False
+    # CS-1 and CS-7: people log what they paid in plain messages ("dinner was
+    # me, $164") or by texting a receipt, without tagging scout.
+    if message.mentions_money or message.photo is not None:
+        return True
+    # The payer's reply to "Split it 4 ways?" is usually just "yep".
+    receipt = trip.pending_receipt
+    return receipt is not None and receipt.payer_phone == message.sender_phone
+
+
+def _chat_log_text(message: IncomingMessage) -> str:
+    # The photo itself isn't kept, but later turns should know one was sent.
+    if message.photo is None:
+        return message.text
+    return f"[photo] {message.text}".strip()

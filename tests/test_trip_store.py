@@ -1,6 +1,15 @@
 from datetime import date, datetime
 
-from scout.trip import DestinationOption, PreferenceUpdate, TripStage
+from scout.nessie import SandboxPayment
+from scout.trip import (
+    DateWindow,
+    DestinationOption,
+    Expense,
+    PendingReceipt,
+    PreferenceUpdate,
+    Settlement,
+    TripStage,
+)
 
 SPACE = "group-chat-1"
 MAYA = "+15550000001"
@@ -70,17 +79,29 @@ def test_changing_a_vote_replaces_the_old_one(store):
     assert store.get_trip(SPACE).open_poll.votes == {MAYA: 2}
 
 
-def test_closing_a_poll_sets_the_destination(store):
+def test_closing_a_poll_sets_the_destination_and_dates(store):
     store.create_trip(SPACE)
     store.open_poll(SPACE, OPTIONS)
     poll_id = store.get_trip(SPACE).open_poll.id
+    dates = DateWindow(date(2027, 3, 14), date(2027, 3, 19))
 
-    store.close_poll(poll_id, "Tulum, Mexico")
+    store.close_poll(poll_id, "Tulum, Mexico", dates)
 
     trip = store.get_trip(SPACE)
     assert trip.stage == TripStage.DESTINATION_CHOSEN
     assert trip.destination == "Tulum, Mexico"
+    assert trip.dates == dates
     assert trip.open_poll is None
+
+
+def test_a_trip_closed_without_shared_dates_has_no_dates(store):
+    store.create_trip(SPACE)
+    store.open_poll(SPACE, OPTIONS)
+    poll_id = store.get_trip(SPACE).open_poll.id
+
+    store.close_poll(poll_id, "Tulum, Mexico", None)
+
+    assert store.get_trip(SPACE).dates is None
 
 
 def test_recent_messages_come_back_oldest_first_and_limited(store):
@@ -93,3 +114,63 @@ def test_recent_messages_come_back_oldest_first_and_limited(store):
     recent = store.recent_messages(SPACE, limit=2)
 
     assert [m.text for m in recent] == ["message 3", "message 4"]
+
+
+def test_expenses_come_back_in_the_order_they_were_logged(store):
+    store.create_trip(SPACE)
+
+    airbnb = store.add_expense(SPACE, LEO, 124_000, "Airbnb")
+    kayaks = store.add_expense(SPACE, MAYA, 19_600, "Bio bay kayaks")
+
+    assert store.get_trip(SPACE).expenses == [
+        Expense(airbnb, LEO, 124_000, "Airbnb"),
+        Expense(kayaks, MAYA, 19_600, "Bio bay kayaks"),
+    ]
+
+
+def test_removing_an_expense_keeps_the_others(store):
+    store.create_trip(SPACE)
+    airbnb = store.add_expense(SPACE, LEO, 124_000, "Airbnb")
+    kayaks = store.add_expense(SPACE, MAYA, 19_600, "Bio bay kayaks")
+
+    store.remove_expense(SPACE, airbnb)
+
+    assert [e.id for e in store.get_trip(SPACE).expenses] == [kayaks]
+
+
+def test_settlements_remember_whether_sandbox_money_moved(store):
+    store.create_trip(SPACE)
+    through_nessie = Settlement(MAYA, LEO, 5_000, went_through_nessie=True)
+    simulated = Settlement(MAYA, LEO, 1_000, went_through_nessie=False)
+
+    store.add_settlement(SPACE, through_nessie, SandboxPayment("w-1", "d-1"))
+    store.add_settlement(SPACE, simulated, None)
+
+    assert store.get_trip(SPACE).settlements == [through_nessie, simulated]
+
+
+def test_a_members_nessie_account_is_saved(store):
+    store.create_trip(SPACE)
+    store.add_members(SPACE, [MAYA])
+
+    store.save_nessie_account(SPACE, MAYA, "account-1")
+
+    assert store.get_trip(SPACE).find_member(MAYA).nessie_account_id == "account-1"
+
+
+def test_a_newer_receipt_replaces_the_one_waiting(store):
+    store.create_trip(SPACE)
+    store.save_pending_receipt(SPACE, PendingReceipt(MAYA, "Casa Brisa", 16_400))
+
+    store.save_pending_receipt(SPACE, PendingReceipt(LEO, "Bodega", 1_250))
+
+    assert store.get_trip(SPACE).pending_receipt == PendingReceipt(LEO, "Bodega", 1_250)
+
+
+def test_a_cleared_receipt_is_gone(store):
+    store.create_trip(SPACE)
+    store.save_pending_receipt(SPACE, PendingReceipt(MAYA, "Casa Brisa", 16_400))
+
+    store.clear_pending_receipt(SPACE)
+
+    assert store.get_trip(SPACE).pending_receipt is None

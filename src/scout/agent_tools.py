@@ -1,9 +1,11 @@
 """The tools Claude can call, and how each call maps onto a TripAction."""
 
 from datetime import date
+from decimal import Decimal
 from typing import Any
 
-from scout.trip import DestinationOption, PreferenceUpdate
+from scout.money import CENTS_PER_DOLLAR
+from scout.trip import DestinationOption, ItineraryDay, PreferenceUpdate
 from scout.trip_actions import TripActionError, TripActions
 
 
@@ -150,6 +152,181 @@ TOOL_DEFINITIONS = [
             "additionalProperties": False,
         },
     },
+    {
+        "name": "post_itinerary",
+        "description": (
+            "Post a day-by-day plan for the chosen destination, one anchor "
+            "activity per day within the trip dates. Replaces any earlier plan, "
+            "so include every day when editing."
+        ),
+        "strict": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "days": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "date": {
+                                "type": "string",
+                                "description": "The day, as YYYY-MM-DD.",
+                            },
+                            "plan": {
+                                "type": "string",
+                                "description": (
+                                    "The day's one big thing, under 10 words, "
+                                    "e.g. 'Night kayak on a bioluminescent bay'."
+                                ),
+                            },
+                        },
+                        "required": ["date", "plan"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
+            "required": ["days"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "send_booking_links",
+        "description": (
+            "Post flight search links from each member's home city and a stay "
+            "search link sized for the group, for the chosen destination and "
+            "trip dates."
+        ),
+        "strict": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "log_sender_expense",
+        "description": (
+            "Log a shared trip cost that the sender of the newest message paid. "
+            "It's split evenly across everyone in the trip. Only log costs the "
+            "sender says they paid themselves."
+        ),
+        "strict": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "amount_usd": {
+                    "type": "number",
+                    "description": "What they paid in US dollars, e.g. 1240 or 164.5.",
+                },
+                "description": {
+                    "type": "string",
+                    "description": (
+                        "What it was for, under 5 words, e.g. 'Airbnb' or "
+                        "'Casa Brisa dinner'."
+                    ),
+                },
+            },
+            "required": ["amount_usd", "description"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "ask_to_confirm_receipt",
+        "description": (
+            "When the sender's photo is a clear receipt, post what you read from "
+            "it and ask them to confirm before anything is logged. Once they "
+            "confirm, call log_sender_expense with the total (or their corrected "
+            "amount). Don't use it for unclear receipts: ask for the total instead."
+        ),
+        "strict": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "merchant": {
+                    "type": "string",
+                    "description": "The business name, e.g. 'Casa Brisa'.",
+                },
+                "purchased_on": _nullable(
+                    "string", "The receipt's date as YYYY-MM-DD, if it shows one."
+                ),
+                "total_usd": {
+                    "type": "number",
+                    "description": "The final total, including tax and tip.",
+                },
+            },
+            "required": ["merchant", "purchased_on", "total_usd"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "drop_pending_receipt",
+        "description": (
+            "Forget the receipt waiting for confirmation, when its payer says not "
+            "to split it."
+        ),
+        "strict": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "remove_expense",
+        "description": (
+            "Remove an expense the sender logged by mistake. Only the person who "
+            "paid it can remove it. To fix an amount, remove the old expense and "
+            "log the right one."
+        ),
+        "strict": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "expense_number": {
+                    "type": "integer",
+                    "description": "The expense's # as shown in the trip state.",
+                },
+            },
+            "required": ["expense_number"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "pay_from_sender",
+        "description": (
+            "Pay what the sender of the newest message owes one person in the "
+            "settle-up plan, through Capital One's Nessie sandbox bank. It pays "
+            "the planned amount and posts the confirmation and what's left."
+        ),
+        "strict": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "payee_name": {
+                    "type": "string",
+                    "description": "Who they're paying, as named in the trip state.",
+                },
+            },
+            "required": ["payee_name"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "post_settle_up",
+        "description": (
+            "Post the total shared cost, each person's share, and the fewest "
+            "payments that settle everyone up."
+        ),
+        "strict": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": False,
+        },
+    },
 ]
 
 
@@ -167,6 +344,28 @@ def run_tool(actions: TripActions, name: str, tool_input: dict[str, Any]) -> str
             return actions.record_sender_vote(tool_input["option_number"] - 1)
         case "close_poll":
             return actions.close_poll()
+        case "post_itinerary":
+            return actions.post_itinerary(_to_itinerary(tool_input))
+        case "send_booking_links":
+            return actions.send_booking_links()
+        case "log_sender_expense":
+            return actions.log_sender_expense(
+                _to_cents(tool_input["amount_usd"]), tool_input["description"]
+            )
+        case "ask_to_confirm_receipt":
+            return actions.ask_to_confirm_receipt(
+                tool_input["merchant"],
+                _parse_date(tool_input["purchased_on"]),
+                _to_cents(tool_input["total_usd"]),
+            )
+        case "drop_pending_receipt":
+            return actions.drop_pending_receipt()
+        case "remove_expense":
+            return actions.remove_expense(tool_input["expense_number"])
+        case "post_settle_up":
+            return actions.post_settle_up()
+        case "pay_from_sender":
+            return actions.pay_from_sender(tool_input["payee_name"])
         case _:
             raise TripActionError(f"unknown tool {name}")
 
@@ -180,6 +379,21 @@ def _to_preference_update(tool_input: dict[str, Any]) -> PreferenceUpdate:
         home_city=tool_input["home_city"],
         must_haves=tool_input["must_haves"],
     )
+
+
+def _to_itinerary(tool_input: dict[str, Any]) -> list[ItineraryDay]:
+    return [
+        ItineraryDay(day=_parse_date(day["date"]), plan=day["plan"])
+        for day in tool_input["days"]
+    ]
+
+
+def _to_cents(amount_usd: float) -> int:
+    # Decimal avoids float rounding: 0.29 * 100 is 28.999999999999996.
+    cents = Decimal(str(amount_usd)) * CENTS_PER_DOLLAR
+    if cents != cents.to_integral_value():
+        raise TripActionError(f"{amount_usd} has fractions of a cent")
+    return int(cents)
 
 
 def _parse_date(value: str | None) -> date | None:

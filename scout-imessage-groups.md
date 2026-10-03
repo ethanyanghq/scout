@@ -3,7 +3,7 @@
 | | |
 | --- | --- |
 | **Question** | How does scout work in iMessage group chats when we're on Photon's Pro plan, not Business? |
-| **Decision** | A bridge program on a Mac uses a teammate's Apple ID to join groups as "scout" and relays them to scout's agent on Photon Pro. The agent controls the group through commands the bridge carries out. |
+| **Decision** | A bridge program on a Mac signs into an Apple ID created just for scout, joins groups as that account and relays them to scout's agent on Photon Pro. The agent controls the group through commands the bridge carries out. |
 | **Docs version** | Photon Stable docs, read October 2, 2026 |
 | **Related** | [scout-PRD.md](scout-PRD.md): GC-1, GC-4, GC-6, DS-1 to DS-3, AL-4, and the messaging risks in the risks table |
 
@@ -11,7 +11,7 @@
 
 Photon Pro can't do iMessage group chats. Business can, at $250 per number per month. We get groups anyway by giving scout a real iMessage account on a Mac we control:
 
-- **In the group.** A teammate's Apple ID, renamed "scout," gets added to the group like any person. BlueBubbles Server, running on that Mac, gives the bridge nearly every native iMessage feature: tapbacks, typing indicators, threaded replies and more.
+- **In the group.** scout has its own Apple ID, and members add it to their group like any person. BlueBubbles Server, running on that Mac, gives the bridge nearly every native iMessage feature: tapbacks, typing indicators, threaded replies and more.
 - **Bridge to agent.** The bridge passes group messages to scout's agent on Photon Pro and carries out the commands the agent sends back.
 - **Private chats.** Scout's private DMs with members go straight through Photon Pro's iMessage line, which fully supports one-to-one chats, native polls included.
 
@@ -40,7 +40,7 @@ iMessage group (A, B, C) ◀──────▶ scout's account on a dedicated
                                      │  BlueBubbles + Private API: native features in the group
                                      │  imessage-kit: backup if the Private API breaks
                                      ▼
-                                   Bridge: allowed-groups list, group tags, message IDs,
+                                   Bridge: groups only, group tags, message IDs,
                                      │     events, runs or mimics each command
                                      │  JSON commands and events
                                      ▼
@@ -49,11 +49,14 @@ iMessage group (A, B, C) ◀──────▶ scout's account on a dedicated
                      Members' private DMs ◀── Photon Pro iMessage line ┘ (native polls, tapbacks, typing)
 ```
 
-### 1. Identity: a teammate's Apple ID, named "scout"
+### 1. Identity: a dedicated Apple ID named "scout"
 
-- The account runs in its own macOS user on an always-on Mac. Messages allows only one iMessage account per macOS user, so this keeps the teammate's own laptop setup untouched.
+- We create a new Apple ID only for scout. Its Messages database holds no one's private chats. If Apple flags it, nobody loses their own iMessage.
+- Creating the account needs a trusted phone number for two-factor authentication. A teammate's number works. It only receives sign-in codes and never becomes scout's iMessage address.
+- On a Mac, iMessage uses the Apple ID's email address. Only an iPhone with a SIM can register a phone number to the account. The email address is enough, because members can add an email address to a group. If we want a number later, a prepaid SIM in a spare iPhone can register one.
+- The account runs in its own macOS user on an always-on Mac, because Messages allows only one iMessage account per macOS user.
 - Turn on **Messages → Settings → Share Name and Photo** with the name "scout" and an icon.
-- Members add scout to their group by the account's phone number.
+- Members add scout to their group by the account's email address.
 
 ### 2. Native group features: BlueBubbles with the Private API
 
@@ -69,7 +72,7 @@ iMessage group (A, B, C) ◀──────▶ scout's account on a dedicated
 
 The bridge runs in scout's macOS user and is the core of the system.
 
-- **Allowed groups only.** This is a personal Apple ID, so its Messages database holds the teammate's private chats. The bridge only forwards messages from groups on its allow list. A group joins the list when someone first sends "@scout" in it, or when we add it by hand. Everything else is ignored.
+- **Groups only.** Private chats go through the Photon Pro line (see [Private DMs](#6-private-dms-gc-6-the-photon-pro-imessage-line)), so the bridge ignores direct messages to scout's account. The account belongs to scout alone, so every group it's in is one somebody added it to, and the bridge forwards all of them without an allow list.
 - **Routing.** It tags each group with a short ID, gives every message an ID, and ignores scout's own outgoing messages so it never loops.
 - **Events.** It passes reactions, people joining or leaving, and photos up to the agent, not only text.
 - **Commands.** It carries out each agent command natively where it can and mimics it where it can't (see [Commands](#commands)).
@@ -77,7 +80,7 @@ The bridge runs in scout's macOS user and is the core of the system.
 
 ### 4. Bridge to agent: Photon Pro over Telegram
 
-The bridge talks to scout's agent through Photon Pro's Telegram provider rather than by iMessage DM. Every group message would otherwise create a second iMessage from the teammate's account. That doubles the bot-like traffic Apple filters for, on the account we most need to protect. Telegram also carries JSON without the risk of iMessage turning links into preview cards.
+The bridge talks to scout's agent through Photon Pro's Telegram provider rather than by iMessage DM. Every group message would otherwise create a second iMessage from scout's account. That doubles the bot-like traffic Apple filters for, on a new account with no history to vouch for it. Telegram also carries JSON without the risk of iMessage turning links into preview cards.
 
 A Telegram bot can't message another bot, so the bridge uses a Telegram *user* account (through a library such as [gramjs](https://gram.js.org)) to message scout's Photon bot.
 
@@ -91,13 +94,13 @@ Pro fully supports one-to-one iMessage, including native polls, tapbacks, typing
 
 - **Registration.** Pro only messages registered users. Photon's CLI has `photon spectrum users add`, so the bridge could register members automatically as they appear in groups.
 - **Capacity.** The 100-user cap covers about 20 groups of five.
-- **Trade-off.** Private chats come from a different number than scout's group account. Scout explains this once ("for private stuff, text me here") and sends its contact card.
+- **Trade-off.** Private chats come from a Photon number, not the email address scout uses in groups. Scout explains this once ("for private stuff, text me here") and sends its contact card.
 
 ## Feature sources
 
 | Feature | Source |
 | --- | --- |
-| Real iMessage group, blue bubbles | Teammate account on the Mac |
+| Real iMessage group, blue bubbles | scout's Apple ID on the Mac |
 | Tapbacks, typing, threaded replies, edit/unsend, effects | BlueBubbles Private API |
 | Rename, group photo, add/remove members | BlueBubbles Private API |
 | Group polls (DS-1 to DS-3) | Native if BlueBubbles supports them, otherwise 👍 voting on one message per option |
@@ -134,15 +137,17 @@ How the bridge handles each command, depending on whether the Private API is wor
 
 ### Mac and account
 
-1. On an always-on Mac, create a macOS user called "scout."
-2. Log in as "scout," sign into Messages with the teammate's Apple ID, and set Share Name and Photo to "scout."
-3. Grant Full Disk Access to Terminal (and later to BlueBubbles and the bridge) under **System Settings → Privacy & Security**.
-4. Switch back to another user from Control Center *without logging scout out*. Scout's session keeps running in the background.
-5. Keep the Mac awake and set it to restart after a power cut. A sleeping Mac stops receiving messages. For a quick test, `caffeinate -dims` in scout's session is enough.
+1. Create scout's Apple ID at [account.apple.com](https://account.apple.com), with a teammate's phone number for two-factor codes.
+2. On an always-on Mac, create a macOS user called "scout."
+3. Log in as "scout," sign into Messages with scout's Apple ID, and set Share Name and Photo to "scout."
+4. Send a test message to a teammate right away. New Apple IDs sometimes fail to activate iMessage on a Mac. If it won't activate, fix that before building anything else, through Apple Support if needed.
+5. Grant Full Disk Access to Terminal (and later to BlueBubbles and the bridge) under **System Settings → Privacy & Security**.
+6. Switch back to another user from Control Center *without logging scout out*. Scout's session keeps running in the background.
+7. Keep the Mac awake and set it to restart after a power cut. A sleeping Mac stops receiving messages. For a quick test, `caffeinate -dims` in scout's session is enough.
 
 ### Getting scout into a group
 
-From an iPhone in the group, tap the group's name, then **Add Member**, and enter scout's number.
+From an iPhone in the group, tap the group's name, then **Add Member**, and enter scout's email address.
 
 - Every member must be on iMessage (blue bubbles). SMS groups don't allow adding people.
 - Apple may only allow adding people to a group that already has at least three other members. If the group is smaller, start a new group that includes scout.
@@ -155,8 +160,8 @@ From an iPhone in the group, tap the group's name, then **Add Member**, and ente
 
 ## Build order
 
-1. **Test the Mac (one afternoon).** Install BlueBubbles, turn on the Private API, and check each feature in a test group: tapback, typing, threaded reply, rename, add member, native poll. The results decide which commands can be native.
-2. **Basic bridge.** Use `imessage-kit` only: forward allowed groups to the agent, tag groups, route replies back.
+1. **Set up the account and test the Mac (one afternoon).** Create scout's Apple ID and confirm iMessage activates on the Mac. This is the step most likely to fail, so do it first. Then install BlueBubbles, turn on the Private API, and check each feature in a test group: tapback, typing, threaded reply, rename, add member, native poll. The results decide which commands can be native.
+2. **Basic bridge.** Use `imessage-kit` only: forward group messages to the agent, ignore direct messages, tag groups, route replies back.
 3. **Protocol.** Add the JSON commands and events, the agent's tools and the capability report.
 4. **Native features.** Switch the bridge's in-group actions to BlueBubbles, with `imessage-kit` as the backup.
 5. **Private DMs.** Add Pro DMs and automatic user registration.
@@ -174,10 +179,8 @@ Steps 1–3 are enough for the demo.
 
 | Risk | Mitigation |
 | --- | --- |
-| The bridge forwards the teammate's private chats to Photon and the AI. | Allow-list groups. Ignore everything else, including DMs to the teammate's account. |
-| Apple flags the teammate's personal Apple ID as a bot. There's no recovery process like Photon offers Business customers. | Keep machine traffic off iMessage (Telegram link), have people message scout first, pace replies, no late-night messages, no more than 2–3 follow-ups. See Photon's [deliverability guide](https://photon.codes/docs/best-practices/imessage-deliverability.md). |
-| People who already have the teammate saved as a contact see the teammate's name, not "scout." | Demo with friends who don't have that number saved, or ask them to save it as "scout." |
-| The teammate's iPhone shows every scout group and message. | Agreed up front. Mute scout's groups on their phone. |
+| The new Apple ID won't activate iMessage on the Mac. | Create the account and sign into Messages before building anything that depends on it. Contact Apple Support if activation fails. |
+| Apple flags scout's Apple ID as a bot. A new account has no history, which makes this more likely, and there's no recovery process like Photon offers Business customers. | Keep machine traffic off iMessage (Telegram link), have people message scout first, pace replies, no late-night messages, no more than 2–3 follow-ups. See Photon's [deliverability guide](https://photon.codes/docs/best-practices/imessage-deliverability.md). If the account is banned anyway, create a new one. No one's personal account is affected. |
 | A macOS update breaks the BlueBubbles Private API. | Turn off automatic updates. The bridge falls back to `imessage-kit` and reports reduced capabilities. |
 | Private API mode weakens macOS security on that Mac (System Integrity Protection is partly turned off). | Use a dedicated Mac with nothing personal on it, never a daily laptop. |
 | The Mac sleeps, restarts or loses Wi-Fi, and scout goes offline. | Background services, sleep disabled, health check alerts, and the PRD's fallback demo ready. |
@@ -188,6 +191,7 @@ Steps 1–3 are enough for the demo.
 | Option | Why not chosen |
 | --- | --- |
 | Buy Photon Business | $250 per number per month. |
+| Use a teammate's personal Apple ID | Its Messages database holds their private chats, so the bridge would need an allow list to keep those away from the AI. A ban would cost them their own iMessage. People who have them saved as a contact would see their name instead of "scout," and their iPhone would show every scout group. |
 | Test whether Pro handles existing groups | The docs hint that Pro can "reference an existing group," but every member would need registering, membership changes aren't reported, and the number is shared. Worth a 15-minute test, not a foundation. |
 | Mac with `imessage-kit` only | Works, and it's our backup mode, but there are no tapbacks, typing indicators, threaded replies or native polls in the group. |
 | Fake a group with DMs from Pro | Loses the main selling point: adding scout to the group text you already have. |

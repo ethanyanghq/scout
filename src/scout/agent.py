@@ -8,6 +8,9 @@ import anthropic
 
 from scout.agent_tools import TOOL_DEFINITIONS, run_tool
 from scout.group_summary import DateWindow, format_window, summarize_group
+from scout.money import format_usd
+from scout.nessie import NessieBank
+from scout.settle_up import plan_payments
 from scout.trip import IncomingMessage, Member, Trip
 from scout.trip_actions import TripActionError, TripActions
 from scout.trip_store import TripStore
@@ -30,15 +33,23 @@ SYSTEM_PROMPT = (Path(__file__).parent / "system_prompt.md").read_text()
 
 
 class ScoutAgent:
-    def __init__(self, client: anthropic.Anthropic, store: TripStore):
+    def __init__(
+        self,
+        client: anthropic.Anthropic,
+        store: TripStore,
+        bank: NessieBank | None = None,
+    ):
         self._client = client
         self._store = store
+        self._bank = bank
 
     def respond(self, trip: Trip, message: IncomingMessage) -> list[str]:
         """Returns the texts scout should send in reply, possibly none."""
-        actions = TripActions(self._store, trip.space_id, message.sender_phone)
+        actions = TripActions(
+            self._store, trip.space_id, message.sender_phone, self._bank
+        )
         conversation = [
-            {"role": "user", "content": self._describe_situation(trip, message)}
+            {"role": "user", "content": self._show_situation(trip, message)}
         ]
 
         response = self._ask_claude(conversation)
@@ -75,6 +86,21 @@ class ScoutAgent:
             fallbacks="default",
         )
 
+    def _show_situation(self, trip: Trip, message: IncomingMessage) -> list[dict]:
+        """The first prompt: the situation in words, plus any photo just sent."""
+        situation = {"type": "text", "text": self._describe_situation(trip, message)}
+        if message.photo is None:
+            return [situation]
+        photo = {
+            "type": "image",
+            "source": {
+                "type": "base64",
+                "media_type": message.photo.media_type,
+                "data": message.photo.base64_data,
+            },
+        }
+        return [photo, situation]
+
     def _describe_situation(self, trip: Trip, message: IncomingMessage) -> str:
         recent = self._store.recent_messages(trip.space_id, RECENT_MESSAGE_COUNT)
         labels = {member.phone: member.label for member in trip.members}
@@ -88,6 +114,8 @@ class ScoutAgent:
             if message.mentions_scout
             else ("It does not tag you.")
         )
+        if message.photo is not None:
+            tagged += " It comes with the photo above."
         today = date.today()
         return (
             f"Today is {today:%A, %B} {today.day}, {today.year}.\n\n"
@@ -103,6 +131,11 @@ def _describe_trip(trip: Trip) -> str:
     lines = [f"Stage: {trip.stage}"]
     if trip.destination:
         lines.append(f"Chosen destination: {trip.destination}")
+    if trip.dates:
+        lines.append(f"Trip dates: {format_window(trip.dates)} {trip.dates.start.year}")
+    if trip.itinerary:
+        lines.append("Itinerary:")
+        lines.extend(f"  {day.day:%a %Y-%m-%d}: {day.plan}" for day in trip.itinerary)
     lines.append("Members:")
     lines.extend(f"- {_describe_member(member)}" for member in trip.members)
     if summary.shared_window:
@@ -125,7 +158,34 @@ def _describe_trip(trip: Trip) -> str:
                 f"  {number}. {option.name} (~${option.estimated_cost_per_person_usd})"
                 f" votes: {', '.join(voters) or 'none'}"
             )
+    lines.extend(_describe_costs(trip))
     return "\n".join(lines)
+
+
+def _describe_costs(trip: Trip) -> list[str]:
+    """Expenses, what's still owed, and any receipt waiting to be confirmed."""
+    lines = []
+    if trip.expenses:
+        lines.append("Expenses, split evenly across everyone:")
+        lines.extend(
+            f"  #{expense.id} {expense.description}: "
+            f"{format_usd(expense.amount_cents)}, paid by "
+            f"{trip.find_member(expense.payer_phone).label}"
+            for expense in trip.expenses
+        )
+        lines.append("Payments still owed:")
+        lines.extend(
+            f"  {payment.payer.label} → {payment.payee.label} "
+            f"{format_usd(payment.amount_cents)}"
+            for payment in plan_payments(trip)
+        )
+    if trip.pending_receipt:
+        receipt = trip.pending_receipt
+        lines.append(
+            f"Receipt waiting for {trip.find_member(receipt.payer_phone).label} "
+            f"to confirm: {receipt.merchant}, {format_usd(receipt.total_cents)}"
+        )
+    return lines
 
 
 def _describe_member(member: Member) -> str:

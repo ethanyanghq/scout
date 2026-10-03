@@ -8,11 +8,17 @@ from dataclasses import asdict, dataclass
 from datetime import date, datetime
 from pathlib import Path
 
+from scout.nessie import SandboxPayment
 from scout.trip import (
+    DateWindow,
     DestinationOption,
+    Expense,
+    ItineraryDay,
     Member,
+    PendingReceipt,
     Poll,
     PreferenceUpdate,
+    Settlement,
     Trip,
     TripStage,
 )
@@ -22,6 +28,8 @@ CREATE TABLE IF NOT EXISTS trips (
     space_id    TEXT PRIMARY KEY,
     stage       TEXT NOT NULL,
     destination TEXT,
+    starts_on   TEXT,
+    ends_on     TEXT,
     created_at  TEXT NOT NULL
 );
 
@@ -36,6 +44,7 @@ CREATE TABLE IF NOT EXISTS members (
     budget_usd     INTEGER,
     home_city      TEXT,
     must_haves     TEXT NOT NULL DEFAULT '[]',
+    nessie_account_id TEXT,
     PRIMARY KEY (space_id, phone)
 );
 
@@ -52,6 +61,43 @@ CREATE TABLE IF NOT EXISTS votes (
     phone        TEXT NOT NULL,
     option_index INTEGER NOT NULL,
     PRIMARY KEY (poll_id, phone)
+);
+
+CREATE TABLE IF NOT EXISTS itinerary_days (
+    space_id TEXT NOT NULL REFERENCES trips (space_id),
+    day      TEXT NOT NULL,
+    plan     TEXT NOT NULL,
+    PRIMARY KEY (space_id, day)
+);
+
+CREATE TABLE IF NOT EXISTS expenses (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    space_id     TEXT NOT NULL REFERENCES trips (space_id),
+    payer_phone  TEXT NOT NULL,
+    amount_cents INTEGER NOT NULL,
+    description  TEXT NOT NULL
+);
+
+-- Payments already made. What's still owed is worked out from expenses and
+-- these, so there's no separate "unpaid" state to keep in sync.
+CREATE TABLE IF NOT EXISTS settlements (
+    id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+    space_id             TEXT NOT NULL REFERENCES trips (space_id),
+    payer_phone          TEXT NOT NULL,
+    payee_phone          TEXT NOT NULL,
+    amount_cents         INTEGER NOT NULL,
+    -- Both empty when the payment was simulated.
+    nessie_withdrawal_id TEXT,
+    nessie_deposit_id    TEXT
+);
+
+-- At most one receipt per trip waits for its payer to confirm; a newer one
+-- replaces it.
+CREATE TABLE IF NOT EXISTS pending_receipts (
+    space_id    TEXT PRIMARY KEY REFERENCES trips (space_id),
+    payer_phone TEXT NOT NULL,
+    merchant    TEXT NOT NULL,
+    total_cents INTEGER NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS chat_log (
@@ -89,8 +135,13 @@ class TripStore:
                 space_id=space_id,
                 stage=TripStage(row["stage"]),
                 destination=row["destination"],
+                dates=_load_dates(row),
                 members=_load_members(db, space_id),
                 open_poll=_load_open_poll(db, space_id),
+                itinerary=_load_itinerary(db, space_id),
+                expenses=_load_expenses(db, space_id),
+                settlements=_load_settlements(db, space_id),
+                pending_receipt=_load_pending_receipt(db, space_id),
             )
 
     def create_trip(self, space_id: str) -> None:
@@ -154,15 +205,90 @@ class TripStore:
                 (poll_id, phone, option_index),
             )
 
-    def close_poll(self, poll_id: int, destination: str) -> None:
+    def close_poll(
+        self, poll_id: int, destination: str, dates: DateWindow | None
+    ) -> None:
         with self._transaction() as db:
             space_id = db.execute(
                 "SELECT space_id FROM polls WHERE id = ?", (poll_id,)
             ).fetchone()["space_id"]
             db.execute("UPDATE polls SET is_open = 0 WHERE id = ?", (poll_id,))
             db.execute(
-                "UPDATE trips SET stage = ?, destination = ? WHERE space_id = ?",
-                (TripStage.DESTINATION_CHOSEN, destination, space_id),
+                "UPDATE trips SET stage = ?, destination = ?, starts_on = ?, "
+                "ends_on = ? WHERE space_id = ?",
+                (
+                    TripStage.DESTINATION_CHOSEN,
+                    destination,
+                    dates.start.isoformat() if dates else None,
+                    dates.end.isoformat() if dates else None,
+                    space_id,
+                ),
+            )
+
+    def replace_itinerary(self, space_id: str, days: list[ItineraryDay]) -> None:
+        with self._transaction() as db:
+            db.execute("DELETE FROM itinerary_days WHERE space_id = ?", (space_id,))
+            db.executemany(
+                "INSERT INTO itinerary_days (space_id, day, plan) VALUES (?, ?, ?)",
+                [(space_id, day.day.isoformat(), day.plan) for day in days],
+            )
+
+    def add_expense(
+        self, space_id: str, payer_phone: str, amount_cents: int, description: str
+    ) -> int:
+        """Saves a new expense and returns its ID."""
+        with self._transaction() as db:
+            cursor = db.execute(
+                "INSERT INTO expenses (space_id, payer_phone, amount_cents, "
+                "description) VALUES (?, ?, ?, ?)",
+                (space_id, payer_phone, amount_cents, description),
+            )
+            return cursor.lastrowid
+
+    def remove_expense(self, space_id: str, expense_id: int) -> None:
+        with self._transaction() as db:
+            db.execute(
+                "DELETE FROM expenses WHERE space_id = ? AND id = ?",
+                (space_id, expense_id),
+            )
+
+    def save_pending_receipt(self, space_id: str, receipt: PendingReceipt) -> None:
+        with self._transaction() as db:
+            db.execute(
+                "INSERT OR REPLACE INTO pending_receipts "
+                "(space_id, payer_phone, merchant, total_cents) VALUES (?, ?, ?, ?)",
+                (space_id, receipt.payer_phone, receipt.merchant, receipt.total_cents),
+            )
+
+    def clear_pending_receipt(self, space_id: str) -> None:
+        with self._transaction() as db:
+            db.execute("DELETE FROM pending_receipts WHERE space_id = ?", (space_id,))
+
+    def save_nessie_account(self, space_id: str, phone: str, account_id: str) -> None:
+        with self._transaction() as db:
+            db.execute(
+                "UPDATE members SET nessie_account_id = ? "
+                "WHERE space_id = ? AND phone = ?",
+                (account_id, space_id, phone),
+            )
+
+    def add_settlement(
+        self, space_id: str, settlement: Settlement, nessie_ids: SandboxPayment | None
+    ) -> None:
+        """Saves a payment. nessie_ids is None when it was simulated."""
+        with self._transaction() as db:
+            db.execute(
+                "INSERT INTO settlements (space_id, payer_phone, payee_phone, "
+                "amount_cents, nessie_withdrawal_id, nessie_deposit_id) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    space_id,
+                    settlement.payer_phone,
+                    settlement.payee_phone,
+                    settlement.amount_cents,
+                    nessie_ids.withdrawal_id if nessie_ids else None,
+                    nessie_ids.deposit_id if nessie_ids else None,
+                ),
             )
 
     def log_message(
@@ -203,6 +329,15 @@ class TripStore:
             connection.close()
 
 
+def _load_dates(trip_row: sqlite3.Row) -> DateWindow | None:
+    if trip_row["starts_on"] is None:
+        return None
+    return DateWindow(
+        date.fromisoformat(trip_row["starts_on"]),
+        date.fromisoformat(trip_row["ends_on"]),
+    )
+
+
 def _load_members(db: sqlite3.Connection, space_id: str) -> list[Member]:
     rows = db.execute(
         "SELECT * FROM members WHERE space_id = ? ORDER BY rowid", (space_id,)
@@ -216,6 +351,7 @@ def _load_members(db: sqlite3.Connection, space_id: str) -> list[Member]:
             budget_usd=row["budget_usd"],
             home_city=row["home_city"],
             must_haves=json.loads(row["must_haves"]),
+            nessie_account_id=row["nessie_account_id"],
         )
         for row in rows
     ]
@@ -235,6 +371,61 @@ def _load_open_poll(db: sqlite3.Connection, space_id: str) -> Poll | None:
         options=[DestinationOption(**option) for option in json.loads(row["options"])],
         votes={vote["phone"]: vote["option_index"] for vote in votes},
     )
+
+
+def _load_itinerary(db: sqlite3.Connection, space_id: str) -> list[ItineraryDay]:
+    rows = db.execute(
+        "SELECT day, plan FROM itinerary_days WHERE space_id = ? ORDER BY day",
+        (space_id,),
+    ).fetchall()
+    return [ItineraryDay(date.fromisoformat(row["day"]), row["plan"]) for row in rows]
+
+
+def _load_expenses(db: sqlite3.Connection, space_id: str) -> list[Expense]:
+    rows = db.execute(
+        "SELECT id, payer_phone, amount_cents, description FROM expenses "
+        "WHERE space_id = ? ORDER BY id",
+        (space_id,),
+    ).fetchall()
+    return [
+        Expense(
+            id=row["id"],
+            payer_phone=row["payer_phone"],
+            amount_cents=row["amount_cents"],
+            description=row["description"],
+        )
+        for row in rows
+    ]
+
+
+def _load_settlements(db: sqlite3.Connection, space_id: str) -> list[Settlement]:
+    rows = db.execute(
+        "SELECT payer_phone, payee_phone, amount_cents, nessie_deposit_id "
+        "FROM settlements WHERE space_id = ? ORDER BY id",
+        (space_id,),
+    ).fetchall()
+    return [
+        Settlement(
+            payer_phone=row["payer_phone"],
+            payee_phone=row["payee_phone"],
+            amount_cents=row["amount_cents"],
+            went_through_nessie=row["nessie_deposit_id"] is not None,
+        )
+        for row in rows
+    ]
+
+
+def _load_pending_receipt(
+    db: sqlite3.Connection, space_id: str
+) -> PendingReceipt | None:
+    row = db.execute(
+        "SELECT payer_phone, merchant, total_cents FROM pending_receipts "
+        "WHERE space_id = ?",
+        (space_id,),
+    ).fetchone()
+    if row is None:
+        return None
+    return PendingReceipt(row["payer_phone"], row["merchant"], row["total_cents"])
 
 
 def _parse_date(value: str | None) -> date | None:

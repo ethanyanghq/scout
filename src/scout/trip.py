@@ -7,12 +7,29 @@ from enum import StrEnum
 
 # Matches "@scout", "scout,", "Scout?" but not "scouting".
 SCOUT_MENTION = re.compile(r"\bscout\b", re.IGNORECASE)
+# Matches "$164", "$ 40", "164 dollars", "40 bucks", "12.50 usd".
+MONEY_MENTION = re.compile(
+    r"\$\s?\d|\b\d[\d,]*(\.\d+)?\s?(dollars|bucks|usd)\b", re.IGNORECASE
+)
 
 
 class TripStage(StrEnum):
     COLLECTING_PREFERENCES = "collecting_preferences"
     VOTING = "voting"
     DESTINATION_CHOSEN = "destination_chosen"
+
+
+@dataclass(frozen=True)
+class DateWindow:
+    start: date
+    end: date
+
+
+@dataclass(frozen=True)
+class MessagePhoto:
+    # One of the image types Claude reads: image/jpeg, png, gif, or webp.
+    media_type: str
+    base64_data: str
 
 
 @dataclass(frozen=True)
@@ -24,10 +41,15 @@ class IncomingMessage:
     # Everyone in the chat, including people who haven't spoken yet. Empty when
     # the messaging provider can't list participants (for example, in a DM).
     participant_phones: tuple[str, ...] = ()
+    photo: MessagePhoto | None = None
 
     @property
     def mentions_scout(self) -> bool:
         return SCOUT_MENTION.search(self.text) is not None
+
+    @property
+    def mentions_money(self) -> bool:
+        return MONEY_MENTION.search(self.text) is not None
 
 
 @dataclass(frozen=True)
@@ -51,6 +73,8 @@ class Member:
     budget_usd: int | None = None
     home_city: str | None = None
     must_haves: list[str] = field(default_factory=list)
+    # Their Capital One Nessie sandbox account, opened on their first payment.
+    nessie_account_id: str | None = None
 
     @property
     def label(self) -> str:
@@ -99,13 +123,58 @@ class Poll:
     votes: dict[str, int]
 
 
+@dataclass(frozen=True)
+class ItineraryDay:
+    day: date
+    # The one big thing planned for the day, e.g. "Night kayak on a bio bay".
+    plan: str
+
+
+@dataclass(frozen=True)
+class Expense:
+    """A shared cost one member paid, split evenly across the whole group."""
+
+    id: int
+    payer_phone: str
+    amount_cents: int
+    # What it was for, e.g. "Airbnb" or "Casa Brisa dinner".
+    description: str
+
+
+@dataclass(frozen=True)
+class PendingReceipt:
+    """A receipt scout read and asked its payer to confirm before logging."""
+
+    payer_phone: str
+    merchant: str
+    total_cents: int
+
+
+@dataclass(frozen=True)
+class Settlement:
+    """A payment one member made to another through scout to settle up."""
+
+    payer_phone: str
+    payee_phone: str
+    amount_cents: int
+    # False when Nessie was unreachable or not set up, so no sandbox money moved.
+    went_through_nessie: bool
+
+
 @dataclass
 class Trip:
     space_id: str
     stage: TripStage
     destination: str | None
+    # Locked in when the destination poll closes. None if no dates worked for
+    # everyone at that point.
+    dates: DateWindow | None
     members: list[Member]
     open_poll: Poll | None
+    itinerary: list[ItineraryDay]
+    expenses: list[Expense]
+    settlements: list[Settlement]
+    pending_receipt: PendingReceipt | None
 
     def find_member(self, phone: str) -> Member:
         for member in self.members:
