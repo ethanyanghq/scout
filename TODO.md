@@ -15,6 +15,7 @@ Everything still open, grouped by what it unblocks. Requirement IDs point to [sc
 - [ ] Set up the Mac: a "scout" macOS user, Full Disk Access for the terminal, kept awake.
 - [ ] Get an Anthropic API key and set `ANTHROPIC_API_KEY`.
 - [ ] Get a Nessie API key from nessieisreal.com and set `NESSIE_API_KEY`.
+- [ ] Create a Google Cloud key with Places API (New) enabled and billing on, set `GOOGLE_PLACES_API_KEY`, and add a budget alert.
 - [ ] Delete any old local `scout.db`. The schema changed and there are no migrations.
 
 ## Before the demo: verify
@@ -40,7 +41,7 @@ Everything still open, grouped by what it unblocks. Requirement IDs point to [sc
 
 ## Decisions needed
 
-- [ ] Pick the places API for on-trip discovery (OT-1 to OT-3).
+- [x] Pick the places API for on-trip discovery (OT-1 to OT-3): Google Places API (New) Text Search.
 - [ ] Pick album hosting (AL-1, AL-2). The PRD proposes a scout-hosted web album.
 - [ ] Decide whether payments made outside scout (cash, Venmo, "sent 💸") can be recorded, or everything goes through Nessie.
 
