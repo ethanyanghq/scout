@@ -7,6 +7,7 @@ store, polls, and summaries are all real.
 from datetime import date, datetime
 
 from scout.conversation import INTRODUCTION, SNAG_REPLY, handle_message
+from scout.places import Coordinates, Place
 from scout.trip import (
     DestinationOption,
     IncomingMessage,
@@ -260,3 +261,41 @@ def test_the_chat_log_notes_when_a_photo_was_sent(store):
     send(store, FakeAgent(replies=[]), PRIYA, "casa brisa dinner", photo=RECEIPT_PHOTO)
 
     assert store.recent_messages(SPACE, limit=1)[0].text == "[photo] casa brisa dinner"
+
+
+TACO_SPOTS = [
+    Place("place-1", "Lote 23", Coordinates(18.45, -66.07), "$$", None),
+    Place("place-2", "Taco Bar", Coordinates(18.46, -66.08), "$", None),
+]
+
+
+def test_a_plain_pick_sends_directions_without_the_agent(store):
+    choose_san_juan(store)
+    store.replace_place_suggestions(SPACE, TACO_SPOTS)
+    agent = FakeAgent()
+
+    replies = send(store, agent, LEO, "2")
+
+    assert agent.messages_seen == []
+    assert replies[0].startswith("🧭 Directions to Taco Bar:")
+
+
+def test_a_pick_by_name_sends_directions_too(store):
+    choose_san_juan(store)
+    store.replace_place_suggestions(SPACE, TACO_SPOTS)
+
+    replies = send(store, FakeAgent(), MAYA, "lote 23!")
+
+    assert replies[0].startswith("🧭 Directions to Lote 23:")
+
+
+def test_numbers_are_just_chat_once_a_place_is_picked(store):
+    choose_san_juan(store)
+    store.replace_place_suggestions(SPACE, TACO_SPOTS)
+    send(store, FakeAgent(), LEO, "2")
+    agent = FakeAgent()
+
+    replies = send(store, agent, MAYA, "1")
+
+    assert replies == []
+    assert agent.messages_seen == []

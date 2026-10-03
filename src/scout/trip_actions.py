@@ -15,7 +15,7 @@ from scout.calendar_link import format_calendar_message
 from scout.group_summary import format_group_summary, summarize_group
 from scout.itinerary import format_itinerary
 from scout.money import format_usd
-from scout.nearby import format_nearby_places
+from scout.nearby import format_directions, format_nearby_places
 from scout.nessie import NessieError, SandboxPayment
 from scout.outside_services import NO_OUTSIDE_SERVICES, OutsideServices
 from scout.places import Coordinates, GooglePlaces, PlacesError
@@ -301,6 +301,19 @@ class TripActions:
         self._store.replace_place_suggestions(self._space_id, found)
         self.outbox.append(format_nearby_places(found, start, near or trip.destination))
         return "Places posted."
+
+    def send_directions(self, option_index: int) -> str:
+        """Sends directions to the place the group picked (OT-3)."""
+        suggestions = self._load_trip().place_suggestions
+        if not suggestions:
+            raise TripActionError("there are no place suggestions to pick from")
+        if not 0 <= option_index < len(suggestions):
+            raise TripActionError(f"place {option_index + 1} doesn't exist")
+
+        # Once the group has picked, a later "2" is just chat again.
+        self._store.clear_place_suggestions(self._space_id)
+        self.outbox.append(format_directions(suggestions[option_index]))
+        return "Directions sent."
 
     def _close(self, trip: Trip) -> str:
         result = polls.decide_winner(trip.open_poll)

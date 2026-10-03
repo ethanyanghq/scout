@@ -187,3 +187,13 @@ def test_new_place_suggestions_replace_the_old_ones_in_order(store):
     store.replace_place_suggestions(SPACE, [bar, beach])
 
     assert store.get_trip(SPACE).place_suggestions == [bar, beach]
+
+
+def test_cleared_place_suggestions_are_gone(store):
+    store.create_trip(SPACE)
+    tacos = Place("place-1", "Lote 23", Coordinates(18.45, -66.07), "$$", None)
+    store.replace_place_suggestions(SPACE, [tacos])
+
+    store.clear_place_suggestions(SPACE)
+
+    assert store.get_trip(SPACE).place_suggestions == []
