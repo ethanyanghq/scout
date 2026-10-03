@@ -17,6 +17,7 @@ from scout.itinerary import format_itinerary
 from scout.money import format_usd
 from scout.nearby import format_directions, format_nearby_places
 from scout.nessie import NessieError, SandboxPayment
+from scout.outgoing import Outgoing, Say
 from scout.outside_services import NO_OUTSIDE_SERVICES, OutsideServices
 from scout.places import Coordinates, GooglePlaces, PlacesError
 from scout.settle_up import (
@@ -58,7 +59,7 @@ class TripActions:
         self._space_id = space_id
         self._sender_phone = sender_phone
         self._services = services
-        self.outbox: list[str] = []
+        self.outbox: list[Outgoing] = []
 
     def save_sender_preferences(self, update: PreferenceUpdate) -> str:
         from_date, to_date = update.available_from, update.available_to
@@ -81,7 +82,7 @@ class TripActions:
     def post_group_summary(self) -> str:
         trip = self._load_trip()
         summary = summarize_group(trip.members)
-        self.outbox.append(format_group_summary(summary, trip.members))
+        self.outbox.append(Say(format_group_summary(summary, trip.members)))
         if summary.dates_conflict:
             return "Summary posted. No dates work for everyone yet."
         return "Summary posted."
@@ -95,7 +96,7 @@ class TripActions:
             raise TripActionError("a poll is already open; close it first")
 
         self._store.open_poll(self._space_id, options)
-        self.outbox.append(polls.format_poll(options))
+        self.outbox.append(Say(polls.format_poll(options)))
         return "Poll posted."
 
     def record_sender_vote(self, option_index: int) -> str:
@@ -113,8 +114,10 @@ class TripActions:
 
         voter = trip.find_member(self._sender_phone)
         self.outbox.append(
-            f"Got it, {voter.label} → {poll.options[option_index].name} "
-            f"({len(poll.votes)} of {len(trip.members)} voted)"
+            Say(
+                f"Got it, {voter.label} → {poll.options[option_index].name} "
+                f"({len(poll.votes)} of {len(trip.members)} voted)"
+            )
         )
         return "Vote recorded."
 
@@ -140,11 +143,11 @@ class TripActions:
 
         in_order = sorted(days, key=lambda day: day.day)
         self._store.replace_itinerary(self._space_id, in_order)
-        self.outbox.append(format_itinerary(in_order))
+        self.outbox.append(Say(format_itinerary(in_order)))
         return "Itinerary posted."
 
     def send_booking_links(self) -> str:
-        self.outbox.append(format_booking_links(self._load_locked_in_trip()))
+        self.outbox.append(Say(format_booking_links(self._load_locked_in_trip())))
         return "Booking links posted."
 
     def log_sender_expense(self, amount_cents: int, description: str) -> str:
@@ -166,8 +169,10 @@ class TripActions:
             self._store.clear_pending_receipt(self._space_id)
         payer = trip.find_member(self._sender_phone)
         self.outbox.append(
-            f"Got it: {description}, {format_usd(amount_cents)}, paid by "
-            f"{payer.label}. Split {len(trip.members)} ways."
+            Say(
+                f"Got it: {description}, {format_usd(amount_cents)}, paid by "
+                f"{payer.label}. Split {len(trip.members)} ways."
+            )
         )
         return f"Logged as expense #{expense_id}."
 
@@ -184,8 +189,10 @@ class TripActions:
         payer = trip.find_member(self._sender_phone)
         when = f", {purchased_on:%b} {purchased_on.day}" if purchased_on else ""
         self.outbox.append(
-            f"From the receipt: {merchant}{when}, {format_usd(total_cents)} total, "
-            f"paid by {payer.label}. Split it {len(trip.members)} ways?"
+            Say(
+                f"From the receipt: {merchant}{when}, {format_usd(total_cents)} total, "
+                f"paid by {payer.label}. Split it {len(trip.members)} ways?"
+            )
         )
         return f"Asked {payer.label} to confirm. Log it once they do."
 
@@ -211,7 +218,7 @@ class TripActions:
 
         self._store.remove_expense(self._space_id, expense_id)
         self.outbox.append(
-            f"Removed: {expense.description}, {format_usd(expense.amount_cents)}."
+            Say(f"Removed: {expense.description}, {format_usd(expense.amount_cents)}.")
         )
         return "Expense removed."
 
@@ -219,7 +226,7 @@ class TripActions:
         trip = self._load_trip()
         if not trip.expenses:
             raise TripActionError("nobody has logged an expense yet")
-        self.outbox.append(format_settle_up(trip))
+        self.outbox.append(Say(format_settle_up(trip)))
         return "Settle-up posted."
 
     def pay_from_sender(self, payee_label: str) -> str:
@@ -246,7 +253,7 @@ class TripActions:
             paid += " (simulated: no money moved in the Capital One sandbox)"
         else:
             paid += " through Capital One's Nessie sandbox (not real money)"
-        self.outbox.append(f"{paid}\n{format_payments_left(self._load_trip())}")
+        self.outbox.append(Say(f"{paid}\n{format_payments_left(self._load_trip())}"))
         return "Paid." if nessie_ids else "Recorded as a simulated payment."
 
     def _send_through_nessie(self, payment: Payment) -> SandboxPayment | None:
@@ -299,7 +306,9 @@ class TripActions:
             raise TripActionError(f"no places matched {request!r}; try other words")
 
         self._store.replace_place_suggestions(self._space_id, found)
-        self.outbox.append(format_nearby_places(found, start, near or trip.destination))
+        self.outbox.append(
+            Say(format_nearby_places(found, start, near or trip.destination))
+        )
         return "Places posted."
 
     def send_directions(self, option_index: int) -> str:
@@ -312,7 +321,7 @@ class TripActions:
 
         # Once the group has picked, a later "2" is just chat again.
         self._store.clear_place_suggestions(self._space_id)
-        self.outbox.append(format_directions(suggestions[option_index]))
+        self.outbox.append(Say(format_directions(suggestions[option_index])))
         return "Directions sent."
 
     def _close(self, trip: Trip) -> str:
@@ -324,13 +333,13 @@ class TripActions:
         # edits can't quietly move a trip people have started booking.
         dates = summarize_group(trip.members).shared_window
         self._store.close_poll(trip.open_poll.id, result.winner.name, dates)
-        self.outbox.append(polls.format_result(result, len(trip.open_poll.votes)))
+        self.outbox.append(Say(polls.format_result(result, len(trip.open_poll.votes))))
         if dates is None:
             return (
                 f"Poll closed. Destination is now {result.winner.name}, "
                 "but no dates work for everyone, so the trip has no dates."
             )
-        self.outbox.append(format_calendar_message(result.winner.name, dates))
+        self.outbox.append(Say(format_calendar_message(result.winner.name, dates)))
         return f"Poll closed. Destination is now {result.winner.name}."
 
     def _load_locked_in_trip(self) -> Trip:

@@ -1,4 +1,5 @@
-// How the bridge hands a text to scout's Python service and gets replies back.
+// How the bridge hands a text to scout's Python service and gets back what to
+// send.
 
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -22,7 +23,12 @@ export type IncomingText = {
   sent_at: string;
   participant_phones: string[];
   photo: IncomingPhoto | null;
+  // The line's ID for this message, so scout can react or reply to it.
+  message_id: string;
 };
+
+// What scout asks the bridge to send (src/scout/outgoing.py).
+export type ScoutAction = { type: "say"; text: string };
 
 // Read on each call, so tests and the end-to-end runner can point the bridge
 // at their own service.
@@ -30,7 +36,7 @@ export function scoutUrl(): string {
   return process.env.SCOUT_URL ?? DEFAULT_SCOUT_URL;
 }
 
-export async function askScout(text: IncomingText): Promise<string[]> {
+export async function askScout(text: IncomingText): Promise<ScoutAction[]> {
   const response = await fetch(`${scoutUrl()}/messages`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -39,8 +45,8 @@ export async function askScout(text: IncomingText): Promise<string[]> {
   if (!response.ok) {
     throw new Error(`scout returned ${response.status}: ${await response.text()}`);
   }
-  const { replies } = (await response.json()) as { replies: string[] };
-  return replies;
+  const { actions } = (await response.json()) as { actions: ScoutAction[] };
+  return actions;
 }
 
 // iPhones send HEIC, which Claude can't read, so every photo goes through

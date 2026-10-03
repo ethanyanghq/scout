@@ -7,6 +7,7 @@ store, polls, and summaries are all real.
 from datetime import date, datetime
 
 from scout.conversation import INTRODUCTION, SNAG_REPLY, handle_message
+from scout.outgoing import Say
 from scout.places import Coordinates, Place
 from scout.trip import (
     DestinationOption,
@@ -16,6 +17,13 @@ from scout.trip import (
     PreferenceUpdate,
     TripStage,
 )
+
+
+def said(outgoing):
+    """The texts scout sent, failing on anything that isn't a plain text."""
+    assert all(isinstance(item, Say) for item in outgoing), outgoing
+    return [item.text for item in outgoing]
+
 
 SPACE = "group-chat-1"
 MAYA = "+15550000001"
@@ -37,7 +45,7 @@ class FakeAgent:
 
     def respond(self, trip, message):
         self.messages_seen.append(message.text)
-        return self.replies
+        return [Say(text) for text in self.replies]
 
 
 class BrokenAgent:
@@ -54,7 +62,7 @@ def send(store, agent, sender, text, photo=None):
         participant_phones=EVERYONE,
         photo=photo,
     )
-    return handle_message(message, store, agent)
+    return said(handle_message(message, store, agent))
 
 
 def start_voting(store):

@@ -106,7 +106,7 @@ describe("a Linq group chat through Spectrum", () => {
     port: 0,
     async fetch(request) {
       scoutReceived.push((await request.json()) as IncomingText);
-      return Response.json({ replies: ["hey Maya 👋"] });
+      return Response.json({ actions: [{ type: "say", text: "hey Maya 👋" }] });
     },
   });
   const stubLinq = Bun.serve({
@@ -155,6 +155,7 @@ describe("a Linq group chat through Spectrum", () => {
       sender_phone: MAYA.handle,
       text: "@scout spring break?",
       participant_phones: [MAYA.handle, LEO.handle],
+      message_id: "message-1",
     });
     expect(linqReceived).toEqual([
       {

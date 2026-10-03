@@ -12,6 +12,7 @@ from datetime import datetime
 from typing import Protocol
 
 from scout import polls
+from scout.outgoing import Outgoing, Say, as_plain_text
 from scout.trip import IncomingMessage, Trip, TripStage
 from scout.trip_actions import TripActions
 from scout.trip_store import TripStore
@@ -33,17 +34,17 @@ SNAG_REPLY = "Sorry, I hit a snag on my end. Mind trying that again in a minute?
 
 
 class Agent(Protocol):
-    def respond(self, trip: Trip, message: IncomingMessage) -> list[str]: ...
+    def respond(self, trip: Trip, message: IncomingMessage) -> list[Outgoing]: ...
 
 
 def handle_message(
     message: IncomingMessage, store: TripStore, agent: Agent
-) -> list[str]:
-    """Records the message and returns the texts scout should send back."""
-    replies = []
+) -> list[Outgoing]:
+    """Records the message and returns what scout should send back."""
+    replies: list[Outgoing] = []
     if store.get_trip(message.space_id) is None:
         store.create_trip(message.space_id)
-        replies.append(INTRODUCTION)
+        replies.append(Say(INTRODUCTION))
 
     store.add_members(
         message.space_id, [message.sender_phone, *message.participant_phones]
@@ -52,19 +53,17 @@ def handle_message(
         message.space_id, message.sender_phone, _chat_log_text(message), message.sent_at
     )
     # Log the introduction before the agent runs so the agent can see it.
-    for reply in replies:
-        store.log_message(message.space_id, None, reply, datetime.now())
+    _log_sent(store, message.space_id, replies)
 
     trip = store.get_trip(message.space_id)
     new_replies = _respond(trip, message, store, agent)
-    for reply in new_replies:
-        store.log_message(message.space_id, None, reply, datetime.now())
+    _log_sent(store, message.space_id, new_replies)
     return replies + new_replies
 
 
 def _respond(
     trip: Trip, message: IncomingMessage, store: TripStore, agent: Agent
-) -> list[str]:
+) -> list[Outgoing]:
     if trip.open_poll is not None:
         option_names = [option.name for option in trip.open_poll.options]
         choice = polls.parse_vote(message.text, option_names)
@@ -90,7 +89,7 @@ def _respond(
         # The group shouldn't be left hanging when they asked scout directly,
         # but scout shouldn't apologize for messages it was never asked about.
         logger.exception("Agent failed on message in %s", message.space_id)
-        return [SNAG_REPLY] if message.mentions_scout else []
+        return [Say(SNAG_REPLY)] if message.mentions_scout else []
 
 
 def _needs_agent_untagged(trip: Trip, message: IncomingMessage) -> bool:
@@ -108,6 +107,11 @@ def _needs_agent_untagged(trip: Trip, message: IncomingMessage) -> bool:
     # The payer's reply to "Split it 4 ways?" is usually just "yep".
     receipt = trip.pending_receipt
     return receipt is not None and receipt.payer_phone == message.sender_phone
+
+
+def _log_sent(store: TripStore, space_id: str, sent: list[Outgoing]) -> None:
+    for outgoing in sent:
+        store.log_message(space_id, None, as_plain_text(outgoing), datetime.now())
 
 
 def _chat_log_text(message: IncomingMessage) -> str:

@@ -3,6 +3,7 @@ from datetime import date
 import pytest
 
 from scout.nessie import NessieError, SandboxPayment
+from scout.outgoing import Say
 from scout.outside_services import OutsideServices
 from scout.places import Coordinates, Place, PlacesError
 from scout.trip import (
@@ -32,6 +33,14 @@ MAYA_PREFERENCES = PreferenceUpdate(
     budget_usd=800,
     home_city="Boston",
 )
+
+
+def said(outgoing):
+    """The texts scout sent, failing on anything that isn't a plain text."""
+    assert all(isinstance(item, Say) for item in outgoing), outgoing
+    return [item.text for item in outgoing]
+
+
 LEO_PREFERENCES = PreferenceUpdate(
     display_name="Leo",
     available_from=date(2027, 3, 14),
@@ -92,7 +101,7 @@ def test_rejects_dates_that_end_before_they_start(maya_actions):
 def test_starting_a_poll_posts_it_to_the_chat(maya_actions):
     maya_actions.start_destination_poll(OPTIONS)
 
-    assert maya_actions.outbox[0].startswith("🗳️ Where should we go?")
+    assert said(maya_actions.outbox)[0].startswith("🗳️ Where should we go?")
 
 
 def test_cannot_start_a_second_poll_while_one_is_open(maya_actions):
@@ -125,7 +134,7 @@ def test_closing_the_poll_locks_in_the_dates_everyone_shares(store):
 def test_closing_the_poll_sends_a_calendar_link_after_the_winner(store):
     closing = everyone_votes_for_san_juan(store)
 
-    winner, calendar = closing.outbox
+    winner, calendar = said(closing.outbox)
     assert winner.startswith("🎉 Poll closed! San Juan, Puerto Rico wins")
     assert calendar.startswith("📅 Locked in: San Juan, Puerto Rico, Mar 14–19.")
     assert "calendar.google.com" in calendar
@@ -143,7 +152,7 @@ def test_no_calendar_link_when_no_dates_work_for_everyone(store):
     closing = everyone_votes_for_san_juan(store, leo_preferences=leo_in_april)
 
     assert store.get_trip(SPACE).dates is None
-    assert len(closing.outbox) == 1
+    assert len(said(closing.outbox)) == 1
 
 
 def test_itinerary_is_posted_in_date_order(locked_in_actions):
@@ -151,7 +160,7 @@ def test_itinerary_is_posted_in_date_order(locked_in_actions):
         [plan_day(15, "Beach day in Condado"), plan_day(14, "Land and check in")]
     )
 
-    assert locked_in_actions.outbox == [
+    assert said(locked_in_actions.outbox) == [
         "🗓️ The plan:\nSun 3/14 · Land and check in\nMon 3/15 · Beach day in Condado"
     ]
 
@@ -182,7 +191,7 @@ def test_no_itinerary_before_a_destination_is_chosen(maya_actions):
 def test_booking_links_cover_each_home_city_and_a_stay(locked_in_actions):
     locked_in_actions.send_booking_links()
 
-    lines = locked_in_actions.outbox[0].split("\n")
+    lines = said(locked_in_actions.outbox)[0].split("\n")
     assert lines[0] == "✈️ Flights for Mar 14–19:"
     assert lines[1].startswith("Boston: https://www.google.com/travel/flights?")
     assert lines[2].startswith("New York: https://www.google.com/travel/flights?")
@@ -202,7 +211,9 @@ def test_logging_an_expense_confirms_it_in_the_chat(store):
 
     leo_actions.log_sender_expense(124_000, "Airbnb")
 
-    assert leo_actions.outbox == ["Got it: Airbnb, $1,240, paid by Leo. Split 2 ways."]
+    assert said(leo_actions.outbox) == [
+        "Got it: Airbnb, $1,240, paid by Leo. Split 2 ways."
+    ]
     [expense] = store.get_trip(SPACE).expenses
     assert (expense.payer_phone, expense.amount_cents) == (LEO, 124_000)
 
@@ -219,7 +230,7 @@ def test_payers_can_remove_their_own_expense(maya_actions, store):
     maya_actions.remove_expense(expense.id)
 
     assert store.get_trip(SPACE).expenses == []
-    assert maya_actions.outbox[-1] == "Removed: Bio bay kayaks, $196."
+    assert said(maya_actions.outbox)[-1] == "Removed: Bio bay kayaks, $196."
 
 
 def test_nobody_else_can_remove_someones_expense(maya_actions, store):
@@ -240,7 +251,7 @@ def test_settle_up_is_posted_to_the_chat(maya_actions):
 
     maya_actions.post_settle_up()
 
-    assert maya_actions.outbox[-1] == (
+    assert said(maya_actions.outbox)[-1] == (
         "💸 Shared costs: $100, so $50 each. Fewest payments to settle up:\n"
         "…0002 → …0001 $50\n"
         'To pay, text "@scout pay …0001".'
@@ -291,7 +302,7 @@ def test_paying_moves_sandbox_money_and_confirms_in_the_chat(store):
     maya_actions.pay_from_sender("Leo")
 
     assert bank.payments == [("account-1", "account-2", 5_000)]
-    assert maya_actions.outbox == [
+    assert said(maya_actions.outbox) == [
         "Paid ✓ Maya → Leo $50 through Capital One's Nessie sandbox "
         "(not real money)\nEveryone's settled up 🎉"
     ]
@@ -323,7 +334,7 @@ def test_payments_are_simulated_when_no_sandbox_bank_is_set_up(store):
 
     maya_actions.pay_from_sender("Leo")
 
-    assert maya_actions.outbox[0].startswith(
+    assert said(maya_actions.outbox)[0].startswith(
         "Paid ✓ Maya → Leo $50 (simulated: no money moved in the Capital One sandbox)"
     )
     [settlement] = store.get_trip(SPACE).settlements
@@ -338,7 +349,7 @@ def test_the_group_can_still_settle_up_when_nessie_is_down(store):
 
     maya_actions.pay_from_sender("Leo")
 
-    assert "(simulated" in maya_actions.outbox[0]
+    assert "(simulated" in said(maya_actions.outbox)[0]
     assert len(store.get_trip(SPACE).settlements) == 1
 
 
@@ -383,7 +394,7 @@ def priya_texts_a_receipt(store):
 def test_a_receipt_is_read_back_for_its_payer_to_confirm(store):
     priya_actions = priya_texts_a_receipt(store)
 
-    assert priya_actions.outbox == [
+    assert said(priya_actions.outbox) == [
         "From the receipt: Casa Brisa, Mar 16, $164 total, paid by Priya. "
         "Split it 3 ways?"
     ]
@@ -396,7 +407,9 @@ def test_a_receipt_is_read_back_for_its_payer_to_confirm(store):
 def test_a_receipt_without_a_date_is_read_back_without_one(maya_actions):
     maya_actions.ask_to_confirm_receipt("Bodega", None, 1_250)
 
-    assert maya_actions.outbox[0].startswith("From the receipt: Bodega, $12.50 total")
+    assert said(maya_actions.outbox)[0].startswith(
+        "From the receipt: Bodega, $12.50 total"
+    )
 
 
 def test_logging_the_confirmed_receipt_clears_it(store):
@@ -472,7 +485,7 @@ def test_nearby_places_are_posted_with_rough_walking_times(locked_in_actions, st
 
     maya_actions.suggest_nearby_places("cozy tacos with outdoor seating", "Condado")
 
-    assert maya_actions.outbox == [
+    assert said(maya_actions.outbox) == [
         "📍 Near Condado:\n"
         "1. Lote 23 · $$ · ~10 min walk\n"
         "   Food park.\n"
@@ -501,7 +514,7 @@ def test_without_a_named_spot_places_come_from_the_whole_destination(
 
     maya_actions.suggest_nearby_places("tacos", None)
 
-    assert maya_actions.outbox[0].startswith(
+    assert said(maya_actions.outbox)[0].startswith(
         "📍 Near San Juan, Puerto Rico:\n1. Lote 23 · $$\n"
     )
 
@@ -551,7 +564,7 @@ def test_picking_a_place_sends_directions_to_it(maya_actions, store):
 
     maya_actions.send_directions(1)
 
-    [directions] = maya_actions.outbox
+    [directions] = said(maya_actions.outbox)
     assert directions.startswith("🧭 Directions to Taco Bar: https://www.google.com/")
     assert "destination_place_id=place-2" in directions
 

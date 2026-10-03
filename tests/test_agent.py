@@ -4,6 +4,7 @@ from datetime import date, datetime
 from types import SimpleNamespace
 
 from scout.agent import ScoutAgent
+from scout.outgoing import Say
 from scout.places import Coordinates, Place
 from scout.trip import (
     DateWindow,
@@ -14,6 +15,13 @@ from scout.trip import (
     PendingReceipt,
     PreferenceUpdate,
 )
+
+
+def said(outgoing):
+    """The texts scout sent, failing on anything that isn't a plain text."""
+    assert all(isinstance(item, Say) for item in outgoing), outgoing
+    return [item.text for item in outgoing]
+
 
 SPACE = "group-chat-1"
 MAYA = "+15550000001"
@@ -79,7 +87,7 @@ def test_saves_preferences_and_confirms(store):
         response("end_turn", text("Got it, Maya: ~$800. Dates and home city?")),
     )
 
-    replies = ScoutAgent(claude, store).respond(trip, message)
+    replies = said(ScoutAgent(claude, store).respond(trip, message))
 
     assert replies == ["Got it, Maya: ~$800. Dates and home city?"]
     assert store.get_trip(SPACE).find_member(MAYA).budget_usd == 800
@@ -95,7 +103,7 @@ def test_bad_tool_input_goes_back_to_claude_as_an_error(store):
         response("end_turn", text("There's no poll open yet.")),
     )
 
-    replies = ScoutAgent(claude, store).respond(trip, message)
+    replies = said(ScoutAgent(claude, store).respond(trip, message))
 
     tool_result = claude.requests[1]["messages"][-1]["content"][0]
     assert tool_result["is_error"]
@@ -117,7 +125,7 @@ def test_posted_summaries_follow_the_lead_in_line(store):
         response("end_turn", text("Here you go!")),
     )
 
-    replies = ScoutAgent(claude, store).respond(trip, message)
+    replies = said(ScoutAgent(claude, store).respond(trip, message))
 
     assert replies[0] == "Here you go!"
     assert replies[1].startswith("Here's where everyone landed:")

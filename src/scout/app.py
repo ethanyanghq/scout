@@ -2,6 +2,7 @@
 
 import logging
 import os
+from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 from typing import Literal
@@ -14,6 +15,7 @@ from pydantic import BaseModel
 from scout.agent import ScoutAgent
 from scout.conversation import handle_message
 from scout.dev_endpoints import create_dev_router
+from scout.outgoing import Link, Outgoing, React, Say
 from scout.outside_services import connect_outside_services
 from scout.trip import IncomingMessage, MessagePhoto
 from scout.trip_store import TripStore
@@ -22,6 +24,7 @@ from scout.trip_store import TripStore
 HOST = "127.0.0.1"
 DEFAULT_PORT = 8787
 DEFAULT_DB_PATH = "scout.db"
+ACTION_TYPES = {Say: "say", React: "react", Link: "link"}
 
 
 class IncomingPhoto(BaseModel):
@@ -39,10 +42,13 @@ class IncomingText(BaseModel):
     sent_at: datetime
     participant_phones: list[str] = []
     photo: IncomingPhoto | None = None
+    message_id: str | None = None
 
 
-class Replies(BaseModel):
-    replies: list[str]
+class Actions(BaseModel):
+    # Each action is its type ("say", "react" or "link") plus that type's
+    # fields in outgoing.py, which the bridge turns into iMessages.
+    actions: list[dict]
 
 
 def create_app(store: TripStore, agent: ScoutAgent) -> FastAPI:
@@ -51,7 +57,7 @@ def create_app(store: TripStore, agent: ScoutAgent) -> FastAPI:
     # A plain `def` (not `async def`) makes FastAPI run this in a worker
     # thread, so the slow Claude call doesn't freeze the server.
     @app.post("/messages")
-    def receive_message(incoming: IncomingText) -> Replies:
+    def receive_message(incoming: IncomingText) -> Actions:
         message = IncomingMessage(
             space_id=incoming.space_id,
             sender_phone=incoming.sender_phone,
@@ -63,11 +69,20 @@ def create_app(store: TripStore, agent: ScoutAgent) -> FastAPI:
                 if incoming.photo
                 else None
             ),
+            message_id=incoming.message_id,
         )
-        return Replies(replies=handle_message(message, store, agent))
+        return _as_actions(handle_message(message, store, agent))
 
     app.include_router(create_dev_router(store))
     return app
+
+
+def _as_actions(outgoing: list[Outgoing]) -> Actions:
+    return Actions(
+        actions=[
+            {"type": ACTION_TYPES[type(item)], **asdict(item)} for item in outgoing
+        ]
+    )
 
 
 def main() -> None:

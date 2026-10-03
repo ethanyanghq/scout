@@ -38,7 +38,7 @@ def vote(client, member, text, chat="chat-1"):
             "participant_phones": [person["phone"] for person in GROUP],
         },
     )
-    return response.json()["replies"]
+    return [action["text"] for action in response.json()["actions"]]
 
 
 def test_seeding_at_the_poll_opens_the_vote_with_everyones_preferences(client):
