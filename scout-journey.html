@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>scout: the user journey</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  --bg:#2341D6;
+  --text:#FFFFFF;
+  --muted:#CDD6FF;
+  --sun:#FFD23F;
+  --navy:#0E1A4A;
+  --line:rgba(255,255,255,.36);
+  --panel:#1A32B4;
+  --phone-frame:#0E1A4A;
+  --phone-edge:rgba(255,255,255,.10);
+  --screen:#FFFFFF;
+  --screen-text:#11131A;
+  --screen-muted:#6F7482;
+  --hair:#E6E6EC;
+  --head-bg:#F7F7F9;
+  --bubble-them:#E9E9EB;
+  --bubble-me:#1E6BFF;
+  --bubble-sq:#FFF2B8;
+  --bubble-sq-text:#2B2300;
+  --card:#FFFFFF;
+  --card-border:#EADFAE;
+  --chip:#EEF0F4;
+  --bar:#E3A600;
+  --link:#1757E6;
+  --map-bg:#E7EEDD;
+  --map-street:#FFFFFF;
+  --ok:#11845A;
+  --quest-bg:#FFFFFF;
+  --quest-text:#0E1A4A;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0C1442; --text:#F2F4FF; --muted:#A3AFE8; --line:rgba(255,255,255,.24); --panel:#16205C;
+    --phone-frame:#000000; --phone-edge:rgba(255,255,255,.16);
+    --screen:#000000; --screen-text:#F2F2F7; --screen-muted:#8E8E96; --hair:#26262B; --head-bg:#0E0E10;
+    --bubble-them:#26252A; --bubble-sq:#3A3110; --bubble-sq-text:#FFE68A;
+    --card:#1A1A1D; --card-border:#4A4020; --chip:#2C2C30; --bar:#FFD23F; --link:#6EA6FF;
+    --map-bg:#1C2420; --map-street:#363C40; --ok:#3DD68C; --quest-bg:#1C2A78; --quest-text:#F2F4FF;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0C1442; --text:#F2F4FF; --muted:#A3AFE8; --line:rgba(255,255,255,.24); --panel:#16205C;
+  --phone-frame:#000000; --phone-edge:rgba(255,255,255,.16);
+  --screen:#000000; --screen-text:#F2F2F7; --screen-muted:#8E8E96; --hair:#26262B; --head-bg:#0E0E10;
+  --bubble-them:#26252A; --bubble-sq:#3A3110; --bubble-sq-text:#FFE68A;
+  --card:#1A1A1D; --card-border:#4A4020; --chip:#2C2C30; --bar:#FFD23F; --link:#6EA6FF;
+  --map-bg:#1C2420; --map-street:#363C40; --ok:#3DD68C; --quest-bg:#1C2A78; --quest-text:#F2F4FF;
+  color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px);background:var(--bg)}
+body{margin:0;background:var(--bg);color:var(--text);font-family:"Hanken Grotesk",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:17px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+img,svg{max-width:100%}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+.wrap{max-width:1140px;margin:0 auto;padding:clamp(28px,5vw,64px) clamp(16px,4vw,40px) 40px}
+.stage{display:grid;grid-template-columns:minmax(0,1fr) 372px;grid-template-areas:"hero phone" "trail phone";column-gap:clamp(32px,6vw,84px);row-gap:44px;align-items:start}
+
+/* Hero */
+.hero{grid-area:hero}
+.hero h1{font-family:"Bagel Fat One","Arial Black",Impact,sans-serif;font-weight:400;font-size:clamp(84px,13vw,156px);line-height:.92;color:var(--sun);margin:0}
+.lede{font-size:clamp(21px,2.3vw,27px);font-weight:700;line-height:1.25;margin:18px 0 10px;max-width:24ch}
+.sub{color:var(--muted);margin:0;max-width:48ch}
+
+/* Trail */
+.trail-wrap{grid-area:trail;position:relative}
+.trail-svg{position:absolute;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;overflow:visible}
+.p-all{fill:none;stroke:var(--line);stroke-width:3;stroke-linecap:round;stroke-dasharray:1 10}
+.p-done{fill:none;stroke:var(--sun);stroke-width:4;stroke-linecap:round;transition:stroke-dashoffset .8s ease}
+.p-measure{fill:none;stroke:none}
+.trail{list-style:none;margin:0;padding:0;position:relative;z-index:1;display:flex;flex-direction:column;gap:20px}
+.trail > li{margin-left:var(--x,0px)}
+.wp{display:flex;align-items:center;gap:16px;background:none;border:0;padding:0;text-align:left;cursor:pointer;border-radius:32px}
+.wp:focus-visible{outline:3px solid var(--sun);outline-offset:6px}
+.num{flex:none;width:52px;height:52px;border-radius:50%;display:grid;place-items:center;font-family:"Bagel Fat One","Arial Black",Impact,sans-serif;font-size:22px;line-height:1;background:var(--bg);border:2px solid var(--line);color:var(--text);transition:transform .25s ease,background-color .25s,box-shadow .25s}
+.wp:hover .num{border-color:var(--sun)}
+.wp.done .num{background:var(--sun);border-color:var(--sun);color:var(--navy)}
+.wp[aria-current="step"] .num{background:var(--sun);border-color:var(--sun);color:var(--navy);transform:scale(1.1);box-shadow:0 0 0 7px rgba(255,210,63,.28)}
+.txt{display:flex;flex-direction:column}
+.t{font-weight:700;font-size:19px;line-height:1.25}
+.d{color:var(--muted);font-size:15.5px;line-height:1.35}
+.s{display:none;font-weight:700;font-size:15px;white-space:nowrap}
+.more{display:none;margin:14px 0 4px 68px;background:var(--panel);border-radius:16px;padding:14px 18px 16px;max-width:440px}
+.trail > li.active .more{display:block}
+.more h3,.detail-m h3{margin:0 0 4px;font-size:14px;font-weight:700;color:var(--sun)}
+.more ul,.detail-m ul{margin:0;padding:0;list-style:none}
+.more li,.detail-m li{position:relative;padding-left:20px;font-size:15.5px;line-height:1.45;margin-top:6px}
+.more li::before,.detail-m li::before{content:"";position:absolute;left:2px;top:.55em;width:8px;height:8px;border-radius:2px;background:var(--sun);transform:rotate(45deg)}
+
+/* Phone */
+.phone-col{grid-area:phone;position:sticky;top:calc(24px + env(safe-area-inset-top,0px))}
+.phone{max-width:360px;margin:0 auto;background:var(--phone-frame);border-radius:54px;padding:11px;box-shadow:inset 0 0 0 1.5px var(--phone-edge),0 40px 70px -30px rgba(4,8,40,.6)}
+.screen{position:relative;height:680px;border-radius:44px;overflow:hidden;background:var(--screen);color:var(--screen-text);display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif}
+.island{position:absolute;top:11px;left:50%;transform:translateX(-50%);width:98px;height:29px;border-radius:20px;background:#000;z-index:2}
+.status{flex:none;height:48px;display:flex;align-items:center;justify-content:space-between;padding:6px 28px 0 32px;font-size:14.5px;font-weight:600}
+.status svg{display:block}
+.head{flex:none;display:flex;flex-direction:column;align-items:center;gap:3px;padding:2px 12px 9px;background:var(--head-bg);border-bottom:1px solid var(--hair)}
+.head-avas{display:flex}
+.head-avas .ava{width:26px;height:26px;margin-left:-7px;box-shadow:0 0 0 2px var(--head-bg);font-size:11px}
+.head-avas .ava:first-child{margin-left:0}
+.head-name{font-size:12.5px;font-weight:600}
+.head-sub{font-size:11px;color:var(--screen-muted);margin-top:-3px}
+.chat{flex:1;overflow-y:auto;overscroll-behavior:contain;padding:6px 10px 12px;display:flex;flex-direction:column;gap:2px;font-size:14.5px;line-height:1.32}
+.composer{flex:none;display:flex;align-items:center;gap:8px;padding:8px 12px 22px;border-top:1px solid var(--hair)}
+.composer .plus{width:30px;height:30px;border-radius:50%;background:var(--chip);display:grid;place-items:center;color:var(--screen-muted);font-size:20px;line-height:1}
+.composer .field{flex:1;border:1px solid var(--hair);border-radius:18px;padding:6px 12px;font-size:14px;color:var(--screen-muted)}
+
+/* Messages */
+.ts{text-align:center;font-size:11px;color:var(--screen-muted);margin:8px 0 6px}
+.ts b{font-weight:600}
+.sys{text-align:center;font-size:11.5px;color:var(--screen-muted);margin:10px 18px 4px;line-height:1.35}
+.row{display:flex;align-items:flex-end;gap:6px}
+.row.newgrp{margin-top:9px}
+.row.me{justify-content:flex-end}
+.ava{width:26px;height:26px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:11.5px;font-weight:700;color:#fff;line-height:1}
+.ava.hide{visibility:hidden}
+.ava-sq{background:#FFD23F}
+.ava-sq svg{width:18px;height:18px;display:block}
+.stack{display:flex;flex-direction:column;align-items:flex-start;max-width:76%;min-width:0}
+.me .stack{align-items:flex-end}
+.stack.wide{max-width:88%;width:88%}
+.name{font-size:11px;color:var(--screen-muted);margin:0 0 2px 11px}
+.bubble{padding:7px 12px 8px;border-radius:18px;background:var(--bubble-them);color:var(--screen-text);overflow-wrap:anywhere;max-width:100%}
+.me .bubble{background:var(--bubble-me);color:#fff}
+.sq .bubble{background:var(--bubble-sq);color:var(--bubble-sq-text)}
+.stack.wide .bubble{width:100%;padding:8px 8px 8px}
+.stack.wide .msg-text{padding:0 4px}
+.typing{display:flex;gap:4px;padding:5px 2px}
+.typing i{width:7px;height:7px;border-radius:50%;background:var(--screen-muted);opacity:.4;animation:dot 1.1s infinite}
+.typing i:nth-child(2){animation-delay:.15s}
+.typing i:nth-child(3){animation-delay:.3s}
+@keyframes dot{0%,60%,100%{opacity:.35;transform:none}30%{opacity:1;transform:translateY(-2px)}}
+.pop{animation:pop .28s cubic-bezier(.2,.8,.3,1.2) both}
+@keyframes pop{from{opacity:0;transform:translateY(6px) scale(.97)}to{opacity:1;transform:none}}
+
+/* Cards inside scout messages */
+.card{margin-top:8px;background:var(--card);border:1px solid var(--card-border);border-radius:13px;padding:9px 10px;color:var(--screen-text);font-size:13px;line-height:1.35}
+.card.waiting{animation:nudge 1.6s ease-in-out infinite}
+@keyframes nudge{0%,100%{box-shadow:0 0 0 0 rgba(30,107,255,0)}50%{box-shadow:0 0 0 4px rgba(30,107,255,.35)}}
+.kv{display:grid;grid-template-columns:78px 1fr;gap:8px;padding:5px 0}
+.kv+.kv{border-top:1px solid var(--hair)}
+.k{color:var(--screen-muted);font-weight:600}
+.opt{display:block;width:100%;text-align:left;background:transparent;border:1.5px solid var(--hair);border-radius:11px;padding:8px 9px;margin-top:6px;cursor:pointer;color:inherit;font:inherit}
+.opt:first-child{margin-top:0}
+.opt:disabled{cursor:default}
+.poll.waiting .opt:hover{border-color:var(--link)}
+.opt[aria-pressed="true"]{border-color:var(--link);box-shadow:inset 0 0 0 1px var(--link)}
+.opt:focus-visible,.paybtn:focus-visible{outline:2px solid var(--link);outline-offset:2px}
+.opt-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.opt-name{font-weight:700;font-size:13.5px}
+.opt-price{font-size:12px;color:var(--screen-muted);white-space:nowrap}
+.opt-note{display:block;font-size:12px;color:var(--screen-muted);margin-top:1px}
+.bar{display:block;height:5px;border-radius:3px;background:var(--chip);margin-top:7px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--bar);border-radius:3px;transition:width .45s ease}
+.vline{display:flex;align-items:center;gap:6px;margin-top:5px;min-height:16px}
+.voters{display:flex;gap:2px}
+.voters span{width:16px;height:16px;border-radius:50%;display:grid;place-items:center;font-size:9px;font-weight:700;color:#fff}
+.count{font-size:11px;color:var(--screen-muted)}
+.foot{text-align:center;font-size:12px;color:var(--screen-muted);margin-top:8px}
+.foot.cta{color:var(--link);font-weight:700}
+.day{display:grid;grid-template-columns:60px 1fr;gap:6px;padding:4px 0}
+.day+.day{border-top:1px solid var(--hair)}
+.dn{font-weight:700}
+.place{display:flex;justify-content:space-between;gap:10px;padding:6px 0}
+.place+.place{border-top:1px solid var(--hair)}
+.pn{font-weight:700;font-size:13.5px}
+.pd{color:var(--screen-muted);font-size:12.5px;font-weight:400}
+.pm{text-align:right;font-size:12px;color:var(--screen-muted);white-space:nowrap}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.chip{display:inline-block;background:var(--card);border:1px solid var(--card-border);border-radius:999px;padding:5px 10px;font-size:12.5px;font-weight:600;color:var(--link);white-space:nowrap}
+.mapcard{padding:6px}
+.map{display:block;width:100%;height:auto;border-radius:9px}
+.m-bg{fill:var(--map-bg)}
+.m-st path{stroke:var(--map-street);stroke-width:8;fill:none}
+.m-route{stroke:var(--link);stroke-width:3.5;fill:none;stroke-dasharray:.5 6;stroke-linecap:round}
+.m-you{fill:var(--link);stroke:#fff;stroke-width:2.5}
+.m-pin{fill:#E5484D}
+.m-pin-dot{fill:#fff}
+.mapfoot{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 4px 2px}
+.lg-h{font-size:11.5px;font-weight:700;color:var(--screen-muted);margin:1px 0 3px}
+.lg-row{display:flex;align-items:baseline;gap:8px;padding:3px 0}
+.lg-row>span:first-child{flex:1}
+.amt{font-weight:700;font-variant-numeric:tabular-nums}
+.st{font-size:11px;color:var(--screen-muted)}
+.st.ok{color:var(--ok);font-weight:700}
+.lg-row.you>span:first-child{font-weight:700}
+.lg-sep{height:1px;background:var(--hair);margin:7px 0}
+.paybtn{display:block;width:100%;margin-top:8px;border:1.5px solid var(--link);border-radius:10px;padding:8px;background:var(--link);color:#fff;font:inherit;font-weight:700;font-size:13.5px;cursor:pointer}
+.paybtn:disabled{cursor:default;opacity:.45}
+.paybtn.paid{background:transparent;color:var(--ok);border-color:var(--ok);opacity:1}
+
+.bubble.media{padding:0;background:transparent;border-radius:16px;overflow:hidden}
+.photo{width:184px;border-radius:16px;overflow:hidden;line-height:0}
+.photo svg{display:block;width:100%;height:auto}
+.al-top{display:flex;gap:10px;align-items:center}
+.al-cover{width:56px;height:56px;border-radius:10px;overflow:hidden;flex:none}
+.al-cover svg{display:block;width:100%;height:100%}
+.al-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:9px}
+.al-avas{display:flex}
+.al-avas span{width:20px;height:20px;border-radius:50%;margin-left:-5px;box-shadow:0 0 0 2px var(--card);display:grid;place-items:center;font-size:9.5px;font-weight:700;color:#fff}
+.al-avas span:first-child{margin-left:0}
+
+/* Controls */
+.controls{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:20px}
+.btn{border-radius:999px;padding:10px 18px;font-weight:700;font-size:15.5px;cursor:pointer;border:2px solid var(--line);background:transparent;color:var(--text)}
+.btn:hover:not(:disabled){border-color:var(--sun)}
+.btn.primary{background:var(--sun);border-color:var(--sun);color:var(--navy)}
+.btn:disabled{opacity:.35;cursor:default}
+.btn:focus-visible{outline:3px solid var(--sun);outline-offset:3px}
+.btn.primary:focus-visible{outline-color:var(--text)}
+.stepcount{text-align:center;color:var(--muted);font-size:15px;margin:12px 0 0}
+.detail-m{grid-area:detail;display:none;background:var(--panel);border-radius:18px;padding:16px 18px 18px}
+
+/* Other quests */
+.others{margin-top:80px;border-top:3px dotted var(--line);padding-top:44px}
+.others h2{font-family:"Bagel Fat One","Arial Black",Impact,sans-serif;font-weight:400;font-size:clamp(30px,4vw,40px);line-height:1.05;color:var(--sun);margin:0 0 10px}
+.quests{display:flex;flex-wrap:wrap;gap:12px;margin:24px 0 0;padding:0;list-style:none}
+.quests li{background:var(--quest-bg);color:var(--quest-text);border-radius:20px 20px 20px 6px;padding:11px 17px 12px;font-size:16px;line-height:1.35;max-width:32ch}
+.note{color:var(--muted);font-size:14px;margin:48px 0 0}
+
+@media (max-width: 880px){
+  .stage{grid-template-columns:minmax(0,1fr);grid-template-areas:"hero" "trail" "phone" "detail";row-gap:22px}
+  .phone-col{position:static}
+  .detail-m{display:block}
+  .trail-svg{display:none}
+  .trail{flex-direction:row;gap:8px;overflow-x:auto;margin:0 calc(-1 * clamp(16px,4vw,40px));padding:4px clamp(16px,4vw,40px) 8px;scrollbar-width:none}
+  .trail::-webkit-scrollbar{display:none}
+  .trail > li{margin-left:0;flex:none}
+  .wp{border:2px solid var(--line);padding:5px 15px 5px 5px;gap:9px}
+  .wp:focus-visible{outline-offset:2px}
+  .wp[aria-current="step"]{border-color:var(--sun)}
+  .num{width:30px;height:30px;font-size:15px}
+  .wp[aria-current="step"] .num{transform:none;box-shadow:none}
+  .t,.d,.more{display:none !important}
+  .s{display:inline}
+  .screen{height:600px}
+  .others{margin-top:56px;padding-top:32px}
+}
+@media (prefers-reduced-motion: reduce){
+  .pop,.typing i{animation:none}
+  .card.waiting{animation:none;box-shadow:0 0 0 3px rgba(30,107,255,.4)}
+  .p-done,.num,.bar i{transition:none}
+}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <div class="stage">
+    <header class="hero">
+      <h1>scout</h1>
+      <p class="lede">A trip planner that lives in your group chat.</p>
+      <p class="sub">Add one number to the group text and it handles the rest: what everyone wants, the vote, the plan, a shared photo album, finding spots on the trip, and splitting the bill from a photo of the receipt. Follow one friend group’s spring break, step by step.</p>
+    </header>
+
+    <nav class="trail-wrap" id="trail-wrap" aria-label="Journey steps">
+      <svg class="trail-svg" id="trail-svg" aria-hidden="true"><path class="p-all" id="p-all"/><path class="p-done" id="p-done"/><path class="p-measure" id="p-measure"/></svg>
+      <ol class="trail" id="trail"></ol>
+    </nav>
+
+    <div class="phone-col">
+      <div class="phone">
+        <div class="screen">
+          <div class="island" aria-hidden="true"></div>
+          <div class="status" aria-hidden="true">
+            <span>9:41</span>
+            <svg width="64" height="12" viewBox="0 0 64 12" fill="currentColor"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="6" width="3" height="6" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/><rect x="37.5" y="0.5" width="22" height="11" rx="3" fill="none" stroke="currentColor" stroke-opacity=".45"/><rect x="39.5" y="2.5" width="16" height="7" rx="1.5"/><rect x="60.5" y="4" width="2" height="4" rx="1" fill-opacity=".45"/></svg>
+          </div>
+          <div class="head">
+            <div class="head-avas" id="head-avas" aria-hidden="true"></div>
+            <div class="head-name">spring break ’27 🌴</div>
+            <div class="head-sub">5 people</div>
+          </div>
+          <div class="chat" id="chat" role="log" aria-live="polite" aria-label="Group chat"></div>
+          <div class="composer" aria-hidden="true"><span class="plus">+</span><span class="field">Text Message</span></div>
+        </div>
+      </div>
+      <div class="controls">
+        <button class="btn" id="prev" type="button">Back</button>
+        <button class="btn primary" id="play" type="button">Play the journey</button>
+        <button class="btn" id="next" type="button">Next</button>
+      </div>
+      <p class="stepcount" id="stepcount"></p>
+    </div>
+
+    <section class="detail-m" aria-label="What scout does here">
+      <h3>What scout does here</h3>
+      <ul id="detail-m-list"></ul>
+    </section>
+  </div>
+
+  <section class="others">
+    <h2>Not just spring break</h2>
+    <p class="sub">Any friend group can tag it in for smaller plans, too.</p>
+    <ul class="quests">
+      <li>@scout birthday dinner for 8 on Saturday. loud, fun, under $40 each</li>
+      <li>@scout we’re by the venue and need tacos before the show</li>
+      <li>@scout make an album for the lake house weekend</li>
+      <li>@scout here’s the grocery receipt, split it 5 ways</li>
+    </ul>
+  </section>
+
+  <p class="note">A sample conversation for the scout concept. Places, prices, and the phone number are made up.</p>
+</main>
+
+<script>
+(() => {
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const mobileMQ = window.matchMedia('(max-width: 880px)');
+
+  const COMPASS = '<svg viewBox="0 0 24 24" aria-hidden="true"><g transform="rotate(40 12 12)"><path d="M12 3.5 15 12 12 20.5 9 12Z" fill="#0E1A4A"/><path d="M12 3.5 15 12H9Z" fill="#E5484D"/></g><circle cx="12" cy="12" r="1.6" fill="#FFD23F"/></svg>';
+
+  const PEOPLE = {
+    maya:   { name: 'Maya',   init: 'M', color: '#1E6BFF' },
+    jordan: { name: 'Jordan', init: 'J', color: '#139A68' },
+    priya:  { name: 'Priya',  init: 'P', color: '#D94C86' },
+    leo:    { name: 'Leo',    init: 'L', color: '#E07A10' },
+    sq:     { name: 'scout' }
+  };
+
+  const OFFSETS = [0, 46, 10, 62, 18, 50];
+
+  const STAGES = [
+    {
+      title: 'Add scout to the chat', short: 'Add', desc: 'Text one number into the group thread.',
+      detail: [
+        'Joins the group text you already have as one more member. Nobody downloads an app or makes an account.',
+        'Introduces itself and asks for the basics up front: dates, budget, home city, and one must-have.'
+      ],
+      script: [
+        { ts: ['Tue, Jan 12', '9:14 PM'] },
+        { who: 'jordan', text: 'ok are we actually doing spring break this year' },
+        { who: 'priya', text: 'if we book flights the night before again I’m out' },
+        { who: 'leo', text: 'this chat has 600 messages and zero plans 💀' },
+        { who: 'maya', text: 'ok adding scout. it plans trips over text' },
+        { sys: 'Maya added scout (555-014-2277) to the conversation.' },
+        { who: 'sq', text: 'Hey all 👋 I’m scout. I’ll help turn this chat into an actual trip. To start, everyone send me your dates, your budget, where you’re flying from, and one thing this trip needs.' },
+        { who: 'leo', text: 'wait it just texts us? no app?' },
+        { who: 'sq', text: 'No app. Keep texting like normal and tag @scout when you need me.' }
+      ]
+    },
+    {
+      title: 'Share what everyone wants', short: 'Share', desc: 'Dates, budgets, and must-haves.',
+      detail: [
+        'Pulls dates, budgets, and must-haves out of casual messages, typos and all.',
+        'Finds the dates that work for everyone and keeps a running summary the group can check anytime.'
+      ],
+      script: [
+        { ts: ['Tue, Jan 12', '9:20 PM'] },
+        { who: 'jordan', text: 'mar 13–20, ~$800 all in, flying from boston' },
+        { who: 'priya', text: 'same dates! could stretch to $1k. chicago' },
+        { who: 'leo', text: 'I can only do 14–19 😬 and there NEEDS to be a beach. nyc' },
+        { who: 'maya', text: 'boston too. only requirement is good food' },
+        { who: 'sq', text: 'Here’s where everyone landed:', card: 'summary' },
+        { who: 'sq', text: 'I’ll send a few trips that fit tomorrow morning.' }
+      ]
+    },
+    {
+      title: 'Vote on a destination', short: 'Vote', desc: 'Options that fit, decided by poll.',
+      detail: [
+        'Prices each option against everyone’s home city and budget before suggesting it.',
+        'Runs the vote right in the chat and breaks ties with facts instead of a 40-message debate.'
+      ],
+      script: [
+        { ts: ['Wed, Jan 13', '8:02 AM'] },
+        { who: 'sq', text: 'Morning! 3 trips that fit Mar 14–19, your budgets, and a beach 🏖️ Tap to vote.', card: 'poll' },
+        { who: 'jordan', text: 'san juan, no contest', vote: 'sj' },
+        { who: 'priya', text: 'tulum!! the cenotes 😍', vote: 'tul' },
+        { who: 'leo', text: 'SJ. cheaper = more mofongo', vote: 'sj' },
+        { wait: 'vote' },
+        { dyn: 'pollResult' },
+        { who: 'priya', text: 'fine, but I’m picking a dinner spot 😤' }
+      ]
+    },
+    {
+      title: 'Get the plan and the album', short: 'Plan', desc: 'An itinerary, booking links, and a shared album.',
+      detail: [
+        'Builds a day-by-day plan around the group’s must-haves: a beach for Leo, good food for Maya.',
+        'Sends booking links so the group books flights and stays themselves.',
+        'Creates a shared trip album, adds everyone, and asks before auto-adding photos from the chat.'
+      ],
+      script: [
+        { ts: ['Thu, Jan 14', '8:47 PM'] },
+        { who: 'priya', text: '@scout can you make us a plan? not too packed pls' },
+        { who: 'sq', text: 'Here’s a relaxed 6 days. One big thing a day, the rest is beach and food:', card: 'itinerary' },
+        { who: 'leo', text: 'a GLOWING bay?? 🤯' },
+        { who: 'maya', text: '@scout where do we book' },
+        { who: 'sq', text: 'Cheapest flights from each city, plus stays that sleep 4 for under $1,300 total. Text the price here once you book and I’ll track it.', card: 'links' },
+        { who: 'sq', text: 'I also made a shared album for the trip and added all 4 of you 📸 No account needed.', card: 'album', arg: 0 },
+        { who: 'sq', text: 'Want me to add photos you send in this chat during the trip automatically? I’ll skip receipts.' },
+        { who: 'priya', text: 'yes!!' },
+        { who: 'jordan', text: '👍' },
+        { who: 'leo', text: 'do it' },
+        { who: 'maya', text: 'yes pls' },
+        { who: 'sq', text: 'Done. Photos from Mar 14–19 go straight to the album.' }
+      ]
+    },
+    {
+      title: 'Explore and share photos', short: 'Explore', desc: 'Ask for a vibe, get directions, add photos.',
+      detail: [
+        'Turns a vibe like “cozy, outdoor seating, not touristy” into a few nearby picks.',
+        'Sends walking directions as soon as the group chooses.',
+        'Adds photos sent in the chat to the album, so nobody has to chase them down later.'
+      ],
+      script: [
+        { ts: ['Tue, Mar 16', '7:38 PM'] },
+        { who: 'maya', text: '@scout we’re starving. somewhere cozy with outdoor seating, walkable, not touristy' },
+        { who: 'sq', text: '3 spots near you that fit:', card: 'places' },
+        { who: 'jordan', text: 'casa brisa looks perfect' },
+        { who: 'priya', text: 'yes 🙌 counting this as my pick' },
+        { who: 'sq', text: 'Casa Brisa it is. 6 minutes on foot 👇', card: 'map' },
+        { ts: ['Tue, Mar 16', '9:12 PM'] },
+        { who: 'leo', photo: 'patio', alt: 'Leo’s photo of the group at a string-lit patio table at dusk' },
+        { who: 'leo', text: '10/10 patio' },
+        { who: 'sq', text: 'Added to the album 📸 That’s 47 photos so far.' }
+      ]
+    },
+    {
+      title: 'Split the costs', short: 'Settle up', desc: 'Text a receipt, settle up in the chat.',
+      detail: [
+        'Reads receipt photos for the merchant, date, and total, then confirms before logging. Receipts stay out of the album.',
+        'Works out the fewest payments to settle up, sends pay links, and nudges anyone who hasn’t paid.',
+        'Reminds everyone to add their last photos before the trip ends.'
+      ],
+      script: [
+        { ts: ['Fri, Mar 19', '10:05 AM'] },
+        { who: 'leo', text: 'fyi I paid the airbnb, $1,240' },
+        { who: 'priya', photo: 'receipt', alt: 'Priya’s photo of the Casa Brisa receipt, total $164.00' },
+        { who: 'priya', text: 'casa brisa dinner 👆' },
+        { who: 'sq', text: 'From the receipt: Casa Brisa, Mar 16, $164.00 total, paid by Priya. Split it 4 ways? (I kept this one out of the album.)' },
+        { who: 'priya', text: 'yep, all 4' },
+        { who: 'maya', text: 'and I got the bio bay kayak, $196' },
+        { who: 'jordan', text: '@scout who owes what. I’ve been scared to ask' },
+        { who: 'sq', text: 'Shared costs came to $1,600, so $400 each. Here are the fewest payments to settle up:', card: 'ledger' },
+        { wait: 'pay' },
+        { who: 'maya', text: 'sent 💸' },
+        { who: 'sq', text: 'Got it, Maya ✅ Two payments left. I’ll remind Jordan and Priya tonight.' },
+        { who: 'jordan', text: 'sending now 🫡' },
+        { who: 'sq', text: 'Before you fly: the album has 86 photos from all 4 of you. Add any last ones here 📸', card: 'album', arg: 86 },
+        { who: 'leo', text: 'best trip ever. same time next year?' },
+        { who: 'sq', text: 'I’ll be here 🧭' }
+      ]
+    }
+  ];
+
+  const PHOTOS = {
+    patio:
+      '<svg viewBox="0 0 200 150" aria-hidden="true">' +
+        '<rect width="200" height="150" fill="#2B1E5C"/>' +
+        '<rect y="52" width="200" height="98" fill="#5E2F6B"/>' +
+        '<rect y="84" width="200" height="66" fill="#A9486B"/>' +
+        '<rect y="108" width="200" height="42" fill="#E07A4F"/>' +
+        '<path d="M0 22 Q50 52 100 30 T200 34" stroke="#1B1530" stroke-width="1.2" fill="none"/>' +
+        '<g fill="#FFE08A"><circle cx="20" cy="35" r="2.6"/><circle cx="50" cy="42" r="2.6"/><circle cx="80" cy="40" r="2.6"/><circle cx="120" cy="27" r="2.6"/><circle cx="150" cy="24" r="2.6"/><circle cx="180" cy="29" r="2.6"/></g>' +
+        '<g fill="#FFE08A" opacity=".22"><circle cx="20" cy="35" r="7"/><circle cx="50" cy="42" r="7"/><circle cx="80" cy="40" r="7"/><circle cx="120" cy="27" r="7"/><circle cx="150" cy="24" r="7"/><circle cx="180" cy="29" r="7"/></g>' +
+        '<path d="M178 150 C176 118 178 92 184 70" stroke="#1B1530" stroke-width="5" fill="none"/>' +
+        '<g fill="#1B1530"><ellipse cx="168" cy="66" rx="18" ry="4.5" transform="rotate(18 168 66)"/><ellipse cx="198" cy="64" rx="18" ry="4.5" transform="rotate(-20 198 64)"/><ellipse cx="176" cy="58" rx="16" ry="4" transform="rotate(-48 176 58)"/><ellipse cx="192" cy="56" rx="16" ry="4" transform="rotate(46 192 56)"/></g>' +
+        '<g fill="#1B1530">' +
+          '<circle cx="30" cy="84" r="10"/><path d="M12 150 Q12 98 30 96 Q48 98 48 150Z"/>' +
+          '<circle cx="74" cy="80" r="9.5"/><path d="M57 150 Q57 94 74 92 Q91 94 91 150Z"/>' +
+          '<circle cx="118" cy="82" r="10"/><path d="M100 150 Q100 96 118 94 Q136 96 136 150Z"/>' +
+          '<circle cx="156" cy="88" r="9"/><path d="M140 150 Q140 100 156 98 Q172 100 172 150Z"/>' +
+          '<rect x="8" y="116" width="168" height="7" rx="2"/>' +
+        '</g>' +
+        '<g fill="#FFD9A8"><path d="M50 106h10l-5 10z"/><path d="M96 106h10l-5 10z"/><path d="M138 106h10l-5 10z"/></g>' +
+      '</svg>',
+    receipt:
+      '<svg viewBox="0 0 180 200" aria-hidden="true">' +
+        '<rect width="180" height="200" fill="#6B4A32"/>' +
+        '<rect width="180" height="200" fill="#000" opacity=".08"/>' +
+        '<g transform="rotate(-4 90 100)" font-family="\'Courier New\',Courier,monospace" fill="#2A2A2A">' +
+          '<rect x="34" y="8" width="112" height="186" fill="#FBFAF4"/>' +
+          '<text x="90" y="28" font-size="10" font-weight="700" text-anchor="middle">CASA BRISA</text>' +
+          '<text x="90" y="39" font-size="6.5" text-anchor="middle">San Juan, PR</text>' +
+          '<text x="90" y="48" font-size="6.5" text-anchor="middle">03/16/27  8:41 PM</text>' +
+          '<path d="M42 56H138" stroke="#2A2A2A" stroke-width=".6" stroke-dasharray="2 2"/>' +
+          '<g font-size="7"><text x="42" y="68">Mofongo x2</text><text x="138" y="68" text-anchor="end">38.00</text>' +
+          '<text x="42" y="80">Fish tacos x2</text><text x="138" y="80" text-anchor="end">34.00</text>' +
+          '<text x="42" y="92">Margarita x4</text><text x="138" y="92" text-anchor="end">48.00</text></g>' +
+          '<path d="M42 100H138" stroke="#2A2A2A" stroke-width=".6" stroke-dasharray="2 2"/>' +
+          '<g font-size="7"><text x="42" y="112">Subtotal</text><text x="138" y="112" text-anchor="end">120.00</text>' +
+          '<text x="42" y="123">Tax</text><text x="138" y="123" text-anchor="end">13.80</text>' +
+          '<text x="42" y="134">Tip</text><text x="138" y="134" text-anchor="end">30.20</text></g>' +
+          '<g font-size="9" font-weight="700"><text x="42" y="150">TOTAL</text><text x="138" y="150" text-anchor="end">$164.00</text></g>' +
+          '<text x="90" y="174" font-size="7" text-anchor="middle">Gracias!</text>' +
+        '</g>' +
+      '</svg>'
+  };
+
+  const ALBUM_COVER =
+    '<svg viewBox="0 0 64 64" aria-hidden="true">' +
+      '<rect width="64" height="64" fill="#7CC6F2"/>' +
+      '<circle cx="46" cy="18" r="8" fill="#FFD23F"/>' +
+      '<rect y="36" width="64" height="28" fill="#1E88C7"/>' +
+      '<path d="M0 50 Q16 44 32 49 T64 47 V64 H0Z" fill="#F2D49B"/>' +
+    '</svg>';
+
+  const POLL_OPTS = [
+    { k: 'sj',  name: 'San Juan, Puerto Rico', price: '~$720 each', note: 'Beaches and a great food scene. No passport needed.' },
+    { k: 'mia', name: 'Miami, Florida',        price: '~$850 each', note: 'South Beach and Little Havana. Direct flights from all 3 cities.' },
+    { k: 'tul', name: 'Tulum, Mexico',         price: '~$910 each', note: 'Cenotes and beach clubs. Passport needed.' }
+  ];
+
+  const $ = (s) => document.querySelector(s);
+  const chat = $('#chat'), trail = $('#trail'), trailWrap = $('#trail-wrap');
+  const svg = $('#trail-svg'), pAll = $('#p-all'), pDone = $('#p-done'), pMeasure = $('#p-measure');
+  const detailM = $('#detail-m-list'), stepcount = $('#stepcount');
+  const prevBtn = $('#prev'), nextBtn = $('#next'), playBtn = $('#play');
+
+  let cur = 0, runId = 0, autoplay = false, stageDone = false, lastWho = null;
+  let waiter = null, autoTimer = null, votes = null, mayaVote = null, pollEl = null, ledgerEl = null;
+
+  const sleep = (ms) => new Promise((r) => setTimeout(r, reduce ? 0 : ms));
+  const sleepRaw = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  function el(tag, cls, html) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (html != null) e.innerHTML = html;
+    return e;
+  }
+  function scrollChat() { chat.scrollTo({ top: chat.scrollHeight, behavior: reduce ? 'auto' : 'smooth' }); }
+
+  function avatar(who) {
+    const a = el('div', 'ava');
+    if (who === 'sq') { a.classList.add('ava-sq'); a.innerHTML = COMPASS; }
+    else { a.textContent = PEOPLE[who].init; a.style.background = PEOPLE[who].color; }
+    a.setAttribute('aria-hidden', 'true');
+    return a;
+  }
+
+  function buildRow(who, node, newGroup, bubbleCls) {
+    const isMe = who === 'maya';
+    const row = el('div', 'row ' + (isMe ? 'me' : 'them') + (who === 'sq' ? ' sq' : '') + (newGroup ? ' newgrp' : '') + (reduce ? '' : ' pop'));
+    if (!isMe) { const a = avatar(who); if (!newGroup) a.classList.add('hide'); row.appendChild(a); }
+    const stack = el('div', 'stack');
+    if (!isMe && newGroup) stack.appendChild(el('div', 'name', PEOPLE[who].name));
+    if (isMe) stack.appendChild(el('span', 'sr', 'Maya: '));
+    const b = el('div', 'bubble' + (bubbleCls ? ' ' + bubbleCls : ''));
+    b.appendChild(node);
+    stack.appendChild(b);
+    row.appendChild(stack);
+    return row;
+  }
+
+  /* ---------- Cards ---------- */
+  const CARDS = {
+    summary() {
+      return el('div', 'card', [
+        ['Dates', 'Mar 14–19 works for all 4'],
+        ['Budget', '$800–1,000 each'],
+        ['Flying from', 'Boston (2), Chicago, New York'],
+        ['Must-haves', 'A beach for Leo, great food for Maya']
+      ].map(([k, v]) => `<div class="kv"><span class="k">${k}</span><span>${v}</span></div>`).join(''));
+    },
+    poll() {
+      const c = el('div', 'card poll', POLL_OPTS.map((o) =>
+        `<button type="button" class="opt" data-k="${o.k}" disabled aria-pressed="false">` +
+          `<span class="opt-top"><span class="opt-name">${o.name}</span><span class="opt-price">${o.price}</span></span>` +
+          `<span class="opt-note">${o.note}</span>` +
+          `<span class="bar"><i></i></span>` +
+          `<span class="vline"><span class="voters"></span><span class="count"></span></span>` +
+        `</button>`).join('') + '<div class="foot">Votes coming in…</div>');
+      c.addEventListener('click', (e) => {
+        const b = e.target.closest('.opt');
+        if (b && !b.disabled) mayaVotes(b.dataset.k);
+      });
+      pollEl = c;
+      return c;
+    },
+    itinerary() {
+      return el('div', 'card', [
+        ['Sun 3/14', 'Land, check in, sunset walk in Old San Juan'],
+        ['Mon 3/15', 'Beach day in Condado, dinner in Santurce'],
+        ['Tue 3/16', 'Waterfall hike in El Yunque rainforest'],
+        ['Wed 3/17', 'Night kayak on a bioluminescent bay'],
+        ['Thu 3/18', 'Free day: snorkel or nap, your call'],
+        ['Fri 3/19', 'Slow brunch, then fly home']
+      ].map(([d, t]) => `<div class="day"><span class="dn">${d}</span><span>${t}</span></div>`).join(''));
+    },
+    links() {
+      return el('div', 'chips', ['✈️ Boston flights', '✈️ Chicago flights', '✈️ New York flights', '🏠 Stays for 4']
+        .map((t) => `<span class="chip">${t}</span>`).join(''));
+    },
+    places() {
+      return el('div', 'card', [
+        ['Casa Brisa', 'String-lit patio, mostly locals', '6 min', '$$'],
+        ['El Patio Verde', 'Courtyard under a big mango tree', '8 min', '$$'],
+        ['Mar y Mofongo', 'Tiny rooftop, fresh seafood', '11 min', '$$$']
+      ].map(([n, d, w, p]) => `<div class="place"><div><div class="pn">${n}</div><div class="pd">${d}</div></div><div class="pm">${w} walk<br>${p}</div></div>`).join(''));
+    },
+    map() {
+      return el('div', 'card mapcard',
+        '<svg viewBox="0 0 240 104" class="map" role="img" aria-label="Walking route to Casa Brisa">' +
+          '<rect class="m-bg" width="240" height="104"/>' +
+          '<g class="m-st"><path d="M0 28H240"/><path d="M0 76H240"/><path d="M58 0V104"/><path d="M146 0V104"/><path d="M206 0V104"/></g>' +
+          '<path class="m-route" d="M30 76H146V28H190"/>' +
+          '<circle class="m-you" cx="30" cy="76" r="6"/>' +
+          '<g transform="translate(190 28)"><circle class="m-pin" r="8"/><circle class="m-pin-dot" r="3"/></g>' +
+        '</svg>' +
+        '<div class="mapfoot"><span><b>Casa Brisa</b><br><span class="pd">6 min walk</span></span><span class="chip">Open in Maps</span></div>');
+    },
+    album(count) {
+      const avas = ['maya', 'jordan', 'priya', 'leo']
+        .map((w) => `<span style="background:${PEOPLE[w].color}" aria-hidden="true">${PEOPLE[w].init}</span>`).join('');
+      return el('div', 'card',
+        `<div class="al-top"><div class="al-cover">${ALBUM_COVER}</div><div><div class="pn">San Juan ’27</div>` +
+        `<div class="pd">Mar 14–19</div><div class="pd">${count ? count + ' photos from all 4 of you' : 'No photos yet'}</div></div></div>` +
+        `<div class="al-foot"><span class="al-avas">${avas}</span><span class="sr">Shared with Maya, Jordan, Priya, and Leo.</span><span class="chip">Open album</span></div>`);
+    },
+    ledger() {
+      const c = el('div', 'card ledger',
+        '<div class="lg-h">Logged from the chat</div>' +
+        '<div class="lg-row"><span>Airbnb <span class="pd">(Leo)</span></span><span class="amt">$1,240</span></div>' +
+        '<div class="lg-row"><span>Casa Brisa dinner 🧾 <span class="pd">(Priya)</span></span><span class="amt">$164</span></div>' +
+        '<div class="lg-row"><span>Bio bay kayak <span class="pd">(Maya)</span></span><span class="amt">$196</span></div>' +
+        '<div class="lg-sep"></div>' +
+        '<div class="lg-h">To settle up</div>' +
+        '<div class="lg-row"><span>Jordan pays Leo</span><span class="st">Link sent</span><span class="amt">$400</span></div>' +
+        '<div class="lg-row"><span>Priya pays Leo</span><span class="st">Link sent</span><span class="amt">$236</span></div>' +
+        '<div class="lg-row you"><span>You pay Leo</span><span class="st">Link sent</span><span class="amt">$204</span></div>' +
+        '<button type="button" class="paybtn" disabled>Pay Leo $204</button>' +
+        '<div class="foot">Pay links go to each person</div>');
+      c.querySelector('.paybtn').addEventListener('click', mayaPays);
+      ledgerEl = c;
+      return c;
+    }
+  };
+
+  const DYN = {
+    pollResult() {
+      let text = 'San Juan wins, 3–1 🏝️ Locked in for Mar 14–19.';
+      if (mayaVote === 'tul') text = 'It’s a 2–2 tie. San Juan is about $190 cheaper per person, so I’d go there. Locked in unless anyone objects.';
+      if (mayaVote === 'mia') text = 'San Juan takes it with 2 votes 🏝️ Locked in for Mar 14–19.';
+      return { who: 'sq', text };
+    }
+  };
+
+  /* ---------- Interactions inside the chat ---------- */
+  function castVote(who, k) {
+    if (!pollEl) return;
+    votes[k].push(who);
+    POLL_OPTS.forEach((o) => {
+      const b = pollEl.querySelector(`[data-k="${o.k}"]`);
+      const n = votes[o.k].length;
+      b.querySelector('.bar i').style.width = (n / 4 * 100) + '%';
+      const v = b.querySelector('.voters');
+      v.innerHTML = '';
+      votes[o.k].forEach((w) => {
+        const s = el('span', '', PEOPLE[w].init);
+        s.style.background = PEOPLE[w].color;
+        s.setAttribute('aria-hidden', 'true');
+        v.appendChild(s);
+      });
+      b.querySelector('.count').textContent = n ? n + (n === 1 ? ' vote' : ' votes') : '';
+    });
+  }
+
+  function setWaiting(kind, on) {
+    const card = kind === 'vote' ? pollEl : ledgerEl;
+    if (!card) return;
+    card.classList.toggle('waiting', on);
+    const foot = card.querySelector('.foot');
+    if (kind === 'vote') card.querySelectorAll('.opt').forEach((b) => { b.disabled = !on; });
+    else card.querySelector('.paybtn').disabled = !on;
+    if (on) {
+      foot.textContent = kind === 'vote' ? 'Your turn: tap a trip to vote as Maya' : 'Your turn: tap to pay as Maya';
+      foot.classList.add('cta');
+    }
+  }
+
+  function waitFor(kind) {
+    return new Promise((resolve) => {
+      waiter = { kind, resolve };
+      setWaiting(kind, true);
+      scrollChat();
+      if (autoplay) scheduleAuto();
+    });
+  }
+
+  function scheduleAuto() {
+    clearTimeout(autoTimer);
+    autoTimer = setTimeout(() => {
+      if (!waiter || !autoplay) return;
+      if (waiter.kind === 'vote') mayaVotes('sj'); else mayaPays();
+    }, 1700);
+  }
+
+  function release(kind) {
+    if (!waiter || waiter.kind !== kind) return;
+    const w = waiter;
+    waiter = null;
+    clearTimeout(autoTimer);
+    w.resolve();
+  }
+
+  function mayaVotes(k) {
+    if (!waiter || waiter.kind !== 'vote' || !pollEl) return;
+    mayaVote = k;
+    castVote('maya', k);
+    pollEl.classList.remove('waiting');
+    pollEl.querySelectorAll('.opt').forEach((b) => {
+      b.disabled = true;
+      b.setAttribute('aria-pressed', b.dataset.k === k ? 'true' : 'false');
+    });
+    const foot = pollEl.querySelector('.foot');
+    foot.textContent = 'All 4 voted';
+    foot.classList.remove('cta');
+    release('vote');
+  }
+
+  function mayaPays() {
+    if (!waiter || waiter.kind !== 'pay' || !ledgerEl) return;
+    const btn = ledgerEl.querySelector('.paybtn');
+    btn.textContent = 'Paid Leo $204 ✓';
+    btn.classList.add('paid');
+    btn.disabled = true;
+    const st = ledgerEl.querySelector('.you .st');
+    st.textContent = 'Paid ✓';
+    st.classList.add('ok');
+    ledgerEl.classList.remove('waiting');
+    const foot = ledgerEl.querySelector('.foot');
+    foot.textContent = '1 of 3 payments done';
+    foot.classList.remove('cta');
+    release('pay');
+  }
+
+  /* ---------- Script runner ---------- */
+  async function runItem(item, id) {
+    const alive = () => id === runId;
+    if (item.ts) {
+      chat.appendChild(el('div', 'ts', `<b>${item.ts[0]}</b> ${item.ts[1]}`));
+      lastWho = null;
+      await sleep(350);
+      return;
+    }
+    if (item.sys) {
+      await sleep(550);
+      if (!alive()) return;
+      chat.appendChild(el('div', 'sys' + (reduce ? '' : ' pop'), item.sys));
+      lastWho = null;
+      scrollChat();
+      await sleep(600);
+      return;
+    }
+    if (item.wait) { await waitFor(item.wait); return; }
+
+    const it = item.dyn ? DYN[item.dyn]() : item;
+    const who = it.who;
+    const newGroup = lastWho !== who;
+
+    if (it.photo) {
+      await sleep(1100);
+      if (!alive()) return;
+      const fig = el('div', 'photo', PHOTOS[it.photo]);
+      fig.setAttribute('role', 'img');
+      fig.setAttribute('aria-label', it.alt);
+      chat.appendChild(buildRow(who, fig, newGroup, 'media'));
+      lastWho = who;
+      scrollChat();
+      await sleep(500);
+      return;
+    }
+    await sleep(who === 'maya' ? 750 : 420);
+    if (!alive()) return;
+
+    if (who !== 'maya' && !reduce) {
+      const typing = buildRow(who, el('div', 'typing', '<i></i><i></i><i></i>'), newGroup);
+      typing.setAttribute('aria-hidden', 'true');
+      chat.appendChild(typing);
+      scrollChat();
+      await sleep(Math.min(2000, 600 + it.text.length * 14) + (it.card ? 300 : 0));
+      typing.remove();
+      if (!alive()) return;
+    }
+
+    const content = el('div', 'msg');
+    content.appendChild(el('div', 'msg-text')).textContent = it.text;
+    if (it.card) content.appendChild(CARDS[it.card](it.arg));
+    const row = buildRow(who, content, newGroup);
+    if (it.card) row.querySelector('.stack').classList.add('wide');
+    chat.appendChild(row);
+    lastWho = who;
+    scrollChat();
+    if (it.vote) castVote(who, it.vote);
+    await sleep(200);
+  }
+
+  async function runStage(i, id) {
+    for (const item of STAGES[i].script) {
+      if (id !== runId) return;
+      await runItem(item, id);
+    }
+    if (id !== runId) return;
+    stageDone = true;
+    updateControls();
+    if (autoplay) {
+      if (i < STAGES.length - 1) {
+        await sleepRaw(2600);
+        if (id === runId && autoplay) goTo(i + 1);
+      } else {
+        autoplay = false;
+        updateControls();
+      }
+    }
+  }
+
+  function goTo(i) {
+    cur = i;
+    runId++;
+    const id = runId;
+    stageDone = false;
+    clearTimeout(autoTimer);
+    if (waiter) { const w = waiter; waiter = null; w.resolve(); }
+    chat.innerHTML = '';
+    lastWho = null; pollEl = null; ledgerEl = null; mayaVote = null;
+    votes = { sj: [], mia: [], tul: [] };
+    updateTrail();
+    updateControls();
+    runStage(i, id);
+  }
+
+  /* ---------- Trail + controls ---------- */
+  function pathFor(pts) {
+    if (pts.length < 2) return '';
+    let d = `M${pts[0][0]},${pts[0][1]}`;
+    for (let k = 1; k < pts.length; k++) {
+      const [x0, y0] = pts[k - 1], [x1, y1] = pts[k];
+      const my = (y0 + y1) / 2;
+      d += ` C${x0},${my} ${x1},${my} ${x1},${y1}`;
+    }
+    return d;
+  }
+
+  function drawTrail() {
+    if (getComputedStyle(svg).display === 'none') return;
+    const box = trailWrap.getBoundingClientRect();
+    if (!box.width) return;
+    svg.setAttribute('viewBox', `0 0 ${box.width} ${box.height}`);
+    const pts = [...trail.querySelectorAll('.num')].map((n) => {
+      const r = n.getBoundingClientRect();
+      return [r.left - box.left + r.width / 2, r.top - box.top + r.height / 2];
+    });
+    if (pts.length < 2) return;
+    const d = pathFor(pts);
+    pAll.setAttribute('d', d);
+    pDone.setAttribute('d', d);
+    const total = pDone.getTotalLength();
+    let part = 0;
+    if (cur > 0) {
+      pMeasure.setAttribute('d', pathFor(pts.slice(0, cur + 1)));
+      part = pMeasure.getTotalLength();
+    }
+    pDone.style.strokeDasharray = `${total} ${total}`;
+    pDone.style.strokeDashoffset = String(total - part);
+  }
+
+  function updateTrail() {
+    [...trail.children].forEach((li, i) => {
+      const b = li.querySelector('.wp');
+      li.classList.toggle('active', i === cur);
+      b.classList.toggle('done', i < cur);
+      if (i === cur) b.setAttribute('aria-current', 'step'); else b.removeAttribute('aria-current');
+    });
+    const s = STAGES[cur];
+    detailM.innerHTML = s.detail.map((x) => `<li>${x}</li>`).join('');
+    stepcount.textContent = `Step ${cur + 1} of ${STAGES.length}: ${s.title}`;
+    requestAnimationFrame(drawTrail);
+    if (mobileMQ.matches) {
+      const li = trail.children[cur];
+      trail.scrollTo({ left: li.offsetLeft - (trail.clientWidth - li.offsetWidth) / 2, behavior: reduce ? 'auto' : 'smooth' });
+    }
+  }
+
+  function updateControls() {
+    prevBtn.disabled = cur === 0;
+    nextBtn.disabled = cur === STAGES.length - 1;
+    const atEnd = cur === STAGES.length - 1 && stageDone;
+    playBtn.textContent = autoplay ? 'Pause' : (atEnd ? 'Play again' : 'Play the journey');
+  }
+
+  /* ---------- Build ---------- */
+  ['maya', 'jordan', 'priya', 'leo', 'sq'].forEach((w) => $('#head-avas').appendChild(avatar(w)));
+
+  STAGES.forEach((s, i) => {
+    const li = el('li');
+    li.style.setProperty('--x', OFFSETS[i] + 'px');
+    li.innerHTML =
+      `<button class="wp" type="button" data-i="${i}">` +
+        `<span class="num" aria-hidden="true">${i + 1}</span>` +
+        `<span class="txt"><span class="sr">Step ${i + 1}: </span><span class="t">${s.title}</span><span class="s">${s.short}</span><span class="d">${s.desc}</span></span>` +
+      `</button>` +
+      `<div class="more"><h3>What scout does here</h3><ul>${s.detail.map((x) => `<li>${x}</li>`).join('')}</ul></div>`;
+    trail.appendChild(li);
+  });
+
+  trail.addEventListener('click', (e) => {
+    const b = e.target.closest('.wp');
+    if (b) goTo(+b.dataset.i);
+  });
+  prevBtn.addEventListener('click', () => { if (cur > 0) goTo(cur - 1); });
+  nextBtn.addEventListener('click', () => { if (cur < STAGES.length - 1) goTo(cur + 1); });
+  playBtn.addEventListener('click', () => {
+    if (autoplay) {
+      autoplay = false;
+      clearTimeout(autoTimer);
+      updateControls();
+      return;
+    }
+    autoplay = true;
+    updateControls();
+    if (cur === STAGES.length - 1 && stageDone) goTo(0);
+    else if (stageDone) goTo(cur + 1);
+    else if (waiter) scheduleAuto();
+  });
+
+  if ('ResizeObserver' in window) new ResizeObserver(() => drawTrail()).observe(trailWrap);
+  else window.addEventListener('resize', drawTrail);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(drawTrail);
+
+  goTo(0);
+})();
+</script>
+</body>
+</html>
