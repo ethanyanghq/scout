@@ -38,7 +38,7 @@ def vote(client, member, text, chat="chat-1"):
             "participant_phones": [person["phone"] for person in GROUP],
         },
     )
-    return [action["text"] for action in response.json()["actions"]]
+    return response.json()["actions"]
 
 
 def test_seeding_at_the_poll_opens_the_vote_with_everyones_preferences(client):
@@ -65,9 +65,9 @@ def test_a_seeded_poll_counts_plain_votes_and_announces_the_winner(client):
 
     vote(client, MAYA, "2")
     vote(client, LEO, "2")
-    replies = vote(client, PRIYA, "1")
+    actions = vote(client, PRIYA, "1")
 
-    assert "San Juan, Puerto Rico wins" in replies[0]
+    assert "San Juan, Puerto Rico wins" in actions[0]["text"]
 
 
 def test_seeding_past_the_vote_locks_in_san_juan_and_the_shared_dates(client):
@@ -94,8 +94,9 @@ def test_a_chat_seeded_past_the_vote_shows_the_winner_announcement(client):
 
     messages = client.get("/dev/trips/chat-1/messages").json()
 
-    assert messages[-2]["text"].startswith("🎉 Poll closed! San Juan, Puerto Rico wins")
-    assert messages[-1]["text"].startswith("📅 Locked in: San Juan, Puerto Rico")
+    assert messages[-3]["text"].startswith("🎉 Poll closed! San Juan, Puerto Rico wins")
+    assert messages[-2]["text"].startswith("📅 Locked in: San Juan, Puerto Rico")
+    assert messages[-1]["text"].startswith("https://calendar.google.com/")
 
 
 def test_seeding_never_overwrites_an_existing_trip(client):

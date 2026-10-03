@@ -212,7 +212,16 @@ function printScriptEvent(event: ScriptEvent): void {
 
 function printEntry(entry: ChatEntry): void {
   const thread = entry.replyTo ? ` ↪ ${entry.replyTo}` : "";
-  console.log(`[${entry.id}] ${entry.from}${thread}: ${entry.text}`);
+  if (!entry.card) {
+    console.log(`[${entry.id}] ${entry.from}${thread}: ${entry.text}`);
+    return;
+  }
+  const { card } = entry;
+  console.log(`[${entry.id}] ${entry.from}${thread}: 🔗 link card  ${card.url}`);
+  console.log(`       title        ${card.title ?? "(none)"}`);
+  console.log(`       description  ${card.description ?? "(none)"}`);
+  console.log(`       image        ${card.imageFile ?? card.imageUrl ?? "(none)"}`);
+  for (const warning of card.warnings) console.log(`       ⚠ ${warning}`);
 }
 
 function readStage(value: string): SeedStage {

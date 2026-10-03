@@ -5,6 +5,7 @@ import {
   UnsupportedError,
   reaction,
   reply,
+  richlink,
   type Content,
   type ContentInput,
   type Message,
@@ -103,6 +104,9 @@ async function perform(space: Space, action: ScoutAction, recent: RecentMessages
       await sendOrFallBack(space, tapback, action.fallback_text, recent);
       return;
     }
+    case "link":
+      await sendOrFallBack(space, richlink(action.url), action.url, recent);
+      return;
   }
 }
 

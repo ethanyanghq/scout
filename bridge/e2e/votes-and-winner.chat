@@ -12,5 +12,6 @@ leo: 2
 priya: 1
 expect scout ~ "San Juan, Puerto Rico wins"
 expect scout ~ "Add it to your calendar"
+expect card url ~ "calendar.google.com"
 expect state destination = "San Juan, Puerto Rico"
 expect state stage = "destination_chosen"

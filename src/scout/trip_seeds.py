@@ -11,7 +11,7 @@ from datetime import date, datetime
 from enum import StrEnum
 
 from scout import polls
-from scout.calendar_link import format_calendar_message
+from scout.calendar_link import format_calendar_message, google_calendar_link
 from scout.group_summary import summarize_group
 from scout.trip import DestinationOption, PreferenceUpdate
 from scout.trip_store import TripStore
@@ -101,5 +101,6 @@ def _close_poll_for_everyone(store: TripStore, space_id: str) -> None:
     announcements = [polls.format_result(result, everyone)]
     if dates is not None:
         announcements.append(format_calendar_message(SEED_DESTINATION.name, dates))
+        announcements.append(google_calendar_link(SEED_DESTINATION.name, dates))
     for text in announcements:
         store.log_message(space_id, None, text, datetime.now())

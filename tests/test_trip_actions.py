@@ -3,7 +3,7 @@ from datetime import date
 import pytest
 
 from scout.nessie import NessieError, SandboxPayment
-from scout.outgoing import Say
+from scout.outgoing import Link, Say
 from scout.outside_services import OutsideServices
 from scout.places import Coordinates, Place, PlacesError
 from scout.trip import (
@@ -134,10 +134,11 @@ def test_closing_the_poll_locks_in_the_dates_everyone_shares(store):
 def test_closing_the_poll_sends_a_calendar_link_after_the_winner(store):
     closing = everyone_votes_for_san_juan(store)
 
-    winner, calendar = said(closing.outbox)
-    assert winner.startswith("🎉 Poll closed! San Juan, Puerto Rico wins")
-    assert calendar.startswith("📅 Locked in: San Juan, Puerto Rico, Mar 14–19.")
-    assert "calendar.google.com" in calendar
+    winner, lead_in, link = closing.outbox
+    assert winner.text.startswith("🎉 Poll closed! San Juan, Puerto Rico wins")
+    assert lead_in.text.startswith("📅 Locked in: San Juan, Puerto Rico, Mar 14–19.")
+    assert link == Link(link.url)
+    assert link.url.startswith("https://calendar.google.com/calendar/render?")
 
 
 def test_no_calendar_link_when_no_dates_work_for_everyone(store):
@@ -564,9 +565,10 @@ def test_picking_a_place_sends_directions_to_it(maya_actions, store):
 
     maya_actions.send_directions(1)
 
-    [directions] = said(maya_actions.outbox)
-    assert directions.startswith("🧭 Directions to Taco Bar: https://www.google.com/")
-    assert "destination_place_id=place-2" in directions
+    lead_in, link = maya_actions.outbox
+    assert lead_in == Say("🧭 Directions to Taco Bar:")
+    assert link.url.startswith("https://www.google.com/maps/dir/")
+    assert "destination_place_id=place-2" in link.url
 
 
 def test_once_a_place_is_picked_the_suggestions_are_done(maya_actions, store):

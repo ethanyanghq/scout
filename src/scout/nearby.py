@@ -39,7 +39,9 @@ def format_nearby_places(
 
 
 def format_directions(place: Place) -> str:
-    return f"🧭 Directions to {place.name}: {directions_link(place)}"
+    """The line before the directions link, which goes in a message of its own
+    so iMessage shows it as a map card."""
+    return f"🧭 Directions to {place.name}:"
 
 
 def directions_link(place: Place) -> str:

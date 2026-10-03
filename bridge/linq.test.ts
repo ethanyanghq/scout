@@ -265,6 +265,21 @@ describe("a Linq group chat through Spectrum", () => {
     ]);
   });
 
+  test("sends scout's link to Linq as a link part, so iMessage shows a card", async () => {
+    scoutActions = [{ type: "link", url: "https://calendar.google.com/calendar/render?x=1" }];
+
+    await deliver(messageReceived({}));
+
+    expect(linqReceived).toEqual([
+      {
+        path: "/chats/group-chat-1/messages",
+        body: {
+          message: { parts: [{ type: "link", value: "https://calendar.google.com/calendar/render?x=1" }] },
+        },
+      },
+    ]);
+  });
+
   test("sends scout's tapback to Linq on the member's message", async () => {
     scoutActions = [{ type: "react", message_id: "message-1", tapback: "like", fallback_text: "Got it" }];
 

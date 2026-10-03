@@ -186,6 +186,26 @@ describe("the developer console's group chat", () => {
     });
   });
 
+  test("shows scout's link as the card iMessage would build for it", async () => {
+    const page = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch: () =>
+        new Response('<title>Tacos</title><meta property="og:title" content="Lote 23">', {
+          headers: { "content-type": "text/html" },
+        }),
+    });
+    const url = `http://127.0.0.1:${page.port}/lote-23`;
+    respond = () => Response.json({ actions: [{ type: "link", url }] });
+
+    const exchange = await inChat([MAYA], (chat) => chat.say("maya", "2"));
+    page.stop(true);
+
+    expect(exchange.replies).toMatchObject([
+      { id: "m2", from: "scout", text: url, card: { url, title: "Lote 23", imageUrl: null } },
+    ]);
+  });
+
   test("refuses a tapback on words scout never sent", async () => {
     const tapping = inChat([MAYA], (chat) => chat.react("maya", "Paris", "like"));
 

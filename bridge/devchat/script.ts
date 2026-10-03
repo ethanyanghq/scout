@@ -35,7 +35,11 @@ export type Expectation =
   | { kind: "expect-quiet" }
   | { kind: "expect-tapback"; tapback: Tapback }
   | { kind: "expect-thread"; contains: string }
+  | { kind: "expect-card"; field: CardField; contains: string }
+  | { kind: "expect-card-clean" }
   | { kind: "expect-state"; path: string; matcher: "=" | "~"; expected: unknown };
+
+type CardField = "title" | "description" | "url";
 
 // What the checks look at: scout's replies to the latest message, and the trip.
 export type CheckContext = { replies: ChatEntry[]; trip: unknown };
@@ -54,6 +58,8 @@ const STEP_PATTERNS = {
   react: /^(\w+)\s+react\s+(\S+)\s+(scout\.last|".*")$/,
   reply: /^(\w+)\s+reply\s+(scout\.last|".*?"):\s*(.+)$/,
   expectThread: /^expect\s+thread\s+~\s+(".*")$/,
+  expectCard: /^expect\s+card\s+(title|description|url)\s+~\s+(".*")$/,
+  expectCardClean: /^expect\s+card\s+no\s+warnings$/,
   expectQuiet: /^expect\s+scout\s+quiet$/,
   expectTapback: /^expect\s+scout\s+reacted\s+(\S+)$/,
   expectReply: /^expect\s+scout\s+~\s+(".*")$/,
@@ -127,6 +133,17 @@ export function checkExpectation(expectation: Expectation, context: CheckContext
       const reacted = context.replies.some((reply) => reply.tapback === expectation.tapback);
       return { passed: reacted, detail: whatScoutSaid };
     }
+    case "expect-card":
+    case "expect-card-clean": {
+      const card = context.replies.find((reply) => reply.card)?.card;
+      if (!card) return { passed: false, detail: `scout sent no link card. ${whatScoutSaid}` };
+      if (expectation.kind === "expect-card-clean") {
+        return { passed: card.warnings.length === 0, detail: `warnings: ${card.warnings.join(" / ")}` };
+      }
+      const value = card[expectation.field] ?? "";
+      const passed = value.toLowerCase().includes(expectation.contains.toLowerCase());
+      return { passed, detail: `the card's ${expectation.field} is ${JSON.stringify(card[expectation.field])}` };
+    }
     case "expect-thread": {
       const wanted = expectation.contains.toLowerCase();
       const threaded = context.replies.filter((reply) => reply.replyTo !== undefined);
@@ -162,6 +179,11 @@ function readLine(script: Script, at: StepSource, scriptFolder: string): void {
     script.steps.push({ ...at, kind: "expect-quiet" });
   } else if ((match = source.match(STEP_PATTERNS.expectTapback))) {
     script.steps.push({ ...at, kind: "expect-tapback", tapback: readTapback(match[1]!) });
+  } else if ((match = source.match(STEP_PATTERNS.expectCard))) {
+    const field = match[1] as CardField;
+    script.steps.push({ ...at, kind: "expect-card", field, contains: readQuoted(match[2]!) });
+  } else if ((match = source.match(STEP_PATTERNS.expectCardClean))) {
+    script.steps.push({ ...at, kind: "expect-card-clean" });
   } else if ((match = source.match(STEP_PATTERNS.expectThread))) {
     script.steps.push({ ...at, kind: "expect-thread", contains: readQuoted(match[1]!) });
   } else if ((match = source.match(STEP_PATTERNS.expectReply))) {
