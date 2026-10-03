@@ -33,6 +33,7 @@ def san_juan_trip(*members):
         expenses=[],
         settlements=[],
         pending_receipt=None,
+        place_suggestions=[],
     )
 
 

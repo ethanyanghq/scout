@@ -15,8 +15,10 @@ from scout.calendar_link import format_calendar_message
 from scout.group_summary import format_group_summary, summarize_group
 from scout.itinerary import format_itinerary
 from scout.money import format_usd
+from scout.nearby import format_nearby_places
 from scout.nessie import NessieError, SandboxPayment
 from scout.outside_services import NO_OUTSIDE_SERVICES, OutsideServices
+from scout.places import Coordinates, GooglePlaces, PlacesError
 from scout.settle_up import (
     Payment,
     format_payments_left,
@@ -37,6 +39,7 @@ from scout.trip_store import TripStore
 logger = logging.getLogger(__name__)
 
 DESTINATION_OPTION_COUNT = 3
+NEARBY_SUGGESTION_COUNT = 3
 
 
 class TripActionError(Exception):
@@ -271,6 +274,34 @@ class TripActions:
         self._store.save_nessie_account(self._space_id, member.phone, account_id)
         return account_id
 
+    def suggest_nearby_places(self, request: str, near: str | None) -> str:
+        """Posts three real places that fit a vibe, near where the group is."""
+        trip = self._load_trip()
+        if trip.destination is None:
+            raise TripActionError("the group hasn't picked a destination yet")
+        places = self._services.places
+        if places is None:
+            raise TripActionError(
+                "place search isn't set up, so tell the group recommendations "
+                "aren't available yet"
+            )
+
+        try:
+            start = _locate(places, near, trip.destination) if near else None
+            found = places.search(
+                f"{request} in {trip.destination}",
+                limit=NEARBY_SUGGESTION_COUNT,
+                near=start,
+            )
+        except PlacesError as error:
+            raise TripActionError(f"place search isn't working: {error}") from error
+        if not found:
+            raise TripActionError(f"no places matched {request!r}; try other words")
+
+        self._store.replace_place_suggestions(self._space_id, found)
+        self.outbox.append(format_nearby_places(found, start, near or trip.destination))
+        return "Places posted."
+
     def _close(self, trip: Trip) -> str:
         result = polls.decide_winner(trip.open_poll)
         if result is None:
@@ -320,3 +351,11 @@ def _find_sender_payment(trip: Trip, sender_phone: str, payee_label: str) -> Pay
         f"{sender.label} doesn't owe {payee_label} anything. "
         f"They owe: {payees or 'nobody'}"
     )
+
+
+def _locate(places: GooglePlaces, spot: str, destination: str) -> Coordinates:
+    """Where a place the group named is, e.g. "our Airbnb in Condado" (OT-2)."""
+    matches = places.search(f"{spot}, {destination}", limit=1)
+    if not matches:
+        raise TripActionError(f"couldn't find {spot!r} in {destination}")
+    return matches[0].location

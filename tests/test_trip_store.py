@@ -1,6 +1,7 @@
 from datetime import date, datetime
 
 from scout.nessie import SandboxPayment
+from scout.places import Coordinates, Place
 from scout.trip import (
     DateWindow,
     DestinationOption,
@@ -174,3 +175,15 @@ def test_a_cleared_receipt_is_gone(store):
     store.clear_pending_receipt(SPACE)
 
     assert store.get_trip(SPACE).pending_receipt is None
+
+
+def test_new_place_suggestions_replace_the_old_ones_in_order(store):
+    store.create_trip(SPACE)
+    tacos = Place("place-1", "Lote 23", Coordinates(18.45, -66.07), "$$", "Food park.")
+    bar = Place("place-2", "La Factoría", Coordinates(18.46, -66.11), None, None)
+    beach = Place("place-3", "Playa", Coordinates(18.46, -66.08), "free", None)
+    store.replace_place_suggestions(SPACE, [tacos])
+
+    store.replace_place_suggestions(SPACE, [bar, beach])
+
+    assert store.get_trip(SPACE).place_suggestions == [bar, beach]

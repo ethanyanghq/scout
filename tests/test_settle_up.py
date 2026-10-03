@@ -22,6 +22,7 @@ def trip_with(members, *expenses):
         ],
         settlements=[],
         pending_receipt=None,
+        place_suggestions=[],
     )
 
 

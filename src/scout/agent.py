@@ -158,6 +158,12 @@ def _describe_trip(trip: Trip) -> str:
                 f"  {number}. {option.name} (~${option.estimated_cost_per_person_usd})"
                 f" votes: {', '.join(voters) or 'none'}"
             )
+    if trip.place_suggestions:
+        lines.append("Places you last suggested:")
+        lines.extend(
+            f"  {number}. {place.name}"
+            for number, place in enumerate(trip.place_suggestions, start=1)
+        )
     lines.extend(_describe_costs(trip))
     return "\n".join(lines)
 
