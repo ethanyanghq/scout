@@ -15,7 +15,8 @@ from scout.calendar_link import format_calendar_message
 from scout.group_summary import format_group_summary, summarize_group
 from scout.itinerary import format_itinerary
 from scout.money import format_usd
-from scout.nessie import NessieBank, NessieError, SandboxPayment
+from scout.nessie import NessieError, SandboxPayment
+from scout.outside_services import NO_OUTSIDE_SERVICES, OutsideServices
 from scout.settle_up import (
     Payment,
     format_payments_left,
@@ -48,14 +49,12 @@ class TripActions:
         store: TripStore,
         space_id: str,
         sender_phone: str,
-        bank: NessieBank | None = None,
+        services: OutsideServices = NO_OUTSIDE_SERVICES,
     ):
         self._store = store
         self._space_id = space_id
         self._sender_phone = sender_phone
-        # None means payments are simulated: scout records them but no sandbox
-        # money moves.
-        self._bank = bank
+        self._services = services
         self.outbox: list[str] = []
 
     def save_sender_preferences(self, update: PreferenceUpdate) -> str:
@@ -249,10 +248,10 @@ class TripActions:
 
     def _send_through_nessie(self, payment: Payment) -> SandboxPayment | None:
         """Moves the sandbox money. None if there's no bank or Nessie failed."""
-        if self._bank is None:
+        if self._services.bank is None:
             return None
         try:
-            return self._bank.move_money(
+            return self._services.bank.move_money(
                 self._nessie_account_id(payment.payer),
                 self._nessie_account_id(payment.payee),
                 payment.amount_cents,
@@ -268,7 +267,7 @@ class TripActions:
     def _nessie_account_id(self, member: Member) -> str:
         if member.nessie_account_id is not None:
             return member.nessie_account_id
-        account_id = self._bank.open_account()
+        account_id = self._services.bank.open_account()
         self._store.save_nessie_account(self._space_id, member.phone, account_id)
         return account_id
 

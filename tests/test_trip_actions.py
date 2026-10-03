@@ -3,6 +3,7 @@ from datetime import date
 import pytest
 
 from scout.nessie import NessieError, SandboxPayment
+from scout.outside_services import OutsideServices
 from scout.trip import (
     DateWindow,
     DestinationOption,
@@ -284,7 +285,7 @@ def maya_owes_leo_50(store):
 def test_paying_moves_sandbox_money_and_confirms_in_the_chat(store):
     maya_owes_leo_50(store)
     bank = FakeBank()
-    maya_actions = TripActions(store, SPACE, MAYA, bank)
+    maya_actions = TripActions(store, SPACE, MAYA, OutsideServices(bank=bank))
 
     maya_actions.pay_from_sender("Leo")
 
@@ -301,10 +302,10 @@ def test_each_member_gets_one_nessie_account_that_is_reused(store):
     maya_owes_leo_50(store)
     store.add_expense(SPACE, LEO, 2_000, "Ice")
     bank = FakeBank()
-    TripActions(store, SPACE, MAYA, bank).pay_from_sender("Leo")
+    TripActions(store, SPACE, MAYA, OutsideServices(bank=bank)).pay_from_sender("Leo")
     store.add_expense(SPACE, LEO, 2_000, "Ice")
 
-    TripActions(store, SPACE, MAYA, bank).pay_from_sender("Leo")
+    TripActions(store, SPACE, MAYA, OutsideServices(bank=bank)).pay_from_sender("Leo")
 
     assert bank.accounts_opened == 2
     assert [payment[:2] for payment in bank.payments] == [
@@ -330,7 +331,9 @@ def test_payments_are_simulated_when_no_sandbox_bank_is_set_up(store):
 
 def test_the_group_can_still_settle_up_when_nessie_is_down(store):
     maya_owes_leo_50(store)
-    maya_actions = TripActions(store, SPACE, MAYA, FakeBank(is_down=True))
+    maya_actions = TripActions(
+        store, SPACE, MAYA, OutsideServices(bank=FakeBank(is_down=True))
+    )
 
     maya_actions.pay_from_sender("Leo")
 
@@ -341,14 +344,16 @@ def test_the_group_can_still_settle_up_when_nessie_is_down(store):
 def test_payee_names_match_however_they_are_capitalized(store):
     maya_owes_leo_50(store)
 
-    TripActions(store, SPACE, MAYA, FakeBank()).pay_from_sender(" leo ")
+    TripActions(store, SPACE, MAYA, OutsideServices(bank=FakeBank())).pay_from_sender(
+        " leo "
+    )
 
     assert len(store.get_trip(SPACE).settlements) == 1
 
 
 def test_nobody_can_pay_someone_they_do_not_owe(store):
     maya_owes_leo_50(store)
-    leo_actions = TripActions(store, SPACE, LEO, FakeBank())
+    leo_actions = TripActions(store, SPACE, LEO, OutsideServices(bank=FakeBank()))
 
     with pytest.raises(TripActionError, match="Leo doesn't owe Maya anything"):
         leo_actions.pay_from_sender("Maya")
@@ -359,7 +364,9 @@ def test_a_refused_payment_says_who_the_sender_does_owe(store):
     maya_owes_leo_50(store)
 
     with pytest.raises(TripActionError, match="They owe: Leo"):
-        TripActions(store, SPACE, MAYA, FakeBank()).pay_from_sender("Jordan")
+        TripActions(
+            store, SPACE, MAYA, OutsideServices(bank=FakeBank())
+        ).pay_from_sender("Jordan")
 
 
 def priya_texts_a_receipt(store):
