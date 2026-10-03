@@ -15,6 +15,7 @@
   },
   "scripts": {
     "start": "bun run index.ts",
+    "test": "bun test",
     "typecheck": "tsc --noEmit"
   }
 }
