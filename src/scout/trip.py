@@ -44,6 +44,9 @@ class IncomingMessage:
     # the messaging provider can't list participants (for example, in a DM).
     participant_phones: tuple[str, ...] = ()
     photo: MessagePhoto | None = None
+    # The line's ID for this message, so scout can react or reply to it. None
+    # where there's no line, as in scout-simulate.
+    message_id: str | None = None
 
     @property
     def mentions_scout(self) -> bool:

@@ -16,6 +16,7 @@ import anthropic
 
 from scout.agent import ScoutAgent
 from scout.conversation import handle_message
+from scout.outgoing import as_plain_text
 from scout.outside_services import connect_outside_services
 from scout.trip import IncomingMessage
 from scout.trip_store import TripStore
@@ -62,4 +63,4 @@ def _chat(phones: dict[str, str], store: TripStore, agent: ScoutAgent) -> None:
             participant_phones=tuple(phones.values()),
         )
         for reply in handle_message(message, store, agent):
-            print(f"\nscout: {reply}\n")
+            print(f"\nscout: {as_plain_text(reply)}\n")

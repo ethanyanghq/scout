@@ -3,9 +3,17 @@ from datetime import date
 import pytest
 
 from scout.agent_tools import run_tool
+from scout.outgoing import Say
 from scout.places import Coordinates, Place
 from scout.trip import DateWindow, DestinationOption, ItineraryDay
 from scout.trip_actions import TripActionError, TripActions
+
+
+def said(outgoing):
+    """The texts scout sent, failing on anything that isn't a plain text."""
+    assert all(isinstance(item, Say) for item in outgoing), outgoing
+    return [item.text for item in outgoing]
+
 
 SPACE = "group-chat-1"
 MAYA = "+15550000001"
@@ -98,7 +106,7 @@ def test_agent_receipt_totals_and_dates_are_read_back(maya_actions, store):
     run_tool(maya_actions, "ask_to_confirm_receipt", tool_input)
 
     assert store.get_trip(SPACE).pending_receipt.total_cents == 16_400
-    assert "Casa Brisa, Mar 16, $164 total" in maya_actions.outbox[0]
+    assert "Casa Brisa, Mar 16, $164 total" in said(maya_actions.outbox)[0]
 
 
 def test_agent_picks_use_the_numbers_shown_in_the_list(maya_actions, store):
@@ -112,4 +120,4 @@ def test_agent_picks_use_the_numbers_shown_in_the_list(maya_actions, store):
 
     run_tool(maya_actions, "send_directions", {"option_number": 2})
 
-    assert maya_actions.outbox[0].startswith("🧭 Directions to Taco Bar:")
+    assert said(maya_actions.outbox)[0].startswith("🧭 Directions to Taco Bar:")

@@ -10,7 +10,7 @@ import {
 } from "spectrum-ts";
 import { imessage } from "spectrum-ts/providers/imessage";
 import { localIMessage } from "@spectrum-ts/imessage-local";
-import { askScout, toJpeg } from "./scout";
+import { askScout, toJpeg, type ScoutAction } from "./scout";
 import { secondsSince, type MessageOutcome, type Skipped } from "./trace";
 
 type PhotoAttachment = Extract<Content, { type: "attachment" }>;
@@ -35,27 +35,36 @@ export async function relaySpectrumMessages(
     }
 
     try {
-      const replies = await askScout({
+      const actions = await askScout({
         space_id: space.id,
         sender_phone: readable.senderPhone,
         text: readable.text,
         sent_at: message.timestamp.toISOString(),
         participant_phones: await listParticipants(space, message),
         photo: readable.photo ? await toJpeg(await readable.photo.read()) : null,
+        message_id: message.id,
       });
-      for (const reply of replies) {
-        await space.send(reply);
+      for (const action of actions) {
+        await perform(space, action);
       }
       reportOutcome({
         ...outcome,
         kind: "handled",
-        replyCount: replies.length,
+        replyCount: actions.length,
         seconds: secondsSince(startedAt),
       });
     } catch (error) {
       // Keep listening: one failed message shouldn't take scout offline.
       reportOutcome({ ...outcome, kind: "failed", error });
     }
+  }
+}
+
+async function perform(space: Space, action: ScoutAction): Promise<void> {
+  switch (action.type) {
+    case "say":
+      await space.send(action.text);
+      return;
   }
 }
 

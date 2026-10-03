@@ -9,6 +9,7 @@ import anthropic
 from scout.agent_tools import TOOL_DEFINITIONS, run_tool
 from scout.group_summary import DateWindow, format_window, summarize_group
 from scout.money import format_usd
+from scout.outgoing import Outgoing, Say
 from scout.outside_services import NO_OUTSIDE_SERVICES, OutsideServices
 from scout.settle_up import plan_payments
 from scout.trip import IncomingMessage, Member, Trip
@@ -43,8 +44,8 @@ class ScoutAgent:
         self._store = store
         self._services = services
 
-    def respond(self, trip: Trip, message: IncomingMessage) -> list[str]:
-        """Returns the texts scout should send in reply, possibly none."""
+    def respond(self, trip: Trip, message: IncomingMessage) -> list[Outgoing]:
+        """Returns what scout should send in reply, possibly nothing."""
         actions = TripActions(
             self._store, trip.space_id, message.sender_phone, self._services
         )
@@ -72,7 +73,7 @@ class ScoutAgent:
             return actions.outbox
 
         reply = _reply_text(response.content)
-        return [reply, *actions.outbox] if reply else actions.outbox
+        return [Say(reply), *actions.outbox] if reply else actions.outbox
 
     def _ask_claude(self, conversation: list[dict]):
         return self._client.beta.messages.create(

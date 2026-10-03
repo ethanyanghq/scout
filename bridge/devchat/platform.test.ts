@@ -4,7 +4,9 @@ import { DevChat, connectDevChat, type ChatEntry, type ChatMember } from "./plat
 
 // The scout service is the bridge's outside boundary, so a stub stands in for
 // it here. The end-to-end scripts run the console against the real service.
-const staysQuiet = () => Response.json({ replies: [] });
+const staysQuiet = () => Response.json({ actions: [] });
+const scoutSays = (...texts: string[]) =>
+  Response.json({ actions: texts.map((text) => ({ type: "say", text })) });
 let received: IncomingText[] = [];
 let respond: () => Response = staysQuiet;
 const stubScout = Bun.serve({
@@ -59,11 +61,12 @@ describe("the developer console's group chat", () => {
       text: "hey @scout",
       participant_phones: [MAYA.phone, LEO.phone, PRIYA.phone],
       photo: null,
+      message_id: "m1",
     });
   });
 
   test("returns scout's replies in order, numbered after the message", async () => {
-    respond = () => Response.json({ replies: ["hi all", "who's in?"] });
+    respond = () => scoutSays("hi all", "who's in?");
 
     const exchange = await inChat([MAYA, LEO], (chat) => chat.say("Maya", "hey @scout"));
 
@@ -93,7 +96,7 @@ describe("the developer console's group chat", () => {
 
   test("handles each message before the next, in the order they were sent", async () => {
     let replyNumber = 0;
-    respond = () => Response.json({ replies: [`reply ${++replyNumber}`] });
+    respond = () => scoutSays(`reply ${++replyNumber}`);
 
     const transcript = await inChat([MAYA, LEO], async (chat) => {
       await chat.say("maya", "1");
