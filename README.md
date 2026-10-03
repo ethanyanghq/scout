@@ -2,13 +2,14 @@
 
 An AI trip planner that lives in your group chat. Add scout to a group text and it collects everyone's dates, budget, and must-haves, suggests three destinations, runs the vote, and then plans the days and sends booking and calendar links. See [scout-PRD.md](scout-PRD.md) for the full product.
 
-**Status:** Phase 1 (join, collect preferences, vote on a destination) is done. Phase 2 has started with the itinerary, booking links, and the Add to Google Calendar link.
+**Status:** Phase 1 (join, collect preferences, vote on a destination) is done. Phase 2 so far has the itinerary, booking links, the Add to Google Calendar link, and cost splitting: logging expenses from the chat or a receipt photo, and settling up over Capital One's Nessie sandbox.
 
 ## How it fits together
 
 ```
 iMessage ⇄ Photon (spectrum-ts) ⇄ bridge/  ──HTTP──▶  src/scout/  ⇄ Claude API
                                   TypeScript          Python         + SQLite
+                                                                     + Nessie
 ```
 
 Photon only sends messages from TypeScript, so `bridge/` is a thin relay. Everything scout knows and decides lives in the Python service:
@@ -57,6 +58,9 @@ uv run scout-simulate maya leo jordan priya
 > leo: leo here, mar 14-22, 600, nyc
 ...
 > leo: 2
+> leo: fyi I paid the airbnb, $1,240
+> jordan: @scout who owes what
+> jordan: @scout pay leo
 ```
 
 Add `--verbose` to see each tool scout calls.
