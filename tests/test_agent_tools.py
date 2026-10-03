@@ -3,6 +3,7 @@ from datetime import date
 import pytest
 
 from scout.agent_tools import run_tool
+from scout.places import Coordinates, Place
 from scout.trip import DateWindow, DestinationOption, ItineraryDay
 from scout.trip_actions import TripActionError, TripActions
 
@@ -98,3 +99,17 @@ def test_agent_receipt_totals_and_dates_are_read_back(maya_actions, store):
 
     assert store.get_trip(SPACE).pending_receipt.total_cents == 16_400
     assert "Casa Brisa, Mar 16, $164 total" in maya_actions.outbox[0]
+
+
+def test_agent_picks_use_the_numbers_shown_in_the_list(maya_actions, store):
+    store.replace_place_suggestions(
+        SPACE,
+        [
+            Place("place-1", "Lote 23", Coordinates(18.45, -66.07), None, None),
+            Place("place-2", "Taco Bar", Coordinates(18.46, -66.08), None, None),
+        ],
+    )
+
+    run_tool(maya_actions, "send_directions", {"option_number": 2})
+
+    assert maya_actions.outbox[0].startswith("🧭 Directions to Taco Bar:")

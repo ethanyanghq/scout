@@ -1,12 +1,15 @@
-"""How nearby place suggestions read in the chat (OT-1).
+"""How nearby place suggestions and directions read in the chat (OT-1, OT-3).
 
 Travel times are estimates from straight-line distance, so scout doesn't need
 a second, routing API. They're labeled with "~" so nobody takes them as exact.
 """
 
 import math
+from urllib.parse import urlencode
 
 from scout.places import Coordinates, Place
+
+GOOGLE_MAPS_DIRECTIONS_URL = "https://www.google.com/maps/dir/"
 
 EARTH_RADIUS_METERS = 6_371_000
 # Streets aren't straight lines, so stretch the straight-line distance.
@@ -31,7 +34,25 @@ def format_nearby_places(
         lines.append(f"{number}. {' · '.join(details)}")
         if place.summary:
             lines.append(f"   {place.summary}")
+    lines.append("Reply with a number and I'll send directions.")
     return "\n".join(lines)
+
+
+def format_directions(place: Place) -> str:
+    return f"🧭 Directions to {place.name}: {directions_link(place)}"
+
+
+def directions_link(place: Place) -> str:
+    # With no origin, Google Maps starts from wherever each member opens the
+    # link, so one link works for the whole group.
+    query = urlencode(
+        {
+            "api": 1,
+            "destination": place.name,
+            "destination_place_id": place.place_id,
+        }
+    )
+    return f"{GOOGLE_MAPS_DIRECTIONS_URL}?{query}"
 
 
 def describe_travel_time(start: Coordinates, end: Coordinates) -> str:

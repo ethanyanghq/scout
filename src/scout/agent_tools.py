@@ -234,6 +234,26 @@ TOOL_DEFINITIONS = [
         },
     },
     {
+        "name": "send_directions",
+        "description": (
+            "Send a Google Maps directions link to one of the places you last "
+            "suggested, once the group picks it. Plain replies like '2' are "
+            "handled automatically before you see them."
+        ),
+        "strict": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "option_number": {
+                    "type": "integer",
+                    "description": "The place's number as shown in the list (1-3).",
+                },
+            },
+            "required": ["option_number"],
+            "additionalProperties": False,
+        },
+    },
+    {
         "name": "log_sender_expense",
         "description": (
             "Log a shared trip cost that the sender of the newest message paid. "
@@ -381,6 +401,8 @@ def run_tool(actions: TripActions, name: str, tool_input: dict[str, Any]) -> str
             return actions.suggest_nearby_places(
                 tool_input["request"], tool_input["near"]
             )
+        case "send_directions":
+            return actions.send_directions(tool_input["option_number"] - 1)
         case "log_sender_expense":
             return actions.log_sender_expense(
                 _to_cents(tool_input["amount_usd"]), tool_input["description"]

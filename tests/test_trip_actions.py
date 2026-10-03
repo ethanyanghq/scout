@@ -478,7 +478,8 @@ def test_nearby_places_are_posted_with_rough_walking_times(locked_in_actions, st
         "   Food park.\n"
         "2. Taco Bar · $ · ~1 min walk\n"
         "3. Cocina · ~8 min walk\n"
-        "   Patio."
+        "   Patio.\n"
+        "Reply with a number and I'll send directions."
     ]
 
 
@@ -543,3 +544,33 @@ def test_a_places_outage_is_reported_instead_of_inventing_places(
             "tacos", None
         )
     assert store.get_trip(SPACE).place_suggestions == []
+
+
+def test_picking_a_place_sends_directions_to_it(maya_actions, store):
+    store.replace_place_suggestions(SPACE, TACO_SPOTS)
+
+    maya_actions.send_directions(1)
+
+    [directions] = maya_actions.outbox
+    assert directions.startswith("🧭 Directions to Taco Bar: https://www.google.com/")
+    assert "destination_place_id=place-2" in directions
+
+
+def test_once_a_place_is_picked_the_suggestions_are_done(maya_actions, store):
+    store.replace_place_suggestions(SPACE, TACO_SPOTS)
+
+    maya_actions.send_directions(0)
+
+    assert store.get_trip(SPACE).place_suggestions == []
+
+
+def test_picking_a_place_that_was_not_suggested_is_refused(maya_actions, store):
+    store.replace_place_suggestions(SPACE, TACO_SPOTS)
+
+    with pytest.raises(TripActionError, match="place 4 doesn't exist"):
+        maya_actions.send_directions(3)
+
+
+def test_no_directions_without_suggestions(maya_actions):
+    with pytest.raises(TripActionError, match="no place suggestions"):
+        maya_actions.send_directions(0)

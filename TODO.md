@@ -35,7 +35,7 @@ Everything still open, grouped by what it unblocks. Requirement IDs point to [sc
 - [x] On-trip discovery: 3 nearby options for a vibe, with travel time and price level (OT-1).
 - [x] Work out the group's location from a place someone names (OT-2).
 - [ ] Use the lodging address on file, or a location a member shares (OT-2).
-- [ ] Send a directions link once the group picks (OT-3).
+- [x] Send a directions link once the group picks (OT-3).
 - [ ] Create the shared trip album and text everyone the link (AL-1).
 - [ ] Add photos texted to scout or uploaded through the link (AL-2).
 - [ ] Keep receipt photos out of the album once it exists (AL-3, CS-7).

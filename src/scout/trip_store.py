@@ -302,6 +302,10 @@ class TripStore:
                 ],
             )
 
+    def clear_place_suggestions(self, space_id: str) -> None:
+        with self._transaction() as db:
+            db.execute("DELETE FROM place_suggestions WHERE space_id = ?", (space_id,))
+
     def save_nessie_account(self, space_id: str, phone: str, account_id: str) -> None:
         with self._transaction() as db:
             db.execute(

@@ -1,9 +1,10 @@
 """Decides what scout does with each message in a chat.
 
-Cheap, predictable cases (introducing scout, counting a plain "2" as a vote)
-are handled here in code. Everything that needs language understanding goes
-to the agent. Messages arrive one at a time per chat (the bridge waits for
-each reply), so two votes can't race to close the same poll.
+Cheap, predictable cases (introducing scout, counting a plain "2" as a vote or
+a pick of a nearby place) are handled here in code. Everything that needs
+language understanding goes to the agent. Messages arrive one at a time per
+chat (the bridge waits for each reply), so two votes can't race to close the
+same poll.
 """
 
 import logging
@@ -70,6 +71,14 @@ def _respond(
         if choice is not None:
             actions = TripActions(store, trip.space_id, message.sender_phone)
             actions.record_sender_vote(choice)
+            return actions.outbox
+
+    if trip.place_suggestions:
+        place_names = [place.name for place in trip.place_suggestions]
+        pick = polls.parse_vote(message.text, place_names)
+        if pick is not None:
+            actions = TripActions(store, trip.space_id, message.sender_phone)
+            actions.send_directions(pick)
             return actions.outbox
 
     if not (message.mentions_scout or _needs_agent_untagged(trip, message)):

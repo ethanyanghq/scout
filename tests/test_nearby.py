@@ -1,4 +1,6 @@
-from scout.nearby import describe_travel_time, format_nearby_places
+from urllib.parse import parse_qs, urlparse
+
+from scout.nearby import describe_travel_time, directions_link, format_nearby_places
 from scout.places import Coordinates, Place
 
 CONDADO = Coordinates(18.4574, -66.0745)
@@ -36,7 +38,8 @@ def test_suggestions_are_numbered_with_price_time_and_summary():
         "1. Lote 23 · $$ · ~10 min walk\n"
         "   Open-air food park.\n"
         "2. La Placita · $ · ~11 min drive\n"
-        "   Open-air food park."
+        "   Open-air food park.\n"
+        "Reply with a number and I'll send directions."
     )
 
 
@@ -58,4 +61,17 @@ def test_unknown_price_and_summary_are_left_out():
         area="Condado",
     )
 
-    assert message == "📍 Near Condado:\n1. Lote 23"
+    assert message.splitlines()[:2] == ["📍 Near Condado:", "1. Lote 23"]
+    assert message.splitlines()[2].startswith("Reply with a number")
+
+
+def test_directions_go_to_the_exact_place_from_wherever_you_are():
+    link = directions_link(place("Lote 23", LOTE_23))
+
+    query = parse_qs(urlparse(link).query)
+    assert link.startswith("https://www.google.com/maps/dir/?")
+    assert query == {
+        "api": ["1"],
+        "destination": ["Lote 23"],
+        "destination_place_id": ["id-Lote 23"],
+    }
