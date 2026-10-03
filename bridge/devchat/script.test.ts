@@ -69,6 +69,15 @@ describe("reading a console script", () => {
     );
   });
 
+  test("reads a tapback check, and names the tapbacks when one is wrong", () => {
+    const script = parseScript("members maya\nexpect scout reacted like", FOLDER);
+
+    expect(script.steps[0]).toMatchObject({ kind: "expect-tapback", tapback: "like" });
+    expect(() => parseScript("members maya\nexpect scout reacted thumbs", FOLDER)).toThrow(
+      'line 2: a tapback is one of love, like, dislike, laugh, emphasize, question, not "thumbs"',
+    );
+  });
+
   test("names the stages a script can start from", () => {
     expect(() => parseScript("members maya\nfrom the-end", FOLDER)).toThrow(
       'line 2: "from" must be one of poll-open, destination-chosen, not "the-end"',
@@ -107,6 +116,16 @@ describe("checking what scout did", () => {
 
     expect(checkExpectation(expectation, { replies: [], trip: null }).passed).toBe(true);
     expect(checkExpectation(expectation, { replies: scout("lol"), trip: null }).passed).toBe(false);
+  });
+
+  test("a tapback check passes when scout added that tapback", () => {
+    const thumbsUp = { id: "m2", from: "scout", text: "👍 on m1", tapback: "like", on: "m1" };
+
+    const liked = checkExpectation({ kind: "expect-tapback", tapback: "like" }, { replies: [thumbsUp], trip: null });
+    const loved = checkExpectation({ kind: "expect-tapback", tapback: "love" }, { replies: [thumbsUp], trip: null });
+
+    expect(liked.passed).toBe(true);
+    expect(loved).toEqual({ passed: false, detail: "scout said: 👍 on m1" });
   });
 
   test("an exact state check follows a dotted path into the trip", () => {

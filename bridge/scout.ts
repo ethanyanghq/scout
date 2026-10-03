@@ -1,6 +1,8 @@
 // How the bridge hands a text to scout's Python service and gets back what to
 // send.
 
+import type { Tapback } from "./tapbacks";
+
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -28,7 +30,9 @@ export type IncomingText = {
 };
 
 // What scout asks the bridge to send (src/scout/outgoing.py).
-export type ScoutAction = { type: "say"; text: string };
+export type ScoutAction =
+  | { type: "say"; text: string }
+  | { type: "react"; message_id: string; tapback: Tapback; fallback_text: string };
 
 // Read on each call, so tests and the end-to-end runner can point the bridge
 // at their own service.

@@ -1,10 +1,11 @@
 # Journey: members vote by number and scout announces the winner. Votes are
-# counted in code, so this one doesn't need Claude.
+# counted in code, so this one doesn't need Claude. scout confirms each vote
+# with a 👍 tapback rather than another line in the chat.
 members maya leo priya
 from poll-open
 
 maya: 2
-expect scout ~ "1 of 3 voted"
+expect scout reacted like
 leo: lol this is taking forever
 expect scout quiet
 leo: 2

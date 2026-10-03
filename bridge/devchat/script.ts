@@ -15,6 +15,7 @@
 // state, or a word a reply must contain, never whole replies.
 
 import { resolve } from "node:path";
+import { TAPBACKS, type Tapback } from "../tapbacks";
 import { readPhoto, type ChatEntry, type DevChat, type Exchange } from "./platform";
 import { SEED_STAGES, showTrip, type SeedStage } from "./trips";
 
@@ -30,6 +31,7 @@ export type Step = StepSource &
 export type Expectation =
   | { kind: "expect-reply"; contains: string }
   | { kind: "expect-quiet" }
+  | { kind: "expect-tapback"; tapback: Tapback }
   | { kind: "expect-state"; path: string; matcher: "=" | "~"; expected: unknown };
 
 // What the checks look at: scout's replies to the latest message, and the trip.
@@ -46,6 +48,7 @@ const STEP_PATTERNS = {
   say: /^(\w+):\s*(.+)$/,
   photo: /^(\w+)\s+photo\s+(.+)$/,
   expectQuiet: /^expect\s+scout\s+quiet$/,
+  expectTapback: /^expect\s+scout\s+reacted\s+(\S+)$/,
   expectReply: /^expect\s+scout\s+~\s+(".*")$/,
   expectState: /^expect\s+state\s+(\S+)\s+(=|~)\s+(.+)$/,
 };
@@ -101,6 +104,10 @@ export function checkExpectation(expectation: Expectation, context: CheckContext
   switch (expectation.kind) {
     case "expect-quiet":
       return { passed: said.length === 0, detail: whatScoutSaid };
+    case "expect-tapback": {
+      const reacted = context.replies.some((reply) => reply.tapback === expectation.tapback);
+      return { passed: reacted, detail: whatScoutSaid };
+    }
     case "expect-reply": {
       const wanted = expectation.contains.toLowerCase();
       return { passed: said.some((text) => text.toLowerCase().includes(wanted)), detail: whatScoutSaid };
@@ -128,6 +135,8 @@ function readLine(script: Script, at: StepSource, scriptFolder: string): void {
     script.from = readStage(match[1]!);
   } else if ((match = source.match(STEP_PATTERNS.expectQuiet))) {
     script.steps.push({ ...at, kind: "expect-quiet" });
+  } else if ((match = source.match(STEP_PATTERNS.expectTapback))) {
+    script.steps.push({ ...at, kind: "expect-tapback", tapback: readTapback(match[1]!) });
   } else if ((match = source.match(STEP_PATTERNS.expectReply))) {
     script.steps.push({ ...at, kind: "expect-reply", contains: readQuoted(match[1]!) });
   } else if ((match = source.match(STEP_PATTERNS.expectState))) {
@@ -157,6 +166,12 @@ function readStage(value: string): SeedStage {
   const stage = SEED_STAGES.find((candidate) => candidate === value);
   if (!stage) throw new Error(`"from" must be one of ${SEED_STAGES.join(", ")}, not "${value}"`);
   return stage;
+}
+
+function readTapback(value: string): Tapback {
+  const tapback = TAPBACKS.find((candidate) => candidate === value);
+  if (!tapback) throw new Error(`a tapback is one of ${TAPBACKS.join(", ")}, not "${value}"`);
+  return tapback;
 }
 
 function readQuoted(value: string): string {

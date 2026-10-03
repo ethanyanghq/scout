@@ -3,7 +3,9 @@
 
 import {
   UnsupportedError,
+  reaction,
   type Content,
+  type ContentInput,
   type Message,
   type Space,
   type SpectrumInstance,
@@ -11,6 +13,7 @@ import {
 import { imessage } from "spectrum-ts/providers/imessage";
 import { localIMessage } from "@spectrum-ts/imessage-local";
 import { askScout, toJpeg, type ScoutAction } from "./scout";
+import { tapbackEmoji } from "./tapbacks";
 import { secondsSince, type MessageOutcome, type Skipped } from "./trace";
 
 type PhotoAttachment = Extract<Content, { type: "attachment" }>;
@@ -19,13 +22,20 @@ type PhotoAttachment = Extract<Content, { type: "attachment" }>;
 type ReadableParts = { text: string; photo: PhotoAttachment | null };
 type ScoutMessage = ReadableParts & { senderPhone: string };
 
+// Spectrum reacts and replies to a Message, not an ID, so the relay keeps the
+// messages it has seen and sent lately. Older ones, and everything from before
+// a restart, get scout's plain-text fallback instead.
+const REMEMBERED_MESSAGES = 1000;
+
 export async function relaySpectrumMessages(
   app: SpectrumInstance,
   reportOutcome: (outcome: MessageOutcome) => void,
 ): Promise<void> {
+  const recent = new RecentMessages();
   // Messages are handled one at a time, on purpose: scout finishes replying to
   // one text before it reads the next, so its view of the trip is never stale.
   for await (const [space, message] of app.messages) {
+    recent.remember(message);
     const startedAt = performance.now();
     const outcome = { id: message.id, chatId: space.id };
     const readable = readForScout(space, message);
@@ -45,7 +55,7 @@ export async function relaySpectrumMessages(
         message_id: message.id,
       });
       for (const action of actions) {
-        await perform(space, action);
+        await perform(space, action, recent);
       }
       reportOutcome({
         ...outcome,
@@ -60,11 +70,46 @@ export async function relaySpectrumMessages(
   }
 }
 
-async function perform(space: Space, action: ScoutAction): Promise<void> {
+async function perform(space: Space, action: ScoutAction, recent: RecentMessages): Promise<void> {
   switch (action.type) {
     case "say":
-      await space.send(action.text);
+      recent.remember(await space.send(action.text));
       return;
+    case "react": {
+      const target = recent.find(action.message_id);
+      const tapback = target ? reaction(tapbackEmoji(action.tapback), target) : null;
+      await sendOrFallBack(space, tapback, action.fallback_text, recent);
+      return;
+    }
+  }
+}
+
+// Spectrum resolves a send to nothing when the line can't do it (a tapback in
+// local mode, say), so the plain-text version goes instead.
+async function sendOrFallBack(
+  space: Space,
+  content: ContentInput | null,
+  fallbackText: string,
+  recent: RecentMessages,
+): Promise<void> {
+  const sent = content ? await space.send(content) : undefined;
+  recent.remember(sent ?? (await space.send(fallbackText)));
+}
+
+class RecentMessages {
+  private readonly byId = new Map<string, Message>();
+
+  remember(message: Message | undefined): void {
+    if (!message) return;
+    this.byId.set(message.id, message);
+    if (this.byId.size > REMEMBERED_MESSAGES) {
+      const oldest = this.byId.keys().next().value;
+      if (oldest !== undefined) this.byId.delete(oldest);
+    }
+  }
+
+  find(id: string): Message | undefined {
+    return this.byId.get(id);
   }
 }
 

@@ -7,6 +7,7 @@ agent to read.
 """
 
 import logging
+from collections.abc import Callable
 from datetime import date
 
 from scout import polls
@@ -99,7 +100,11 @@ class TripActions:
         self.outbox.append(Say(polls.format_poll(options)))
         return "Poll posted."
 
-    def record_sender_vote(self, option_index: int) -> str:
+    def record_sender_vote(
+        self, option_index: int, confirm: Callable[[str], Outgoing] = Say
+    ) -> str:
+        """Counts the vote. Unless it closes the poll, `confirm` turns the
+        confirmation text into what scout sends: by default, that text."""
         trip = self._load_trip()
         poll = trip.open_poll
         if poll is None:
@@ -114,7 +119,7 @@ class TripActions:
 
         voter = trip.find_member(self._sender_phone)
         self.outbox.append(
-            Say(
+            confirm(
                 f"Got it, {voter.label} → {poll.options[option_index].name} "
                 f"({len(poll.votes)} of {len(trip.members)} voted)"
             )

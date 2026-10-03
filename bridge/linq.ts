@@ -10,6 +10,7 @@
 import { UnsupportedError, definePlatform, stream, type Content, type Message } from "spectrum-ts";
 import { asAttachment, asGroup, type ProviderMessageRecord } from "spectrum-ts/authoring";
 import z from "zod";
+import { tapbackNamed } from "./tapbacks";
 import { isSkipped, logOutcome, type Skipped } from "./trace";
 
 const PLATFORM = "linq";
@@ -161,11 +162,28 @@ async function sendContent(
   chatId: string,
   content: Content,
 ): Promise<ProviderMessageRecord> {
+  if (content.type === "reaction") return sendTapback(api, chatId, content);
   if (content.type !== "text") throw UnsupportedError.content(content.type, PLATFORM);
   const sent = (await callLinq(api, `/chats/${chatId}/messages`, {
     message: { parts: [{ type: "text", value: content.text }] },
   })) as { message: { id: string } };
   return { id: sent.message.id, content, space: { id: chatId }, timestamp: new Date() };
+}
+
+async function sendTapback(
+  api: LinqApi,
+  chatId: string,
+  content: Extract<Content, { type: "reaction" }>,
+): Promise<ProviderMessageRecord> {
+  const tapback = tapbackNamed(content.emoji);
+  if (!tapback) throw UnsupportedError.content("reaction", PLATFORM, "scout only sends tapbacks");
+  await callLinq(api, `/messages/${content.target.id}/reactions`, { operation: "add", type: tapback });
+  return {
+    id: `${content.target.id}:${tapback}`,
+    content,
+    space: { id: chatId },
+    timestamp: new Date(),
+  };
 }
 
 async function callLinq(api: LinqApi, path: string, body?: object): Promise<unknown> {

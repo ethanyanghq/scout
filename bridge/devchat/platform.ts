@@ -7,12 +7,20 @@ import { Spectrum, definePlatform, stream, type Content } from "spectrum-ts";
 import { asAttachment, setLogLevel, type ProviderMessageRecord } from "spectrum-ts/authoring";
 import z from "zod";
 import { relaySpectrumMessages } from "../spectrum";
+import { tapbackNamed } from "../tapbacks";
 import type { MessageOutcome } from "../trace";
 
 export type ChatMember = { name: string; phone: string };
 
-// One line of the chat. `from` is a member's name, or "scout".
-export type ChatEntry = { id: string; from: string; text: string };
+// One line of the chat. `from` is a member's name, or "scout". A tapback also
+// names which one it was and the message it's on.
+export type ChatEntry = {
+  id: string;
+  from: string;
+  text: string;
+  tapback?: string;
+  on?: string;
+};
 
 // What happened to one member's message: the bridge's outcome, and scout's
 // replies to it.
@@ -64,8 +72,18 @@ export class DevChat {
   }
 
   recordScoutMessage(content: Content): ProviderMessageRecord {
-    const text = content.type === "text" ? content.text : `[${content.type}]`;
-    const entry = this.addEntry("scout", text);
+    const entry =
+      content.type === "reaction"
+        ? this.addEntry({
+            from: "scout",
+            text: `${content.emoji} on ${content.target.id}`,
+            tapback: tapbackNamed(content.emoji) ?? content.emoji,
+            on: content.target.id,
+          })
+        : this.addEntry({
+            from: "scout",
+            text: content.type === "text" ? content.text : `[${content.type}]`,
+          });
     return { id: entry.id, content, space: { id: this.chatId }, timestamp: new Date() };
   }
 
@@ -74,7 +92,7 @@ export class DevChat {
   private async send(memberName: string, shownAs: string, content: Content): Promise<Exchange> {
     const member = this.findMember(memberName);
     const deliver = await this.connection.promise;
-    const sent = this.addEntry(member.name, shownAs);
+    const sent = this.addEntry({ from: member.name, text: shownAs });
     const finished = new Promise<MessageOutcome>((resolve) => this.waitingFor.set(sent.id, resolve));
 
     await deliver({
@@ -89,8 +107,8 @@ export class DevChat {
     return { sent, outcome, replies: this.transcript.slice(this.transcript.indexOf(sent) + 1) };
   }
 
-  private addEntry(from: string, text: string): ChatEntry {
-    const entry = { id: `m${this.transcript.length + 1}`, from, text };
+  private addEntry(fields: Omit<ChatEntry, "id">): ChatEntry {
+    const entry = { id: `m${this.transcript.length + 1}`, ...fields };
     this.transcript.push(entry);
     return entry;
   }

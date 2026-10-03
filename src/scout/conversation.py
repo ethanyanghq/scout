@@ -8,11 +8,12 @@ same poll.
 """
 
 import logging
+from collections.abc import Callable
 from datetime import datetime
 from typing import Protocol
 
 from scout import polls
-from scout.outgoing import Outgoing, Say, as_plain_text
+from scout.outgoing import Outgoing, React, Say, Tapback, as_plain_text
 from scout.trip import IncomingMessage, Trip, TripStage
 from scout.trip_actions import TripActions
 from scout.trip_store import TripStore
@@ -69,7 +70,7 @@ def _respond(
         choice = polls.parse_vote(message.text, option_names)
         if choice is not None:
             actions = TripActions(store, trip.space_id, message.sender_phone)
-            actions.record_sender_vote(choice)
+            actions.record_sender_vote(choice, confirm=_tapback_on(message))
             return actions.outbox
 
     if trip.place_suggestions:
@@ -90,6 +91,15 @@ def _respond(
         # but scout shouldn't apologize for messages it was never asked about.
         logger.exception("Agent failed on message in %s", message.space_id)
         return [Say(SNAG_REPLY)] if message.mentions_scout else []
+
+
+def _tapback_on(message: IncomingMessage) -> Callable[[str], Outgoing]:
+    """Confirms with a 👍 on the message, so a vote doesn't add a line to the
+    chat. Without a message ID (scout-simulate), the confirmation is a text."""
+    if message.message_id is None:
+        return Say
+    message_id = message.message_id
+    return lambda text: React(message_id, Tapback.LIKE, fallback_text=text)
 
 
 def _needs_agent_untagged(trip: Trip, message: IncomingMessage) -> bool:
