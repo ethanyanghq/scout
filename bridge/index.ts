@@ -34,6 +34,7 @@ for await (const [space, message] of app.messages) {
   if (message.direction === "outbound") continue;
   // Phase 1 only understands text. Photos and receipts arrive in Phase 2.
   if (message.content.type !== "text" || !message.sender) continue;
+  if (isLocalDirectMessage(space)) continue;
 
   try {
     const replies = await askScout({
@@ -64,6 +65,14 @@ async function connectToIMessage(mode: string) {
     });
   }
   throw new Error(`IMESSAGE_MODE must be "local" or "cloud", got "${mode}"`);
+}
+
+// In local mode the bridge runs on scout's own Apple ID, which exists only to
+// sit in group chats. Private chats with scout go through the Photon line
+// instead (see scout-imessage-groups.md), so a direct text to this account
+// must not start a trip. Cloud mode still answers one-on-one texts.
+function isLocalDirectMessage(space: Space): boolean {
+  return localIMessage.is(space) && localIMessage(space).type === "dm";
 }
 
 async function askScout(text: IncomingText): Promise<string[]> {
