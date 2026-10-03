@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import type { IncomingText } from "../scout";
 import { DevChat, connectDevChat, type ChatEntry, type ChatMember } from "./platform";
 
@@ -15,8 +15,11 @@ const stubScout = Bun.serve({
     return respond();
   },
 });
-const realScoutUrl = process.env.SCOUT_URL;
-process.env.SCOUT_URL = `http://127.0.0.1:${stubScout.port}`;
+let realScoutUrl: string | undefined;
+beforeAll(() => {
+  realScoutUrl = process.env.SCOUT_URL;
+  process.env.SCOUT_URL = `http://127.0.0.1:${stubScout.port}`;
+});
 afterAll(() => {
   process.env.SCOUT_URL = realScoutUrl;
   stubScout.stop(true);
