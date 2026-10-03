@@ -72,7 +72,7 @@ Priorities: **P0** is required for the demo, **P1** is a stretch goal, and **P2*
 
 | ID | Requirement | Priority |
 |---|---|---|
-| GC-1 | Users can add scout to an existing group text by adding its phone number. No app or account is required for anyone. | P0 |
+| GC-1 | Users can add scout to an existing group text by adding its phone number or iMessage email address (the demo uses an email address, because scout's Apple ID has no SIM). No app or account is required for anyone. | P0 |
 | GC-2 | On joining, scout sends one short introduction that explains what it does and asks for each person's name, dates, budget, home city, and one must-have. iMessage only gives scout phone numbers, so it has to ask for names. Without a "member joined" event, scout treats the first message it sees in a chat as joining. | P0 |
 | GC-3 | scout responds when tagged with "@scout" or addressed by name. | P0 |
 | GC-4 | scout attributes each message to the right group member by phone number and learns display names from context. | P0 |
@@ -243,8 +243,8 @@ If the project continues beyond the demo, these metrics would show whether scout
 
 | Risk | Mitigation |
 |---|---|
-| Photon's shared-number plans (Free and Pro) can't reliably join group chats. | Run scout in local mode on a Mac signed into its own Apple ID, and test it in a real group on day one. Keep a fallback demo (1:1 texting, `scout-simulate`, or the interactive journey page) ready. |
-| Apple flags or bans scout's Apple ID for automated messaging. | Follow Photon's deliverability guidance: people message scout first, no cold outreach, no message bursts. Automating a personal Apple ID is a grey area under Apple's terms; acceptable for a class demo, revisit before real users. |
+| Photon's shared-number plans (Free and Pro) can't reliably join group chats. | Run scout in local mode on a Mac signed into an Apple ID created just for scout, and test it in a real group on day one. Keep a fallback demo (1:1 texting, `scout-simulate`, or the interactive journey page) ready. |
+| Apple flags or bans scout's Apple ID for automated messaging. | Follow Photon's deliverability guidance: people message scout first, no cold outreach, no message bursts. A new account has no history, so it's more exposed; if it's banned, create another, since no one's personal account is involved. Automating an Apple ID is a grey area under Apple's terms; acceptable for a class demo, revisit before real users. |
 | In local mode, scout can't list a group's members, so people who never text are invisible to it. | Ask everyone to reply to the introduction. The agent only posts the summary once the people it knows about have all shared, and anyone can ask for it with "@scout summary." |
 | scout becomes noisy or annoying. | Tag-first interaction model, a daily cap on proactive messages, and a pause command. |
 | Suggestions include made-up places or wrong prices. | Pull places only from a data source and label all prices as estimates. |
