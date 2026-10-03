@@ -35,3 +35,6 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # the developer console's saved chat
 .devchat/
+
+# the demo phones' real numbers (demo/roster.example.json shows the format)
+demo/roster.json

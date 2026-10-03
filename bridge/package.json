@@ -18,6 +18,7 @@
     "start": "bun run index.ts",
     "dev": "bun run dev.ts",
     "devchat": "bun run devchat/commands.ts",
+    "demo": "bun run demo/commands.ts",
     "e2e": "bun run e2e/run.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
