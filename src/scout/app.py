@@ -38,6 +38,8 @@ class IncomingText(BaseModel):
     sent_at: datetime
     participant_phones: list[str] = []
     photo: IncomingPhoto | None = None
+    # The sender attached a photo, but the bridge couldn't convert it.
+    has_unreadable_photo: bool = False
 
 
 class Replies(BaseModel):
@@ -62,6 +64,7 @@ def create_app(store: TripStore, agent: ScoutAgent) -> FastAPI:
                 if incoming.photo
                 else None
             ),
+            has_unreadable_photo=incoming.has_unreadable_photo,
         )
         return Replies(replies=handle_message(message, store, agent))
 

@@ -42,6 +42,7 @@ type IncomingText = {
   sent_at: string;
   participant_phones: string[];
   photo: IncomingPhoto | null;
+  has_unreadable_photo: boolean;
 };
 
 type PhotoAttachment = Extract<Content, { type: "attachment" }>;
@@ -63,13 +64,15 @@ for await (const [space, message] of app.messages) {
   if (!parts) continue;
 
   try {
+    const photo = parts.photo ? await toJpegOrNull(parts.photo, message.id) : null;
     const replies = await askScout({
       space_id: space.id,
       sender_phone: message.sender.id,
       text: parts.text,
       sent_at: message.timestamp.toISOString(),
       participant_phones: await listParticipants(space, message),
-      photo: parts.photo ? await toJpeg(parts.photo) : null,
+      photo,
+      has_unreadable_photo: parts.photo !== null && photo === null,
     });
     for (const reply of replies) {
       await space.send(reply);
@@ -120,6 +123,20 @@ function readableParts(content: Content): ReadableParts | null {
 
 function isPhoto(content: Content): content is PhotoAttachment {
   return content.type === "attachment" && content.mimeType.startsWith("image/");
+}
+
+// A photo that can't be converted shouldn't cost scout the caption sent with
+// it, so scout still gets the text and is told a photo didn't come through.
+async function toJpegOrNull(
+  photo: PhotoAttachment,
+  messageId: string,
+): Promise<IncomingPhoto | null> {
+  try {
+    return await toJpeg(photo);
+  } catch (error) {
+    console.error(`Couldn't convert the photo in message ${messageId}:`, error);
+    return null;
+  }
 }
 
 // iPhones send HEIC, which Claude can't read, so every photo goes through

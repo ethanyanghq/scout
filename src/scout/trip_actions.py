@@ -216,11 +216,30 @@ class TripActions:
         return "Expense removed."
 
     def post_settle_up(self) -> str:
+        """Posts who owes whom, and opens Nessie accounts for everyone in it."""
         trip = self._load_trip()
         if not trip.expenses:
             raise TripActionError("nobody has logged an expense yet")
         self.outbox.append(format_settle_up(trip))
+        self._open_nessie_accounts(plan_payments(trip))
         return "Settle-up posted."
+
+    def _open_nessie_accounts(self, payments: list[Payment]) -> None:
+        # Opening accounts now means "@scout pay Leo" later only has to move
+        # money, so a slow Nessie can't stall the payment itself.
+        if self._services.bank is None:
+            return
+        people = {p.payer.phone: p.payer for p in payments} | {
+            p.payee.phone: p.payee for p in payments
+        }
+        try:
+            for member in people.values():
+                self._nessie_account_id(member)
+        except NessieError as error:
+            # Paying opens any missing account again, or falls back to simulated.
+            logger.warning(
+                "Couldn't open Nessie accounts early in %s: %s", self._space_id, error
+            )
 
     def pay_from_sender(self, payee_label: str) -> str:
         """Pays what the sender owes one person, over Nessie when it's up."""

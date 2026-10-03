@@ -116,6 +116,8 @@ class ScoutAgent:
         )
         if message.photo is not None:
             tagged += " It comes with the photo above."
+        if message.has_unreadable_photo:
+            tagged += " It came with a photo that couldn't be opened."
         today = date.today()
         return (
             f"Today is {today:%A, %B} {today.day}, {today.year}.\n\n"

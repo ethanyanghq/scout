@@ -103,7 +103,7 @@ def _needs_agent_untagged(trip: Trip, message: IncomingMessage) -> bool:
         return False
     # CS-1 and CS-7: people log what they paid in plain messages ("dinner was
     # me, $164") or by texting a receipt, without tagging scout.
-    if message.mentions_money or message.photo is not None:
+    if message.mentions_money or message.has_photo:
         return True
     # The payer's reply to "Split it 4 ways?" is usually just "yep".
     receipt = trip.pending_receipt
@@ -112,6 +112,6 @@ def _needs_agent_untagged(trip: Trip, message: IncomingMessage) -> bool:
 
 def _chat_log_text(message: IncomingMessage) -> str:
     # The photo itself isn't kept, but later turns should know one was sent.
-    if message.photo is None:
+    if not message.has_photo:
         return message.text
     return f"[photo] {message.text}".strip()

@@ -21,19 +21,20 @@ Nothing after the vote has ever run against real Claude, so expect fixes here.
 - [ ] Fix whatever breaks.
 - [ ] With the real Nessie key, check that opening a customer and account works with scout's fields (`nessie.py`).
 - [ ] With the real Nessie key, check that deposits accept the same fields as withdrawals.
+- [ ] With the real Nessie key, check that scout starts: the startup key check expects an empty `POST /customers` to answer 400, not create a customer.
 - [ ] Check that Nessie balances actually change after a payment.
 - [ ] With the real Google key, check that a vibe search returns three real places with price levels.
 - [ ] Run the journey in a real iMessage group: at least 3 other members, all on iMessage. Include a real iPhone receipt photo.
 
 ## 3. Fixes that protect the demo
 
-- [ ] Check the Nessie key at startup (an empty `POST /customers` answers 401 for a bad key). Today a bad key silently turns every payment into "simulated".
-- [ ] Add a way to open everyone's Nessie accounts before going on stage, so a slow API can't stall the first payment.
-- [ ] When a photo can't be converted, still forward its caption instead of dropping the whole message (`bridge/index.ts`).
+- [x] Check the Nessie key at startup, so a bad key stops the server instead of silently turning every payment into "simulated".
+- [x] Open everyone's Nessie accounts when scout posts who owes whom, so a slow API can't stall the first payment.
+- [x] When a photo can't be converted, still forward its caption, and have scout ask for the total.
 
 ## 4. Decide
 
-- [ ] The shared trip album (AL-1, AL-2): cut it from the demo, or build it? It isn't part of the §11 bar, and building it means hosting and storage. If it's cut, take it out of the script and the journey page.
+- [x] The shared trip album (AL-1, AL-2): cut from the demo. It isn't part of the §11 bar, and building it means hosting and storage.
 
 ## 5. Script and rehearsal
 
@@ -53,7 +54,6 @@ Nothing after the vote has ever run against real Claude, so expect fixes here.
 - [ ] Delete the old `scout.db` and start a fresh group chat.
 - [ ] Mac plugged in, awake, and online. Service and bridge running.
 - [ ] Send a test text 30 minutes before going on stage.
-- [ ] Open the Nessie accounts (see section 3).
 
 ## Team
 

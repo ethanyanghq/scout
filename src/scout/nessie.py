@@ -20,6 +20,7 @@ import os
 import urllib.error
 import urllib.request
 from datetime import date
+from http import HTTPStatus
 from typing import NamedTuple
 from urllib.parse import urlencode
 
@@ -48,6 +49,15 @@ PLACEHOLDER_CUSTOMER = {
 class NessieError(Exception):
     """Nessie couldn't be reached or refused a request."""
 
+    def __init__(self, message: str, status: int | None = None):
+        super().__init__(message)
+        # The HTTP status Nessie answered with, or None if it didn't answer.
+        self.status = status
+
+
+class NessieKeyRejected(NessieError):
+    """Nessie doesn't accept scout's API key."""
+
 
 class SandboxPayment(NamedTuple):
     """Where one payment shows up in Nessie, for checking it there."""
@@ -60,6 +70,21 @@ class NessieBank:
     def __init__(self, api_key: str, base_url: str = NESSIE_URL):
         self._api_key = api_key
         self._base_url = base_url
+
+    def check_key(self) -> None:
+        """Raises NessieKeyRejected for a bad key, or NessieError if Nessie is down.
+
+        Sends an empty customer, which Nessie always refuses: a bad key gets a
+        401 before anything else is checked, and a good key gets a 400 for the
+        missing fields, so nothing is created either way.
+        """
+        try:
+            self._post("/customers", {})
+        except NessieKeyRejected:
+            raise
+        except NessieError as error:
+            if error.status != HTTPStatus.BAD_REQUEST:
+                raise
 
     def open_account(self) -> str:
         """Opens a funded checking account for one member. Returns its ID."""
@@ -106,9 +131,10 @@ class NessieBank:
             return created.get("_id") or created["id"]
         except urllib.error.HTTPError as error:
             reason = error.read().decode(errors="replace")[:200]
-            raise NessieError(
-                f"POST {path} failed with {error.code}: {reason}"
-            ) from None
+            message = f"POST {path} failed with {error.code}: {reason}"
+            if error.code == HTTPStatus.UNAUTHORIZED:
+                raise NessieKeyRejected(message, error.code) from None
+            raise NessieError(message, error.code) from None
         except (urllib.error.URLError, TimeoutError) as error:
             raise NessieError(f"POST {path} didn't connect: {error}") from None
         except (json.JSONDecodeError, KeyError, TypeError) as error:
@@ -117,13 +143,29 @@ class NessieBank:
             ) from None
 
 
-def connect_bank() -> NessieBank | None:
-    """The Nessie bank to pay through, or None if no API key is set."""
+def connect_bank(base_url: str = NESSIE_URL) -> NessieBank | None:
+    """The Nessie bank to pay through, or None if no API key is set.
+
+    Raises NessieKeyRejected if the key is set but wrong. A wrong key would
+    otherwise turn every payment into a simulated one without anyone noticing.
+    """
     api_key = os.environ.get("NESSIE_API_KEY")
     if not api_key:
         logger.warning("NESSIE_API_KEY isn't set, so payments will be simulated")
         return None
-    return NessieBank(api_key)
+    bank = NessieBank(api_key, base_url)
+    try:
+        bank.check_key()
+    except NessieKeyRejected as error:
+        raise NessieKeyRejected(
+            "Nessie rejected NESSIE_API_KEY. Fix it in .env, or remove it to "
+            f"simulate payments. ({error})",
+            error.status,
+        ) from None
+    except NessieError as error:
+        # Nessie is often slow or down; payments fall back to simulated then.
+        logger.warning("Couldn't check NESSIE_API_KEY, Nessie is down: %s", error)
+    return bank
 
 
 def _whole_dollars(amount_cents: int) -> int:

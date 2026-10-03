@@ -234,3 +234,20 @@ def test_shows_claude_the_places_it_last_suggested(store):
     assert "Places you last suggested:\n  1. Lote 23\n  2. La Factoría" in (
         situation_text(claude)
     )
+
+
+def test_tells_claude_when_a_photo_could_not_be_opened(store):
+    trip, _ = maya_says(store, "casa brisa dinner")
+    message = IncomingMessage(
+        SPACE,
+        MAYA,
+        "casa brisa dinner",
+        datetime(2026, 10, 2, 9, 0),
+        has_unreadable_photo=True,
+    )
+    claude = ScriptedClaude(response("end_turn", text("What was the total?")))
+
+    ScoutAgent(claude, store).respond(trip, message)
+
+    [situation] = claude.requests[0]["messages"][0]["content"]
+    assert "It came with a photo that couldn't be opened." in situation["text"]
