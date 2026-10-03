@@ -11,6 +11,7 @@ from scout.booking_links import format_booking_links
 from scout.calendar_link import format_calendar_message
 from scout.group_summary import format_group_summary, summarize_group
 from scout.itinerary import format_itinerary
+from scout.money import format_usd
 from scout.trip import DestinationOption, ItineraryDay, PreferenceUpdate, Trip
 from scout.trip_store import TripStore
 
@@ -114,6 +115,43 @@ class TripActions:
     def send_booking_links(self) -> str:
         self.outbox.append(format_booking_links(self._load_locked_in_trip()))
         return "Booking links posted."
+
+    def log_sender_expense(self, amount_cents: int, description: str) -> str:
+        """Logs a shared cost the sender paid. Only payers log their own costs."""
+        if amount_cents <= 0:
+            raise TripActionError("an expense must be more than $0")
+        if not description.strip():
+            raise TripActionError("an expense needs a description, e.g. 'Airbnb'")
+
+        expense_id = self._store.add_expense(
+            self._space_id, self._sender_phone, amount_cents, description
+        )
+        trip = self._load_trip()
+        payer = trip.find_member(self._sender_phone)
+        self.outbox.append(
+            f"Got it: {description}, {format_usd(amount_cents)}, paid by "
+            f"{payer.label}. Split {len(trip.members)} ways."
+        )
+        return f"Logged as expense #{expense_id}."
+
+    def remove_expense(self, expense_id: int) -> str:
+        """Removes one of the sender's own expenses, e.g. one logged by mistake."""
+        trip = self._load_trip()
+        expense = next((e for e in trip.expenses if e.id == expense_id), None)
+        if expense is None:
+            raise TripActionError(f"there is no expense #{expense_id}")
+        if expense.payer_phone != self._sender_phone:
+            payer = trip.find_member(expense.payer_phone)
+            raise TripActionError(
+                f"expense #{expense_id} was paid by {payer.label}, "
+                "and only they can remove it"
+            )
+
+        self._store.remove_expense(self._space_id, expense_id)
+        self.outbox.append(
+            f"Removed: {expense.description}, {format_usd(expense.amount_cents)}."
+        )
+        return "Expense removed."
 
     def _close(self, trip: Trip) -> str:
         result = polls.decide_winner(trip.open_poll)

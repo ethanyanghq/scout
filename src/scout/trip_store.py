@@ -11,6 +11,7 @@ from pathlib import Path
 from scout.trip import (
     DateWindow,
     DestinationOption,
+    Expense,
     ItineraryDay,
     Member,
     Poll,
@@ -65,6 +66,14 @@ CREATE TABLE IF NOT EXISTS itinerary_days (
     PRIMARY KEY (space_id, day)
 );
 
+CREATE TABLE IF NOT EXISTS expenses (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    space_id     TEXT NOT NULL REFERENCES trips (space_id),
+    payer_phone  TEXT NOT NULL,
+    amount_cents INTEGER NOT NULL,
+    description  TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS chat_log (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     space_id     TEXT NOT NULL REFERENCES trips (space_id),
@@ -104,6 +113,7 @@ class TripStore:
                 members=_load_members(db, space_id),
                 open_poll=_load_open_poll(db, space_id),
                 itinerary=_load_itinerary(db, space_id),
+                expenses=_load_expenses(db, space_id),
             )
 
     def create_trip(self, space_id: str) -> None:
@@ -195,6 +205,25 @@ class TripStore:
                 [(space_id, day.day.isoformat(), day.plan) for day in days],
             )
 
+    def add_expense(
+        self, space_id: str, payer_phone: str, amount_cents: int, description: str
+    ) -> int:
+        """Saves a new expense and returns its ID."""
+        with self._transaction() as db:
+            cursor = db.execute(
+                "INSERT INTO expenses (space_id, payer_phone, amount_cents, "
+                "description) VALUES (?, ?, ?, ?)",
+                (space_id, payer_phone, amount_cents, description),
+            )
+            return cursor.lastrowid
+
+    def remove_expense(self, space_id: str, expense_id: int) -> None:
+        with self._transaction() as db:
+            db.execute(
+                "DELETE FROM expenses WHERE space_id = ? AND id = ?",
+                (space_id, expense_id),
+            )
+
     def log_message(
         self, space_id: str, sender_phone: str | None, text: str, sent_at: datetime
     ) -> None:
@@ -282,6 +311,23 @@ def _load_itinerary(db: sqlite3.Connection, space_id: str) -> list[ItineraryDay]
         (space_id,),
     ).fetchall()
     return [ItineraryDay(date.fromisoformat(row["day"]), row["plan"]) for row in rows]
+
+
+def _load_expenses(db: sqlite3.Connection, space_id: str) -> list[Expense]:
+    rows = db.execute(
+        "SELECT id, payer_phone, amount_cents, description FROM expenses "
+        "WHERE space_id = ? ORDER BY id",
+        (space_id,),
+    ).fetchall()
+    return [
+        Expense(
+            id=row["id"],
+            payer_phone=row["payer_phone"],
+            amount_cents=row["amount_cents"],
+            description=row["description"],
+        )
+        for row in rows
+    ]
 
 
 def _parse_date(value: str | None) -> date | None:

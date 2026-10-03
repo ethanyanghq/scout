@@ -1,6 +1,12 @@
 from datetime import date, datetime
 
-from scout.trip import DateWindow, DestinationOption, PreferenceUpdate, TripStage
+from scout.trip import (
+    DateWindow,
+    DestinationOption,
+    Expense,
+    PreferenceUpdate,
+    TripStage,
+)
 
 SPACE = "group-chat-1"
 MAYA = "+15550000001"
@@ -105,3 +111,25 @@ def test_recent_messages_come_back_oldest_first_and_limited(store):
     recent = store.recent_messages(SPACE, limit=2)
 
     assert [m.text for m in recent] == ["message 3", "message 4"]
+
+
+def test_expenses_come_back_in_the_order_they_were_logged(store):
+    store.create_trip(SPACE)
+
+    airbnb = store.add_expense(SPACE, LEO, 124_000, "Airbnb")
+    kayaks = store.add_expense(SPACE, MAYA, 19_600, "Bio bay kayaks")
+
+    assert store.get_trip(SPACE).expenses == [
+        Expense(airbnb, LEO, 124_000, "Airbnb"),
+        Expense(kayaks, MAYA, 19_600, "Bio bay kayaks"),
+    ]
+
+
+def test_removing_an_expense_keeps_the_others(store):
+    store.create_trip(SPACE)
+    airbnb = store.add_expense(SPACE, LEO, 124_000, "Airbnb")
+    kayaks = store.add_expense(SPACE, MAYA, 19_600, "Bio bay kayaks")
+
+    store.remove_expense(SPACE, airbnb)
+
+    assert [e.id for e in store.get_trip(SPACE).expenses] == [kayaks]

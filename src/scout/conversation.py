@@ -72,7 +72,11 @@ def _respond(
             return actions.outbox
 
     is_collecting = trip.stage == TripStage.COLLECTING_PREFERENCES
-    if not (message.mentions_scout or is_collecting):
+    # CS-1: people log what they paid in plain messages ("dinner was me, $164"),
+    # without tagging scout. Before the destination is chosen, dollar amounts
+    # are budgets and price talk, not expenses.
+    might_log_expense = trip.destination is not None and message.mentions_money
+    if not (message.mentions_scout or is_collecting or might_log_expense):
         return []
 
     try:

@@ -53,6 +53,12 @@ def start_voting(store):
     store.open_poll(SPACE, OPTIONS)
 
 
+def choose_san_juan(store):
+    start_voting(store)
+    poll_id = store.get_trip(SPACE).open_poll.id
+    store.close_poll(poll_id, "San Juan, Puerto Rico", None)
+
+
 def test_first_message_in_a_chat_gets_the_introduction(store):
     replies = send(store, FakeAgent(replies=[]), MAYA, "hey everyone")
 
@@ -168,3 +174,33 @@ def test_replies_are_saved_so_the_agent_sees_them_next_time(store):
         (None, INTRODUCTION),
         (None, "Got it, Maya"),
     ]
+
+
+def test_untagged_expenses_reach_the_agent_once_a_destination_is_chosen(store):
+    choose_san_juan(store)
+    agent = FakeAgent()
+
+    replies = send(store, agent, LEO, "fyi I paid the airbnb, $1,240")
+
+    assert agent.messages_seen == ["fyi I paid the airbnb, $1,240"]
+    assert replies == ["agent reply"]
+
+
+def test_untagged_chatter_without_an_amount_is_ignored_on_the_trip(store):
+    choose_san_juan(store)
+    agent = FakeAgent()
+
+    replies = send(store, agent, LEO, "beach at 10?")
+
+    assert replies == []
+    assert agent.messages_seen == []
+
+
+def test_price_talk_during_the_vote_is_not_treated_as_an_expense(store):
+    start_voting(store)
+    agent = FakeAgent()
+
+    replies = send(store, agent, LEO, "flights to tulum look like $450")
+
+    assert replies == []
+    assert agent.messages_seen == []

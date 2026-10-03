@@ -57,3 +57,31 @@ def test_agent_itinerary_dates_become_planned_days(maya_actions, store):
     assert store.get_trip(SPACE).itinerary == [
         ItineraryDay(date(2027, 3, 14), "Land and check in")
     ]
+
+
+@pytest.mark.parametrize(
+    ("amount_usd", "expected_cents"), [(1240, 124_000), (164.5, 16_450), (0.29, 29)]
+)
+def test_agent_dollar_amounts_become_exact_cents(
+    maya_actions, store, amount_usd, expected_cents
+):
+    tool_input = {"amount_usd": amount_usd, "description": "Dinner"}
+
+    run_tool(maya_actions, "log_sender_expense", tool_input)
+
+    assert store.get_trip(SPACE).expenses[0].amount_cents == expected_cents
+
+
+def test_agent_amounts_cannot_split_a_cent(maya_actions):
+    tool_input = {"amount_usd": 10.005, "description": "Dinner"}
+
+    with pytest.raises(TripActionError, match="fractions of a cent"):
+        run_tool(maya_actions, "log_sender_expense", tool_input)
+
+
+def test_agent_removes_expenses_by_the_number_it_was_shown(maya_actions, store):
+    expense_id = store.add_expense(SPACE, MAYA, 19_600, "Bio bay kayaks")
+
+    run_tool(maya_actions, "remove_expense", {"expense_number": expense_id})
+
+    assert store.get_trip(SPACE).expenses == []

@@ -25,6 +25,7 @@ Photon only sends messages from TypeScript, so `bridge/` is a thin relay. Everyt
 | `itinerary.py` | How the day-by-day plan reads in the chat. |
 | `booking_links.py` | Google Flights links from each home city and an Airbnb link for the group. |
 | `calendar_link.py` | The "Add to Google Calendar" link sent once the trip is locked in. |
+| `money.py` | How amounts of money read in the chat. |
 | `trip_store.py` | Saving everything to SQLite. |
 | `simulate.py` | A fake group chat in your terminal for testing without phones. |
 

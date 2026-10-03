@@ -8,6 +8,7 @@ import anthropic
 
 from scout.agent_tools import TOOL_DEFINITIONS, run_tool
 from scout.group_summary import DateWindow, format_window, summarize_group
+from scout.money import format_usd
 from scout.trip import IncomingMessage, Member, Trip
 from scout.trip_actions import TripActionError, TripActions
 from scout.trip_store import TripStore
@@ -130,6 +131,14 @@ def _describe_trip(trip: Trip) -> str:
                 f"  {number}. {option.name} (~${option.estimated_cost_per_person_usd})"
                 f" votes: {', '.join(voters) or 'none'}"
             )
+    if trip.expenses:
+        lines.append("Expenses, split evenly across everyone:")
+        lines.extend(
+            f"  #{expense.id} {expense.description}: "
+            f"{format_usd(expense.amount_cents)}, paid by "
+            f"{trip.find_member(expense.payer_phone).label}"
+            for expense in trip.expenses
+        )
     return "\n".join(lines)
 
 

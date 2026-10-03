@@ -182,3 +182,44 @@ def test_booking_links_cover_each_home_city_and_a_stay(locked_in_actions):
 def test_no_booking_links_before_a_destination_is_chosen(maya_actions):
     with pytest.raises(TripActionError, match="destination"):
         maya_actions.send_booking_links()
+
+
+def test_logging_an_expense_confirms_it_in_the_chat(store):
+    store.create_trip(SPACE)
+    store.add_members(SPACE, [MAYA, LEO])
+    store.save_preferences(SPACE, LEO, LEO_PREFERENCES)
+    leo_actions = TripActions(store, SPACE, LEO)
+
+    leo_actions.log_sender_expense(124_000, "Airbnb")
+
+    assert leo_actions.outbox == ["Got it: Airbnb, $1,240, paid by Leo. Split 2 ways."]
+    [expense] = store.get_trip(SPACE).expenses
+    assert (expense.payer_phone, expense.amount_cents) == (LEO, 124_000)
+
+
+def test_an_expense_must_cost_something(maya_actions):
+    with pytest.raises(TripActionError):
+        maya_actions.log_sender_expense(0, "Airbnb")
+
+
+def test_payers_can_remove_their_own_expense(maya_actions, store):
+    maya_actions.log_sender_expense(19_600, "Bio bay kayaks")
+    [expense] = store.get_trip(SPACE).expenses
+
+    maya_actions.remove_expense(expense.id)
+
+    assert store.get_trip(SPACE).expenses == []
+    assert maya_actions.outbox[-1] == "Removed: Bio bay kayaks, $196."
+
+
+def test_nobody_else_can_remove_someones_expense(maya_actions, store):
+    expense_id = store.add_expense(SPACE, LEO, 124_000, "Airbnb")
+
+    with pytest.raises(TripActionError, match="only they can remove it"):
+        maya_actions.remove_expense(expense_id)
+    assert len(store.get_trip(SPACE).expenses) == 1
+
+
+def test_removing_an_expense_that_does_not_exist_is_refused(maya_actions):
+    with pytest.raises(TripActionError, match="no expense #7"):
+        maya_actions.remove_expense(7)

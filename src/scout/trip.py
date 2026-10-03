@@ -7,6 +7,10 @@ from enum import StrEnum
 
 # Matches "@scout", "scout,", "Scout?" but not "scouting".
 SCOUT_MENTION = re.compile(r"\bscout\b", re.IGNORECASE)
+# Matches "$164", "$ 40", "164 dollars", "40 bucks", "12.50 usd".
+MONEY_MENTION = re.compile(
+    r"\$\s?\d|\b\d[\d,]*(\.\d+)?\s?(dollars|bucks|usd)\b", re.IGNORECASE
+)
 
 
 class TripStage(StrEnum):
@@ -34,6 +38,10 @@ class IncomingMessage:
     @property
     def mentions_scout(self) -> bool:
         return SCOUT_MENTION.search(self.text) is not None
+
+    @property
+    def mentions_money(self) -> bool:
+        return MONEY_MENTION.search(self.text) is not None
 
 
 @dataclass(frozen=True)
@@ -112,6 +120,17 @@ class ItineraryDay:
     plan: str
 
 
+@dataclass(frozen=True)
+class Expense:
+    """A shared cost one member paid, split evenly across the whole group."""
+
+    id: int
+    payer_phone: str
+    amount_cents: int
+    # What it was for, e.g. "Airbnb" or "Casa Brisa dinner".
+    description: str
+
+
 @dataclass
 class Trip:
     space_id: str
@@ -123,6 +142,7 @@ class Trip:
     members: list[Member]
     open_poll: Poll | None
     itinerary: list[ItineraryDay]
+    expenses: list[Expense]
 
     def find_member(self, phone: str) -> Member:
         for member in self.members:

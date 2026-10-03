@@ -1,8 +1,10 @@
 """The tools Claude can call, and how each call maps onto a TripAction."""
 
 from datetime import date
+from decimal import Decimal
 from typing import Any
 
+from scout.money import CENTS_PER_DOLLAR
 from scout.trip import DestinationOption, ItineraryDay, PreferenceUpdate
 from scout.trip_actions import TripActionError, TripActions
 
@@ -202,6 +204,53 @@ TOOL_DEFINITIONS = [
             "additionalProperties": False,
         },
     },
+    {
+        "name": "log_sender_expense",
+        "description": (
+            "Log a shared trip cost that the sender of the newest message paid. "
+            "It's split evenly across everyone in the trip. Only log costs the "
+            "sender says they paid themselves."
+        ),
+        "strict": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "amount_usd": {
+                    "type": "number",
+                    "description": "What they paid in US dollars, e.g. 1240 or 164.5.",
+                },
+                "description": {
+                    "type": "string",
+                    "description": (
+                        "What it was for, under 5 words, e.g. 'Airbnb' or "
+                        "'Casa Brisa dinner'."
+                    ),
+                },
+            },
+            "required": ["amount_usd", "description"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "remove_expense",
+        "description": (
+            "Remove an expense the sender logged by mistake. Only the person who "
+            "paid it can remove it. To fix an amount, remove the old expense and "
+            "log the right one."
+        ),
+        "strict": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "expense_number": {
+                    "type": "integer",
+                    "description": "The expense's # as shown in the trip state.",
+                },
+            },
+            "required": ["expense_number"],
+            "additionalProperties": False,
+        },
+    },
 ]
 
 
@@ -223,6 +272,12 @@ def run_tool(actions: TripActions, name: str, tool_input: dict[str, Any]) -> str
             return actions.post_itinerary(_to_itinerary(tool_input))
         case "send_booking_links":
             return actions.send_booking_links()
+        case "log_sender_expense":
+            return actions.log_sender_expense(
+                _to_cents(tool_input["amount_usd"]), tool_input["description"]
+            )
+        case "remove_expense":
+            return actions.remove_expense(tool_input["expense_number"])
         case _:
             raise TripActionError(f"unknown tool {name}")
 
@@ -243,6 +298,14 @@ def _to_itinerary(tool_input: dict[str, Any]) -> list[ItineraryDay]:
         ItineraryDay(day=_parse_date(day["date"]), plan=day["plan"])
         for day in tool_input["days"]
     ]
+
+
+def _to_cents(amount_usd: float) -> int:
+    # Decimal avoids float rounding: 0.29 * 100 is 28.999999999999996.
+    cents = Decimal(str(amount_usd)) * CENTS_PER_DOLLAR
+    if cents != cents.to_integral_value():
+        raise TripActionError(f"{amount_usd} has fractions of a cent")
+    return int(cents)
 
 
 def _parse_date(value: str | None) -> date | None:

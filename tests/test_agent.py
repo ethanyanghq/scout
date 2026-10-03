@@ -4,7 +4,13 @@ from datetime import date, datetime
 from types import SimpleNamespace
 
 from scout.agent import ScoutAgent
-from scout.trip import DateWindow, DestinationOption, IncomingMessage, ItineraryDay
+from scout.trip import (
+    DateWindow,
+    DestinationOption,
+    IncomingMessage,
+    ItineraryDay,
+    PreferenceUpdate,
+)
 
 SPACE = "group-chat-1"
 MAYA = "+15550000001"
@@ -147,3 +153,15 @@ def test_shows_claude_the_locked_in_dates_and_plan(store):
     situation = claude.requests[0]["messages"][0]["content"]
     assert "Trip dates: Mar 14–19 2027" in situation
     assert "Tue 2027-03-16: Waterfall hike in El Yunque" in situation
+
+
+def test_shows_claude_each_expense_with_its_number_and_payer(store):
+    trip, message = maya_says(store, "@scout what have we spent?")
+    store.save_preferences(SPACE, MAYA, PreferenceUpdate(display_name="Maya"))
+    expense_id = store.add_expense(SPACE, MAYA, 19_600, "Bio bay kayaks")
+    claude = ScriptedClaude(response("end_turn", text("$196 so far.")))
+
+    ScoutAgent(claude, store).respond(store.get_trip(SPACE), message)
+
+    situation = claude.requests[0]["messages"][0]["content"]
+    assert f"#{expense_id} Bio bay kayaks: $196, paid by Maya" in situation
