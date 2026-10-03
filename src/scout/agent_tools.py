@@ -251,6 +251,20 @@ TOOL_DEFINITIONS = [
             "additionalProperties": False,
         },
     },
+    {
+        "name": "post_settle_up",
+        "description": (
+            "Post the total shared cost, each person's share, and the fewest "
+            "payments that settle everyone up."
+        ),
+        "strict": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": False,
+        },
+    },
 ]
 
 
@@ -278,6 +292,8 @@ def run_tool(actions: TripActions, name: str, tool_input: dict[str, Any]) -> str
             )
         case "remove_expense":
             return actions.remove_expense(tool_input["expense_number"])
+        case "post_settle_up":
+            return actions.post_settle_up()
         case _:
             raise TripActionError(f"unknown tool {name}")
 

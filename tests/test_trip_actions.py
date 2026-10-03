@@ -223,3 +223,19 @@ def test_nobody_else_can_remove_someones_expense(maya_actions, store):
 def test_removing_an_expense_that_does_not_exist_is_refused(maya_actions):
     with pytest.raises(TripActionError, match="no expense #7"):
         maya_actions.remove_expense(7)
+
+
+def test_settle_up_is_posted_to_the_chat(maya_actions):
+    maya_actions.log_sender_expense(10_000, "Groceries")
+
+    maya_actions.post_settle_up()
+
+    assert maya_actions.outbox[-1] == (
+        "💸 Shared costs: $100, so $50 each. Fewest payments to settle up:\n"
+        "…0002 → …0001 $50"
+    )
+
+
+def test_no_settle_up_before_anyone_logs_an_expense(maya_actions):
+    with pytest.raises(TripActionError, match="nobody has logged an expense"):
+        maya_actions.post_settle_up()

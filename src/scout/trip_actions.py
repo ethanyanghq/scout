@@ -12,6 +12,7 @@ from scout.calendar_link import format_calendar_message
 from scout.group_summary import format_group_summary, summarize_group
 from scout.itinerary import format_itinerary
 from scout.money import format_usd
+from scout.settle_up import format_settle_up
 from scout.trip import DestinationOption, ItineraryDay, PreferenceUpdate, Trip
 from scout.trip_store import TripStore
 
@@ -152,6 +153,13 @@ class TripActions:
             f"Removed: {expense.description}, {format_usd(expense.amount_cents)}."
         )
         return "Expense removed."
+
+    def post_settle_up(self) -> str:
+        trip = self._load_trip()
+        if not trip.expenses:
+            raise TripActionError("nobody has logged an expense yet")
+        self.outbox.append(format_settle_up(trip))
+        return "Settle-up posted."
 
     def _close(self, trip: Trip) -> str:
         result = polls.decide_winner(trip.open_poll)
