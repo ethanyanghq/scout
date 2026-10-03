@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { $ } from "bun";
 
-export const SCOUT_URL = process.env.SCOUT_URL ?? "http://127.0.0.1:8787";
+const DEFAULT_SCOUT_URL = "http://127.0.0.1:8787";
 // Claude reads images up to about this many pixels on the long side; bigger
 // photos only cost more to send.
 const MAX_PHOTO_EDGE_PIXELS = 1568;
@@ -24,8 +24,14 @@ export type IncomingText = {
   photo: IncomingPhoto | null;
 };
 
+// Read on each call, so tests and the end-to-end runner can point the bridge
+// at their own service.
+export function scoutUrl(): string {
+  return process.env.SCOUT_URL ?? DEFAULT_SCOUT_URL;
+}
+
 export async function askScout(text: IncomingText): Promise<string[]> {
-  const response = await fetch(`${SCOUT_URL}/messages`, {
+  const response = await fetch(`${scoutUrl()}/messages`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(text),

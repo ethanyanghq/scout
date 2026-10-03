@@ -18,7 +18,7 @@ import { Spectrum } from "spectrum-ts";
 import { imessage } from "spectrum-ts/providers/imessage";
 import { localIMessage } from "@spectrum-ts/imessage-local";
 import { relayLinqGroupMessages } from "./linq";
-import { SCOUT_URL } from "./scout";
+import { scoutUrl } from "./scout";
 import { relaySpectrumMessages } from "./spectrum";
 import { logOutcome } from "./trace";
 
@@ -27,7 +27,7 @@ if (mode === "linq") {
   await relayLinqGroupMessages(requireSetting("LINQ_API_KEY"));
 } else {
   const app = await connectToIMessage(mode);
-  console.log(`scout bridge is listening for texts, forwarding to ${SCOUT_URL}`);
+  console.log(`scout bridge is listening for texts, forwarding to ${scoutUrl()}`);
   await relaySpectrumMessages(app, logOutcome);
 }
 
