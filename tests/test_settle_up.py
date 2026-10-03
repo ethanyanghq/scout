@@ -21,6 +21,7 @@ def trip_with(members, *expenses):
             for number, (payer, cents, description) in enumerate(expenses, start=1)
         ],
         settlements=[],
+        pending_receipt=None,
     )
 
 

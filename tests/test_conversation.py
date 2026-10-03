@@ -7,13 +7,21 @@ store, polls, and summaries are all real.
 from datetime import date, datetime
 
 from scout.conversation import INTRODUCTION, SNAG_REPLY, handle_message
-from scout.trip import DestinationOption, IncomingMessage, PreferenceUpdate, TripStage
+from scout.trip import (
+    DestinationOption,
+    IncomingMessage,
+    MessagePhoto,
+    PendingReceipt,
+    PreferenceUpdate,
+    TripStage,
+)
 
 SPACE = "group-chat-1"
 MAYA = "+15550000001"
 LEO = "+15550000002"
 PRIYA = "+15550000003"
 EVERYONE = (MAYA, LEO, PRIYA)
+RECEIPT_PHOTO = MessagePhoto("image/jpeg", "cmVjZWlwdA==")
 OPTIONS = [
     DestinationOption("Tulum, Mexico", 900, "Beaches"),
     DestinationOption("San Juan, Puerto Rico", 750, "No passport"),
@@ -36,13 +44,14 @@ class BrokenAgent:
         raise ConnectionError("Claude is unreachable")
 
 
-def send(store, agent, sender, text):
+def send(store, agent, sender, text, photo=None):
     message = IncomingMessage(
         space_id=SPACE,
         sender_phone=sender,
         text=text,
         sent_at=datetime(2026, 10, 2, 9, 0),
         participant_phones=EVERYONE,
+        photo=photo,
     )
     return handle_message(message, store, agent)
 
@@ -204,3 +213,50 @@ def test_price_talk_during_the_vote_is_not_treated_as_an_expense(store):
 
     assert replies == []
     assert agent.messages_seen == []
+
+
+def test_untagged_photos_reach_the_agent_once_a_destination_is_chosen(store):
+    choose_san_juan(store)
+    agent = FakeAgent()
+
+    send(store, agent, PRIYA, "casa brisa dinner 👆", photo=RECEIPT_PHOTO)
+
+    assert agent.messages_seen == ["casa brisa dinner 👆"]
+
+
+def test_untagged_photos_during_the_vote_are_ignored(store):
+    start_voting(store)
+    agent = FakeAgent()
+
+    replies = send(store, agent, PRIYA, "", photo=RECEIPT_PHOTO)
+
+    assert replies == []
+    assert agent.messages_seen == []
+
+
+def test_the_payer_can_confirm_a_receipt_without_tagging_scout(store):
+    choose_san_juan(store)
+    store.save_pending_receipt(SPACE, PendingReceipt(PRIYA, "Casa Brisa", 16_400))
+    agent = FakeAgent()
+
+    send(store, agent, PRIYA, "yep, all 3")
+
+    assert agent.messages_seen == ["yep, all 3"]
+
+
+def test_only_the_payer_confirms_their_receipt(store):
+    choose_san_juan(store)
+    store.save_pending_receipt(SPACE, PendingReceipt(PRIYA, "Casa Brisa", 16_400))
+    agent = FakeAgent()
+
+    replies = send(store, agent, LEO, "yep")
+
+    assert replies == []
+
+
+def test_the_chat_log_notes_when_a_photo_was_sent(store):
+    choose_san_juan(store)
+
+    send(store, FakeAgent(replies=[]), PRIYA, "casa brisa dinner", photo=RECEIPT_PHOTO)
+
+    assert store.recent_messages(SPACE, limit=1)[0].text == "[photo] casa brisa dinner"

@@ -85,3 +85,16 @@ def test_agent_removes_expenses_by_the_number_it_was_shown(maya_actions, store):
     run_tool(maya_actions, "remove_expense", {"expense_number": expense_id})
 
     assert store.get_trip(SPACE).expenses == []
+
+
+def test_agent_receipt_totals_and_dates_are_read_back(maya_actions, store):
+    tool_input = {
+        "merchant": "Casa Brisa",
+        "purchased_on": "2027-03-16",
+        "total_usd": 164,
+    }
+
+    run_tool(maya_actions, "ask_to_confirm_receipt", tool_input)
+
+    assert store.get_trip(SPACE).pending_receipt.total_cents == 16_400
+    assert "Casa Brisa, Mar 16, $164 total" in maya_actions.outbox[0]

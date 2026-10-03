@@ -9,6 +9,8 @@ from scout.trip import (
     DestinationOption,
     IncomingMessage,
     ItineraryDay,
+    MessagePhoto,
+    PendingReceipt,
     PreferenceUpdate,
 )
 
@@ -40,6 +42,12 @@ def text(value):
 
 def tool_call(name, tool_input, call_id="call_1"):
     return SimpleNamespace(type="tool_use", id=call_id, name=name, input=tool_input)
+
+
+def situation_text(claude):
+    """The words of scout's first prompt, without any attached photo."""
+    blocks = claude.requests[0]["messages"][0]["content"]
+    return next(block["text"] for block in blocks if block["type"] == "text")
 
 
 def maya_says(store, words):
@@ -129,7 +137,7 @@ def test_tells_claude_whether_it_was_tagged(store):
 
     ScoutAgent(claude, store).respond(trip, message)
 
-    situation = claude.requests[0]["messages"][0]["content"]
+    situation = situation_text(claude)
     assert "It tags or addresses you." in situation
     assert "[…0001] @scout hi" in situation
 
@@ -150,7 +158,7 @@ def test_shows_claude_the_locked_in_dates_and_plan(store):
 
     ScoutAgent(claude, store).respond(store.get_trip(SPACE), message)
 
-    situation = claude.requests[0]["messages"][0]["content"]
+    situation = situation_text(claude)
     assert "Trip dates: Mar 14–19 2027" in situation
     assert "Tue 2027-03-16: Waterfall hike in El Yunque" in situation
 
@@ -163,7 +171,7 @@ def test_shows_claude_each_expense_with_its_number_and_payer(store):
 
     ScoutAgent(claude, store).respond(store.get_trip(SPACE), message)
 
-    situation = claude.requests[0]["messages"][0]["content"]
+    situation = situation_text(claude)
     assert f"#{expense_id} Bio bay kayaks: $196, paid by Maya" in situation
 
 
@@ -175,5 +183,35 @@ def test_shows_claude_the_payments_still_owed(store):
 
     ScoutAgent(claude, store).respond(store.get_trip(SPACE), message)
 
-    situation = claude.requests[0]["messages"][0]["content"]
+    situation = situation_text(claude)
     assert "Payments still owed:\n  …0001 → …0002 $50" in situation
+
+
+def test_a_photo_is_shown_to_claude_before_the_situation(store):
+    trip, _ = maya_says(store, "casa brisa dinner")
+    receipt = MessagePhoto("image/jpeg", "cmVjZWlwdA==")
+    message = IncomingMessage(
+        SPACE, MAYA, "casa brisa dinner", datetime(2026, 10, 2, 9, 0), photo=receipt
+    )
+    claude = ScriptedClaude(response("end_turn", text("NO_REPLY")))
+
+    ScoutAgent(claude, store).respond(trip, message)
+
+    photo, situation = claude.requests[0]["messages"][0]["content"]
+    assert photo["source"] == {
+        "type": "base64",
+        "media_type": "image/jpeg",
+        "data": "cmVjZWlwdA==",
+    }
+    assert "It comes with the photo above." in situation["text"]
+
+
+def test_shows_claude_a_receipt_waiting_for_confirmation(store):
+    trip, message = maya_says(store, "yep")
+    store.save_pending_receipt(SPACE, PendingReceipt(MAYA, "Casa Brisa", 16_400))
+    claude = ScriptedClaude(response("end_turn", text("ok")))
+
+    ScoutAgent(claude, store).respond(store.get_trip(SPACE), message)
+
+    situation = situation_text(claude)
+    assert "Receipt waiting for …0001 to confirm: Casa Brisa, $164" in situation

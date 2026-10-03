@@ -5,6 +5,7 @@ from scout.trip import (
     DateWindow,
     DestinationOption,
     Expense,
+    PendingReceipt,
     PreferenceUpdate,
     Settlement,
     TripStage,
@@ -155,3 +156,21 @@ def test_a_members_nessie_account_is_saved(store):
     store.save_nessie_account(SPACE, MAYA, "account-1")
 
     assert store.get_trip(SPACE).find_member(MAYA).nessie_account_id == "account-1"
+
+
+def test_a_newer_receipt_replaces_the_one_waiting(store):
+    store.create_trip(SPACE)
+    store.save_pending_receipt(SPACE, PendingReceipt(MAYA, "Casa Brisa", 16_400))
+
+    store.save_pending_receipt(SPACE, PendingReceipt(LEO, "Bodega", 1_250))
+
+    assert store.get_trip(SPACE).pending_receipt == PendingReceipt(LEO, "Bodega", 1_250)
+
+
+def test_a_cleared_receipt_is_gone(store):
+    store.create_trip(SPACE)
+    store.save_pending_receipt(SPACE, PendingReceipt(MAYA, "Casa Brisa", 16_400))
+
+    store.clear_pending_receipt(SPACE)
+
+    assert store.get_trip(SPACE).pending_receipt is None
