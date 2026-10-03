@@ -11,7 +11,13 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 
-from scout.nessie import STARTING_BALANCE_USD, NessieBank, NessieError
+from scout.nessie import (
+    STARTING_BALANCE_USD,
+    NessieBank,
+    NessieError,
+    NessieKeyRejected,
+    connect_bank,
+)
 
 API_KEY = "test-key"
 
@@ -136,3 +142,58 @@ def test_ids_named_id_instead_of_underscore_id_still_work(bank, nessie):
     nessie.canned_reply = (201, {"objectCreated": {"id": "uuid-7"}})
 
     assert bank.move_money("a", "b", 100) == ("uuid-7", "uuid-7")
+
+
+MISSING_FIELDS = (400, "2 validation errors for CustomerCreate")
+
+
+def test_a_good_key_passes_the_check_without_creating_anything(bank, nessie):
+    nessie.canned_reply = MISSING_FIELDS
+
+    bank.check_key()
+
+    [request] = nessie.requests
+    assert (request["path"], request["body"]) == ("/customers", {})
+
+
+def test_a_bad_key_fails_the_check(bank, nessie):
+    nessie.canned_reply = (401, "Invalid API key.")
+
+    with pytest.raises(NessieKeyRejected):
+        bank.check_key()
+
+
+def test_a_down_nessie_fails_the_check_without_blaming_the_key(bank, nessie):
+    nessie.canned_reply = (502, {"message": "Internal server error"})
+
+    with pytest.raises(NessieError) as error:
+        bank.check_key()
+    assert not isinstance(error.value, NessieKeyRejected)
+
+
+def test_scout_will_not_start_with_a_rejected_key(nessie, monkeypatch):
+    monkeypatch.setenv("NESSIE_API_KEY", "wrong-key")
+    nessie.canned_reply = (401, "Invalid API key.")
+
+    with pytest.raises(NessieKeyRejected, match="Fix it in .env"):
+        connect_bank(nessie.url)
+
+
+def test_scout_connects_with_a_good_key(nessie, monkeypatch):
+    monkeypatch.setenv("NESSIE_API_KEY", API_KEY)
+    nessie.canned_reply = MISSING_FIELDS
+
+    assert connect_bank(nessie.url) is not None
+
+
+def test_scout_still_starts_when_nessie_is_down(nessie, monkeypatch):
+    monkeypatch.setenv("NESSIE_API_KEY", API_KEY)
+    nessie.stop()
+
+    assert connect_bank(nessie.url) is not None
+
+
+def test_without_a_key_payments_are_simulated(monkeypatch):
+    monkeypatch.delenv("NESSIE_API_KEY", raising=False)
+
+    assert connect_bank() is None
