@@ -11,10 +11,6 @@
 //                                 PHOTON_PROJECT_ID and PHOTON_PROJECT_SECRET.
 //   SCOUT_URL=http://127.0.0.1:8787   Where the Python service is listening.
 
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { $ } from "bun";
 import {
   Spectrum,
   UnsupportedError,
@@ -24,25 +20,7 @@ import {
 } from "spectrum-ts";
 import { imessage } from "spectrum-ts/providers/imessage";
 import { localIMessage } from "@spectrum-ts/imessage-local";
-
-const SCOUT_URL = process.env.SCOUT_URL ?? "http://127.0.0.1:8787";
-// Claude reads images up to about this many pixels on the long side; bigger
-// photos only cost more to send.
-const MAX_PHOTO_EDGE_PIXELS = 1568;
-
-type IncomingPhoto = {
-  media_type: "image/jpeg";
-  base64_data: string;
-};
-
-type IncomingText = {
-  space_id: string;
-  sender_phone: string;
-  text: string;
-  sent_at: string;
-  participant_phones: string[];
-  photo: IncomingPhoto | null;
-};
+import { askScout, SCOUT_URL, toJpeg } from "./scout";
 
 type PhotoAttachment = Extract<Content, { type: "attachment" }>;
 
@@ -69,7 +47,7 @@ for await (const [space, message] of app.messages) {
       text: parts.text,
       sent_at: message.timestamp.toISOString(),
       participant_phones: await listParticipants(space, message),
-      photo: parts.photo ? await toJpeg(parts.photo) : null,
+      photo: parts.photo ? await toJpeg(await parts.photo.read()) : null,
     });
     for (const reply of replies) {
       await space.send(reply);
@@ -120,36 +98,6 @@ function readableParts(content: Content): ReadableParts | null {
 
 function isPhoto(content: Content): content is PhotoAttachment {
   return content.type === "attachment" && content.mimeType.startsWith("image/");
-}
-
-// iPhones send HEIC, which Claude can't read, so every photo goes through
-// macOS's built-in `sips` to become a downsized JPEG.
-async function toJpeg(photo: PhotoAttachment): Promise<IncomingPhoto> {
-  const folder = await mkdtemp(join(tmpdir(), "scout-photo-"));
-  try {
-    // sips reads the format from the file's contents, so the name doesn't matter.
-    const original = join(folder, "original");
-    const converted = join(folder, "photo.jpg");
-    await writeFile(original, await photo.read());
-    await $`sips -s format jpeg -Z ${MAX_PHOTO_EDGE_PIXELS} ${original} --out ${converted}`.quiet();
-    const jpeg = await readFile(converted);
-    return { media_type: "image/jpeg", base64_data: jpeg.toString("base64") };
-  } finally {
-    await rm(folder, { recursive: true, force: true });
-  }
-}
-
-async function askScout(text: IncomingText): Promise<string[]> {
-  const response = await fetch(`${SCOUT_URL}/messages`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(text),
-  });
-  if (!response.ok) {
-    throw new Error(`scout returned ${response.status}: ${await response.text()}`);
-  }
-  const { replies } = (await response.json()) as { replies: string[] };
-  return replies;
 }
 
 // Lets scout count group members who haven't texted yet. Only cloud group
