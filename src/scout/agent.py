@@ -9,7 +9,7 @@ import anthropic
 from scout.agent_tools import TOOL_DEFINITIONS, run_tool
 from scout.group_summary import DateWindow, format_window, summarize_group
 from scout.money import format_usd
-from scout.nessie import NessieBank
+from scout.outside_services import NO_OUTSIDE_SERVICES, OutsideServices
 from scout.settle_up import plan_payments
 from scout.trip import IncomingMessage, Member, Trip
 from scout.trip_actions import TripActionError, TripActions
@@ -37,16 +37,16 @@ class ScoutAgent:
         self,
         client: anthropic.Anthropic,
         store: TripStore,
-        bank: NessieBank | None = None,
+        services: OutsideServices = NO_OUTSIDE_SERVICES,
     ):
         self._client = client
         self._store = store
-        self._bank = bank
+        self._services = services
 
     def respond(self, trip: Trip, message: IncomingMessage) -> list[str]:
         """Returns the texts scout should send in reply, possibly none."""
         actions = TripActions(
-            self._store, trip.space_id, message.sender_phone, self._bank
+            self._store, trip.space_id, message.sender_phone, self._services
         )
         conversation = [
             {"role": "user", "content": self._show_situation(trip, message)}
