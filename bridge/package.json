@@ -1,0 +1,20 @@
+{
+  "name": "scout-bridge",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "@spectrum-ts/imessage-local": "^12.10.1",
+    "spectrum-ts": "^12.10.1"
+  },
+  "scripts": {
+    "start": "bun run index.ts",
+    "typecheck": "tsc --noEmit"
+  }
+}
