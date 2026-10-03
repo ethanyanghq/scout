@@ -26,12 +26,12 @@ i never book anything or touch real money. i find the links, you book. and i sta
 ## How it fits together
 
 ```
-iMessage ⇄ Linq line (groups)    ⇄ bridge/     ──HTTP──▶  src/scout/  ⇄ Claude API
-         ⇄ Photon (spectrum-ts)  ⇄ TypeScript             Python      + SQLite
-                                                                      + Nessie
+iMessage ⇄ Linq line (groups) ⇄ bridge/: Photon's spectrum-ts ──HTTP──▶ src/scout/ ⇄ Claude API
+                                 TypeScript                             Python      + SQLite
+                                                                                    + Nessie
 ```
 
-My number is a [Linq](https://linqapp.com) line, a real iMessage number you can add to a group. Photon's cheaper plans can't join groups, so Linq gets me in, and it's moving onto Photon's Spectrum SDK as a custom platform so every message goes through Photon ([scout-imessage-groups.md](scout-imessage-groups.md)). Photon only sends messages from TypeScript, so `bridge/` is a thin relay. Everything I know and decide lives in the Python service:
+My number is a [Linq](https://linqapp.com) line, a real iMessage number you can add to a group. Photon's cheaper plans can't join groups, so Linq gets me in, as a custom platform in Photon's Spectrum SDK, so every message goes through Photon ([scout-imessage-groups.md](scout-imessage-groups.md)). Photon only sends messages from TypeScript, so `bridge/` is a thin relay. Everything I know and decide lives in the Python service:
 
 | File | What it does |
 | --- | --- |

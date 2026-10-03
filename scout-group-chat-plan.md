@@ -3,7 +3,7 @@
 | | |
 | --- | --- |
 | **Goal** | scout lives in real iMessage group chats through a Linq line running inside Photon's Spectrum SDK. Teammates and their AI agents build and test group chat features, including tapbacks, threaded replies and link cards, without phones, and the demo group can be set up in minutes. |
-| **Status** | Milestone 1 is built, apart from running the two Claude scripts against the real API. Milestones 2 and 3 aren't started. Last updated October 3, 2026. |
+| **Status** | Milestones 1 and 2 are built. What's left of them needs a real Linq line, phones or a Claude key: recording real webhooks, testing the free line, running the journey in a real group, and running the two Claude scripts. Milestone 3 isn't started. Last updated October 3, 2026. |
 | **Design** | [scout-imessage-groups.md](scout-imessage-groups.md): why Linq, how it plugs into Spectrum, the developer console |
 | **How to use it** | [DEVELOPING.md](DEVELOPING.md): what exists today, and how to test without phones |
 | **Rest of the demo** | [TODO.md](TODO.md) |
@@ -51,13 +51,13 @@ Shipped when a real iMessage group runs the whole journey through Photon's Spect
 
 The console plugs into the bridge's existing Spectrum loop, so milestone 1 doesn't wait for this one, and its scripts then check that the switch broke nothing.
 
-- [ ] Record real Linq webhooks as test fixtures: a group text, a photo with a caption, a tapback, a threaded reply, and someone joining. Swap every real phone number for a 555 number before committing.
-- [ ] Linq as a Spectrum platform (`definePlatform("linq")`): group messages and photos in, text out by chat ID, and the group's members. Tested against the fixtures.
-- [ ] One message loop in `bridge/index.ts` for every provider, with `IMESSAGE_MODE` choosing the providers. Today's behavior stays: private chats ignored, repeat deliveries skipped, one message at a time, and one failed message never stops the bridge.
-- [ ] The console scripts from milestone 1 still pass after the switch.
+- [ ] Record real Linq webhooks as test fixtures: a group text, a photo with a caption, a tapback, a threaded reply, and someone joining. Swap every real phone number for a 555 number before committing. Until then, the tests use the payload shapes from Linq's docs.
+- [x] Linq as a Spectrum platform (`definePlatform("linq")`): group messages and photos in, text out by chat ID, and the group's members. Tested against a stand-in for Linq's API.
+- [x] One message loop in `bridge/index.ts` for every provider, with `IMESSAGE_MODE` choosing the providers. Today's behavior stays: private chats ignored, repeat deliveries skipped, one message at a time, and one failed message never stops the bridge.
+- [x] The console scripts from milestone 1 still pass after the switch.
 - [ ] Find out what Linq's free line supports (tapbacks, threaded replies, typing, effects, link cards, polls, renaming the group) and record the answers in the design doc's open questions.
-- [ ] Events in, actions out: scout receives tapbacks and threaded replies, and sends tapbacks and threaded replies. Each lands with its console display (`devchat react`, `devchat reply`) and a script.
-- [ ] Link cards: scout can send one, and the console previews it. The preview builds the card from the page's Open Graph tags, saves the card image to a file, and warns about anything Linq would refuse (a link sharing its message, a non-HTTPS or over-long URL, no title or image). Add a script that checks a card.
+- [x] Events in, actions out: scout receives tapbacks and threaded replies, and sends tapbacks and threaded replies. Each lands with its console display (`devchat react`, `devchat reply`) and a script. Votes use them first: a vote by number gets a 👍, a 👍 or ❤️ on a poll option is a vote, its confirmation is threaded under the option, and a threaded reply under an option reaches Claude.
+- [x] Link cards: scout can send one, and the console previews it. The preview builds the card from the page's Open Graph tags, saves the card image to a file, and warns about anything Linq would refuse (a non-HTTPS or over-long URL, a page that won't load, no title or image). A link is always its own action, so it never shares its message. The calendar and directions links go out as cards.
 - [ ] Run the real-group journey (TODO, First real run) again on the new connector.
 
 ### 3. Demo group
@@ -75,7 +75,7 @@ Shipped when the demo phones can be set up for scout in a few minutes, a rehears
 ## Still open
 
 - **Free-line features, payload shapes and photo format.** These get answered by milestone 2's first items. The full list is in the design doc's open questions.
-- **Where scout's web pages are hosted.** Link cards need a public HTTPS URL, and so would the album. This is tracked in TODO's Decide section.
+- **Where scout's web pages are hosted.** Link cards need a public HTTPS URL, and so would the album. This is tracked in TODO's Decide section. The console's preview of the calendar link makes this more pressing: Google's page titles the card "Google Calendar - Sign in to Access & Edit Your Schedule", which reads like a login.
 - **Private chats (GC-6).** Photon's cloud line, or the Linq line's private chats.
 
 ## Later, not in this plan

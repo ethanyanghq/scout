@@ -77,21 +77,25 @@ Once Linq is a platform, `bridge/index.ts` goes back to one `for await (… of a
 
 ### 3. Bridge to scout: events in, actions out
 
-Today the bridge posts one text (and maybe a photo) and gets back a list of strings. That can't carry tapback votes, threaded replies or anything else iMessage does. Each Spectrum message has an ID, so the bridge and scout exchange events and actions that refer to messages by ID:
+Built. A list of strings couldn't carry tapback votes, threaded replies or anything else iMessage does, so the bridge sends scout events and gets back actions that refer to messages by the line's IDs:
 
 ```json
-{"event": "message", "chat": "c1", "id": "m42", "from": "+15551234567", "text": "2", "reply_to": null}
-{"event": "reaction", "chat": "c1", "on": "m40", "from": "+15551234567", "tapback": "like", "removed": false}
-{"event": "member_joined", "chat": "c1", "member": "+15557654321"}
-{"action": "say", "text": "Got it, Leo votes San Juan", "reply_to": "m42"}
-{"action": "react", "on": "m42", "tapback": "like"}
-{"action": "say", "text": "🎉 San Juan wins!", "effect": "confetti"}
-{"action": "link", "url": "https://scout.example/trips/c1/poll"}
+POST /messages   {"space_id": "c1", "sender_phone": "+15551234567", "text": "2", "message_id": "m42", "reply_to_text": null, ...}
+POST /reactions  {"space_id": "c1", "sender_phone": "+15551234567", "tapback": "like", "message_id": "m40", "message_text": "2. San Juan, Puerto Rico (~$750/person est.): No passport needed", ...}
+
+{"actions": [
+  {"type": "react", "message_id": "m42", "tapback": "like", "fallback_text": "Got it, Leo → San Juan, Puerto Rico (1 of 3 voted)"},
+  {"type": "say", "text": "Got it, Maya → San Juan, Puerto Rico (2 of 3 voted)", "reply_to": "m40"},
+  {"type": "link", "url": "https://calendar.google.com/calendar/render?..."}
+]}
 ```
 
+- **Messages are found by their words.** A tapback arrives with the text of the message it's on, and a threaded reply with the text of what it answers. A poll option's text says which option it is, so nothing needs remembering between messages or restarts. The bridge finds the text among the messages it has seen, or asks the line through Spectrum's `getMessage` (Linq's API, or the console's transcript).
+- **Every action has a plain-text fallback.** Spectrum resolves a send to nothing when a line can't do it, and the bridge then sends the text version.
+- **Not built yet:** message effects, member joins and leaves, and typing. Each lands when a feature needs it.
 - **Capabilities, later.** Once two lines in use support different actions (local mode has no reactions, for example), the bridge will tell scout which actions work so the agent only offers those. Linq and the developer console support the same actions, so this waits.
 - **Link cards.** A `link` action sends one URL as a message of its own, which Linq requires. iMessage shows it as a card built from the page's Open Graph tags, and tapping it opens the page in Safari. iMessage never runs HTML or JavaScript in the chat, so anything interactive (a live poll board, the itinerary with a map, the album) lives on a page scout hosts. The card is a snapshot from when it was sent, so scout sends a new link to show new state.
-- **The agent never writes this format.** Each action is an agent tool (`say`, `react`, `reply_to`), and the bridge turns each into one Spectrum `send`.
+- **The agent never writes this format.** scout's code builds the actions (`src/scout/outgoing.py`), and the bridge turns each into one Spectrum `send`.
 - **Typing** has to start before scout's reply is ready, so it needs either a streamed response or a second call from the service. Decide this when building it.
 
 ### 4. Testing without phones: the developer console
@@ -123,7 +127,7 @@ expect card title ~ "Tulum"
 - **Messages are named, never numbered.** A script points at `scout.last` or a label, because message IDs change between runs.
 - **`expect` checks the trip and scout's replies.** Claude's wording changes between runs, so scripts check the trip's state, a word a reply must contain (`~`), or a link card's fields, never whole replies.
 - **Two ways to run them.** `devchat run <script>` replays a script and prints the transcript. `bun run e2e` runs every script in `bridge/e2e/` against a throwaway service, as the E2E tests for the critical user journeys in `AGENTS.md`. It's separate from `bun test`, so the fast tests stay fast and free. Scripts call the real Claude API, so seeded stages also keep them short and cheap.
-- **Built so far.** Messages, photos, `expect scout`, `expect state` and the seeded stages. Tapbacks, threaded replies and link card checks come with events in, actions out.
+- **Built.** Messages, tapbacks, threaded replies, photos, link card previews, the seeded stages, and checks on replies, tapbacks, threads, cards and state. DEVELOPING.md lists every script line.
 
 #### One command at a time, for agents
 
@@ -132,7 +136,7 @@ The same steps also run as separate shell commands, so an AI agent can explore w
 ```sh
 devchat start maya leo priya --from poll-open
 devchat say leo "2"
-devchat react priya scout.last like
+devchat react priya like scout.last
 devchat state          # the trip: stage, members, preferences, poll and votes, expenses
 devchat transcript
 devchat reset          # clears this chat's trip, without deleting all of scout.db
@@ -144,19 +148,21 @@ devchat reset          # clears this chat's trip, without deleting all of scout.
 
 When scout sends a link, the console builds the card the way Linq does: from `og:title`, `og:description` and `og:image`, then Twitter Card tags, then the page's `<title>` and first image. It prints the card's text, saves the card image as a file a person or agent can open, and warns about anything Linq would refuse or show badly:
 
-- the link shares its message with text or other parts;
 - the URL isn't HTTPS, or is longer than 2,048 characters;
-- the page has no title or no image.
+- the page doesn't load, or has no title or no image.
+
+A link is always its own action, so it never shares its message. Here's the console's preview of the calendar link scout sends after a vote:
 
 ```
-scout [m12] link card  http://127.0.0.1:8787/trips/c1/poll
-  title        Tulum wins 🌴
-  description  2 of 3 votes · Mar 14–20 · ~$900/person
-  image        .devchat/cards/m12.png (1200×630)
-  ⚠ Not HTTPS: Linq only builds previews for https:// links.
+[m13] scout: 🔗 link card  https://calendar.google.com/calendar/render?action=TEMPLATE&...
+       title        Google Calendar - Sign in to Access & Edit Your Schedule
+       description  (none)
+       image        bridge/.devchat/cards/devchat-78599650-m13.png
 ```
 
-In development, scout's pages are served by the local service, so cards and the pages behind them can be built and checked before any public hosting exists. The developer opens the URL in a browser to try the page itself.
+The preview caught a real problem: Google's page makes the card read like a login. A page of scout's own would fix it (see open questions).
+
+Once scout serves its own pages, they can come from the local service in development, so cards and the pages behind them can be built and checked before any public hosting exists.
 
 **Nothing ships that the console can't show.** Each new action lands together with how the console displays it and a script that uses it.
 
@@ -201,7 +207,7 @@ The milestones and their checklist are in [scout-group-chat-plan.md](scout-group
 ## Open questions to test
 
 - **Free-line features.** Do reactions, threaded replies, typing, polls, effects and link cards work on Linq's free line, or only on paid lines? Can scout rename the group and set its photo?
-- **Hosting scout's pages.** Link cards need a public HTTPS URL, but the bridge and service run on a Mac. Should that be a tunnel from the Mac, or a separate host?
+- **Hosting scout's pages.** Link cards need a public HTTPS URL, but the bridge and service run on a Mac. Should that be a tunnel from the Mac, or a separate host? The calendar link's card reads "Google Calendar - Sign in to Access & Edit Your Schedule", so a page of scout's own would help the demo too.
 - **Payload shapes.** What do `reaction.added` and `participant.added` look like, and does `message.received` say which message it replies to? Record real payloads as test fixtures.
 - **Photo format.** Do iPhone photos arrive from Linq as HEIC, or already as JPEG?
 - **Spectrum events.** Can a custom platform raise member joins and leaves, or only messages?
