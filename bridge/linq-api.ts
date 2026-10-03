@@ -34,5 +34,7 @@ export async function callLinq(
   if (!response.ok) {
     throw new LinqApiError(path, response.status, await response.text());
   }
-  return response.json();
+  // Some calls, such as sharing a contact card, answer with no body.
+  const text = await response.text();
+  return text ? JSON.parse(text) : null;
 }
