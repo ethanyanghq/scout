@@ -15,12 +15,12 @@ import {
   type ProviderMessageRecord,
 } from "spectrum-ts/authoring";
 import z from "zod";
+import { LINQ_API_URL, callLinq, type LinqApi, type LinqHandle } from "./linq-api";
 import { threadedReplySchema } from "./spectrum";
 import { isTapback, tapbackEmoji, tapbackNamed } from "./tapbacks";
 import { isSkipped, logOutcome, type Skipped } from "./trace";
 
 const PLATFORM = "linq";
-const LINQ_API_URL = "https://api.linqapp.com/api/partner/v3";
 export const WEBHOOK_PORT = 8788;
 const WEBHOOK_PATH = "/linq-events";
 // Where `linq webhooks listen --forward-to` sends Linq's events.
@@ -34,8 +34,6 @@ export type LinqEvent = {
 
 // The real API and webhook port unless a test stands in for them.
 export type LinqConnection = { apiKey: string; apiUrl?: string; webhookPort?: number };
-
-type LinqHandle = { handle: string; is_me: boolean; status: string };
 
 type LinqPart =
   | { type: "text"; value: string }
@@ -198,8 +196,6 @@ function receiveWebhookEvents(
   return () => server.stop(true);
 }
 
-type LinqApi = { apiKey: string; apiUrl: string };
-
 // Lets scout count group members who haven't texted yet.
 async function listMembers(api: LinqApi, chatId: string): Promise<{ id: string }[]> {
   const chat = (await callLinq(api, `/chats/${chatId}`)) as { handles: LinqHandle[] };
@@ -254,9 +250,11 @@ async function sendParts(
   threadUnder: string | null = null,
 ): Promise<ProviderMessageRecord> {
   const sent = (await callLinq(api, `/chats/${chatId}/messages`, {
-    message: {
-      parts,
-      ...(threadUnder ? { reply_to: { message_id: threadUnder, part_index: 0 } } : {}),
+    body: {
+      message: {
+        parts,
+        ...(threadUnder ? { reply_to: { message_id: threadUnder, part_index: 0 } } : {}),
+      },
     },
   })) as { message: { id: string } };
   return { id: sent.message.id, content, space: { id: chatId }, timestamp: new Date() };
@@ -269,25 +267,15 @@ async function sendTapback(
 ): Promise<ProviderMessageRecord> {
   const tapback = tapbackNamed(content.emoji);
   if (!tapback) throw UnsupportedError.content("reaction", PLATFORM, "scout only sends tapbacks");
-  await callLinq(api, `/messages/${content.target.id}/reactions`, { operation: "add", type: tapback });
+  await callLinq(api, `/messages/${content.target.id}/reactions`, {
+    body: { operation: "add", type: tapback },
+  });
   return {
     id: `${content.target.id}:${tapback}`,
     content,
     space: { id: chatId },
     timestamp: new Date(),
   };
-}
-
-async function callLinq(api: LinqApi, path: string, body?: object): Promise<unknown> {
-  const response = await fetch(`${api.apiUrl}${path}`, {
-    method: body ? "POST" : "GET",
-    headers: { Authorization: `Bearer ${api.apiKey}`, "Content-Type": "application/json" },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  if (!response.ok) {
-    throw new Error(`Linq ${path} returned ${response.status}: ${await response.text()}`);
-  }
-  return response.json();
 }
 
 async function download(url: string): Promise<Buffer> {
