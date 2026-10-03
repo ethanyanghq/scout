@@ -38,7 +38,7 @@ Follow the checklist in [scout-group-chat-plan.md](scout-group-chat-plan.md). Th
 ## 5. Decide
 
 - [ ] The shared trip album (AL-1, AL-2): cut it from the demo, or build it? It isn't part of the §11 bar, and building it means hosting and storage. If it's cut, take it out of the script and the journey page.
-- [ ] Where scout's web pages are hosted. Link cards need a public HTTPS URL, and so would the album: a tunnel from the demo Mac, or a separate host ([scout-imessage-groups.md](scout-imessage-groups.md), Open questions)?
+- [ ] Where scout's web pages are hosted. Link cards need a public HTTPS URL, and so would the album: a tunnel from the demo Mac, or a separate host ([scout-imessage-groups.md](scout-imessage-groups.md), Open questions)? Today the calendar link's card is titled "Google Calendar - Sign in to Access & Edit Your Schedule", which a page of scout's own would replace.
 
 ## 6. Script and rehearsal
 

@@ -14,15 +14,15 @@ Several tools are planned but not built yet. **If a tool is marked planned, it d
 | Tool | Status | Today |
 | --- | --- | --- |
 | Python service and TypeScript bridge | Built | |
-| Linq group chats (`IMESSAGE_MODE=linq`) | Built, beside Spectrum rather than inside it | |
+| Linq group chats (`IMESSAGE_MODE=linq`), as a Spectrum platform | Built | |
 | Scripted chats with `scout-simulate` | Built | |
 | Calling the service with `curl` | Built | |
 | `bun run dev`: one command for everything | Built | |
 | Event trace: one bridge log line per message | Built | |
 | Developer console (`devchat`), scripts and `bun run e2e` | Built. Photos convert only on a Mac and can't have a caption yet. | |
 | Seeded stages and resetting one chat | Built | |
-| Linq as a Spectrum platform | Planned (plan, milestone 2) | The Linq relay in `bridge/linq.ts` |
-| Tapbacks, threaded replies, effects and link cards | Planned (plan, milestone 2) | Text and photos only |
+| Tapbacks, threaded replies and link cards, with console previews | Built, but only tested against a stand-in for Linq's API | |
+| Message effects (confetti) | Planned (design doc, events in, actions out) | Plain text |
 | Demo group commands | Planned (plan, milestone 3) | [Set up the demo group by hand](#set-up-the-demo-group) |
 
 When a pull request ships one of these, it updates this table and the instructions below.
@@ -33,16 +33,20 @@ When a pull request ships one of these, it updates this table and the instructio
 iPhone in the group
   → Linq (scout's number)
   → linq webhooks listen, which relays to the bridge at 127.0.0.1:8788/linq-events
-  → bridge/ (TypeScript), which posts to the service at 127.0.0.1:8787/messages
+  → bridge/linq.ts, a Spectrum platform, so the message goes through Photon's SDK
+  → bridge/spectrum.ts, the one relay loop, which posts to the service:
+      a message to 127.0.0.1:8787/messages, a tapback to /reactions
   → src/scout/conversation.py decides what to do
-  ← the replies, a list of texts (empty means scout stays quiet)
-  ← the bridge sends each one back to the group through Linq
+  ← actions (src/scout/outgoing.py): say (maybe threaded), react, or link
+  ← the relay performs each one through Spectrum and Linq
 ```
 
-- **One message at a time.** The bridge waits for scout's replies before reading the next message, so two votes can't race.
+- **One message at a time.** The bridge waits for scout's actions before reading the next message, so two votes can't race.
+- **Actions fall back to text.** If a line can't send a tapback, a threaded reply or a link card, or the bridge can't find the message it targets, the plain-text version goes instead.
 - **The bridge drops** private chats (in Linq mode), scout's own messages, messages with nothing to read (stickers, voice memos) and repeat deliveries.
 - **The bridge logs one line per message**: `handled` with the reply count and time, `skipped` with the reason, or `failed` with the error.
-- **The service decides whether to speak** (`conversation.py`). The first message in a chat gets the introduction. A plain vote ("2") or a pick of a nearby place is handled in code. Tagged messages, and untagged ones at certain stages, go to Claude. Everything else gets no reply.
+- **The service decides whether to speak** (`conversation.py`). The first message in a chat gets the introduction. A plain vote ("2"), a 👍 or ❤️ on a poll option, and a pick of a nearby place are handled in code. Tagged messages, threaded replies under a poll option, and untagged messages at certain stages go to Claude. Everything else gets no reply.
+- **Votes stay quiet.** A vote by number gets a 👍 tapback, and a tapback vote gets a reply threaded under the option, instead of a new line in the chat.
 - **Each chat is one trip**, saved in `scout.db` under the chat's ID (`space_id`).
 
 ## Test a change without phones
@@ -65,14 +69,18 @@ The console plays a whole group through the real bridge and the running service,
 bun run devchat start maya leo priya --from poll-open   # a new chat, starting at the open poll
 bun run devchat say maya 2                              # prints scout's replies once it's done
 bun run devchat say leo "@scout is tulum too far?"
+bun run devchat react priya like "2. San Juan"          # a tapback on scout's message with those words
+bun run devchat reply maya "2. San Juan" this one!      # a reply threaded under it
 bun run devchat photo leo receipt.jpg                   # Mac only
 bun run devchat transcript
 bun run devchat state                                   # the trip, as JSON
 bun run devchat reset                                   # clears this chat's trip and transcript
 ```
 
-- Each `say` waits until scout has finished, then prints the message and scout's replies with their IDs (`[m3] scout: ...`). If scout didn't reply, it prints `(scout stayed quiet)` or why the bridge skipped the message.
-- `start` without `--from` begins before the introduction. `--from poll-open` begins with everyone's preferences shared and the destination poll open. `--from destination-chosen` begins with San Juan picked for March 14–20, 2027.
+- Each command waits until scout has finished, then prints the message and scout's replies with their IDs (`[m3] scout: ...`). A tapback shows as `👍 on m3`, and a threaded message as `scout ↪ m3: ...`. If scout didn't reply, it prints `(scout stayed quiet)` or why the bridge skipped the message.
+- `react` and `reply` take a target: a message ID (`m3`), `scout.last`, or quoted words, which pick scout's latest message containing them. Quote an option the way it reads ("2. San Juan"), because scout's confirmations mention the same names.
+- When scout sends a link, the console prints the card iMessage would show: its title, description, the path of its saved picture (open it to see the card's image), and warnings about anything Linq would refuse or show badly.
+- `start` without `--from` begins before the introduction. `--from poll-open` begins with everyone's preferences shared and the destination poll open. `--from destination-chosen` begins with San Juan picked for March 14–20, 2027. A seeded chat starts with the messages scout "already sent", such as the poll, so members can tap them.
 - Members get the same numbers as in `scout-simulate`: +15550000001, +15550000002 and so on.
 - The console's chat is saved in `bridge/.devchat/`, so each command picks up where the last one left off.
 - `state --chat <id>` and `reset --chat <id>` work on any chat, including a real group's. Its chat ID is in the bridge's log lines.
@@ -83,17 +91,19 @@ bun run devchat reset                                   # clears this chat's tri
 A script is a plain-text file that reads like the chat. `bun run devchat run <file>` plays it in a new chat, prints the conversation, and stops at the first failure with its line number:
 
 ```
-# Plain votes close the poll and announce the winner.
+# Votes by number and by tapback close the poll and announce the winner.
 members maya leo priya
 from poll-open
 
 maya: 2
-expect scout ~ "1 of 3 voted"
+expect scout reacted like
+leo react love "2. San Juan"
+expect thread ~ "2 of 3 voted"
 leo: lol this is taking forever
 expect scout quiet
-leo: 2
 priya: 1
 expect scout ~ "San Juan, Puerto Rico wins"
+expect card url ~ "calendar.google.com"
 expect state destination = "San Juan, Puerto Rico"
 ```
 
@@ -102,9 +112,15 @@ expect state destination = "San Juan, Puerto Rico"
 | `members maya leo priya` | Who's in the chat. Required, before any message. |
 | `from poll-open` | Start at a seeded stage: `poll-open` or `destination-chosen`. Optional. |
 | `maya: text` | Maya sends a message. |
+| `maya react like "2. San Juan"` | Maya adds a tapback (love, like, dislike, laugh, emphasize or question) to scout's latest message containing the words, or to `scout.last`. |
+| `maya reply "2. San Juan": text` | Maya replies in a thread under that message. |
 | `maya photo receipt.jpg` | Maya sends a photo. The path is relative to the script (Mac only). |
 | `expect scout ~ "words"` | A reply to the latest message contains the words, ignoring case. |
 | `expect scout quiet` | scout didn't reply to the latest message. |
+| `expect scout reacted like` | scout added that tapback in reply to the latest message. |
+| `expect thread ~ "words"` | scout replied in a thread, with the words. |
+| `expect card title ~ "words"` | scout sent a link card whose title (or `description`, or `url`) contains the words. |
+| `expect card no warnings` | Linq would show scout's link card as it is. |
 | `expect state path = value` | The trip's value at a dotted path, such as `members.0.budget_usd`, equals a value: `"text"`, a number, `true`, `false` or `null`. `bun run devchat state` shows the paths. |
 | `expect state path ~ "words"` | The trip's value at that path contains the words, ignoring case. |
 
@@ -184,13 +200,13 @@ This needs a Mac (the bridge converts iPhone photos with macOS's `sips`) and you
 | --- | --- |
 | A rule handled in code, like counting a vote | `conversation.py` (and a module like `polls.py`), tested in `tests/test_conversation.py` |
 | Something Claude decides to do | A tool in `agent_tools.py`, the change in `trip_actions.py`, guidance in `system_prompt.md` |
-| A new kind of incoming message, like a photo | The bridge's parsing (`bridge/spectrum.ts` for Spectrum, `bridge/linq.ts` for Linq), `IncomingText` in both `bridge/scout.ts` and `src/scout/app.py` (keep them identical), and `IncomingMessage` in `trip.py` |
-| scout sending more than text (tapbacks, threaded replies, effects, link cards) | Not possible yet: the service only returns texts. See "Events in, actions out" in the design doc. |
+| A new kind of incoming message, like a photo | The platforms' parsing (`bridge/linq.ts`, `bridge/devchat/platform.ts`), the relay (`bridge/spectrum.ts`), the request types in both `bridge/scout.ts` and `src/scout/app.py` (keep them identical), and `IncomingMessage` in `trip.py` |
+| scout sending something new, like a message effect | An action type in `src/scout/outgoing.py` and `bridge/scout.ts`, a case in `perform` in `bridge/spectrum.ts` with a plain-text fallback, how Linq sends it (`bridge/linq.ts`), how the console shows it (`bridge/devchat/platform.ts`), and a script check |
 | A test that starts later in the journey | A seeded stage in `src/scout/trip_seeds.py`, then `from <stage>` in a console script |
 
 When a feature changes a critical user journey, update or add its script in `bridge/e2e/`.
 
-When "events in, actions out" ships, each new action will land with four parts: a case in the bridge, an action type and agent tool in Python, how the developer console shows it, and a script that uses it.
+Every action lands with the same parts: its type on both sides, a case in the relay with a plain-text fallback, how Linq and the console handle it, and a script that uses it. Only add one when a feature needs it.
 
 ### Link cards
 
@@ -201,7 +217,7 @@ iMessage never runs HTML or JavaScript in the chat. A link card is a preview of 
 - The card is built from the page's `og:title`, `og:description` and `og:image`, then Twitter Card tags, then the page's `<title>` and first image.
 - The card is a snapshot from when it was sent. To show new state, send a new link.
 
-Where scout's pages will be hosted isn't decided yet (TODO, Decide).
+scout sends a link as its own action (`Link` in `outgoing.py`), so it's always alone in its message. The console previews every card scout sends, and its preview of the calendar link shows a real problem: Google's page titles the card "Google Calendar - Sign in to Access & Edit Your Schedule". A page scout hosts would fix that, but where scout's pages will be hosted isn't decided yet (TODO, Decide).
 
 ## Set up the demo group
 
