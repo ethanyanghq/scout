@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from scout.agent import ScoutAgent
 from scout.conversation import handle_message
+from scout.dev_endpoints import create_dev_router
 from scout.outside_services import connect_outside_services
 from scout.trip import IncomingMessage, MessagePhoto
 from scout.trip_store import TripStore
@@ -65,6 +66,7 @@ def create_app(store: TripStore, agent: ScoutAgent) -> FastAPI:
         )
         return Replies(replies=handle_message(message, store, agent))
 
+    app.include_router(create_dev_router(store))
     return app
 
 
