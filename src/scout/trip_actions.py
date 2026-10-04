@@ -23,6 +23,7 @@ from scout.activity_deck import (
 )
 from scout.best_flights import (
     HomeAirport,
+    HomeCityFlight,
     NoFlightFound,
     find_best_flights,
     format_best_flights,
@@ -99,6 +100,8 @@ NEARBY_SUGGESTION_COUNT = 3
 FINAL_DECISION_PROMPT = "once you're ready, let me know your final decision with @scout"
 # The trip interview card has no destination yet, so its bubble shows a beach.
 INTERVIEW_THUMBNAIL_PLACE = "Grace Bay Beach, Turks and Caicos"
+# Sent after the flight card, since flights come first and the stay is next.
+HOTEL_OFFER = "want me to find a hotel too?"
 TRIP_CARD_NUDGE = "just fill this out real quick so i could get a better idea"
 INTERVIEW_FALLBACK_TEXT = (
     "tell me about your trip: the kind of trip (resort, lakeside, city break or "
@@ -370,6 +373,7 @@ class TripActions:
                 caption=f"Flights to {trip.destination}",
                 thumbnail_url=flights_thumbnail_url(home_city_flights),
                 fallback_text=format_best_flights(trip, home_city_flights),
+        self.outbox.append(Say(_introduce_flights(home_city_flights)))
             )
         )
         return "Flights posted."
@@ -378,6 +382,7 @@ class TripActions:
         """Posts a card with the best hotel, live from Google Hotels, for the
         chosen destination and dates."""
         trip = self._load_locked_in_trip()
+        self.outbox.append(Say(HOTEL_OFFER))
         hotels = self._services.hotels
         if hotels is None:
             raise TripActionError(
@@ -397,6 +402,7 @@ class TripActions:
                 caption=f"Where to stay in {trip.destination}",
                 thumbnail_url=hotel.photo_url,
                 fallback_text=format_best_hotel(trip, hotel),
+        self.outbox.append(Say(_introduce_hotel(trip)))
             )
         )
         return "Hotel posted."
@@ -916,6 +922,20 @@ def _check_every_home_city_has_an_airport(
     ]
     if missing:
         raise TripActionError(f"no airport given for {', '.join(missing)}")
+
+
+def _introduce_flights(home_city_flights: list[HomeCityFlight]) -> str:
+    if len(home_city_flights) == 1:
+        return "this flight seems like the best deal"
+    return "these flights seem like the best deals"
+
+
+def _introduce_hotel(trip: Trip) -> str:
+    # The first person to talk to scout is the likeliest to book for everyone.
+    return (
+        f"{trip.initiator.label}, are you making the booking for the group? "
+        "i'll help figure out the accounting later. book this hotel:"
+    )
 
 
 def _locate(places: GooglePlaces, spot: str, destination: str) -> Coordinates:

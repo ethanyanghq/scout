@@ -779,7 +779,9 @@ def test_flights_are_one_card_with_a_departure_board_per_home_city(
 
     actions.send_best_flights(HOME_AIRPORTS, "SJU")
 
-    [card] = actions.outbox
+    intro, card, offer = actions.outbox
+    assert intro == Say("these flights seem like the best deals")
+    assert offer == Say("want me to find a hotel too?")
     assert isinstance(card, Card)
     assert card.layout["title"] == "Flights to San Juan, Puerto Rico"
     assert card.layout["subtitle"] == "Mar 14–19 · round trip"
@@ -853,7 +855,7 @@ def test_the_hotel_is_one_card_with_its_photo_rate_and_rating(locked_in_actions,
 
     actions.send_best_hotel()
 
-    [card] = actions.outbox
+    _, card = actions.outbox
     assert isinstance(card, Card)
     assert card.layout["title"] == "Where to stay in San Juan, Puerto Rico"
     assert card.layout["subtitle"] == "Mar 14–19 · 5 nights"
@@ -873,7 +875,11 @@ def test_an_unrated_hotel_card_leaves_out_the_rating(locked_in_actions, store):
 
     actions.send_best_hotel()
 
-    [card] = actions.outbox
+    intro, card = actions.outbox
+    assert intro == Say(
+        "Maya, are you making the booking for the group? "
+        "i'll help figure out the accounting later. book this hotel:"
+    )
     assert "Guests say" not in card_words(card.layout)
     assert "★" not in card.fallback_text
 
