@@ -7,7 +7,7 @@ from enum import StrEnum
 
 from scout.places import Place
 
-# Matches "@scout", "scout,", "Scout?" but not "scouting".
+# Matches "@scout" and "@Scout?", but not "scout," or "@scouting".
 # Only an explicit tag counts: "someone added a scout bot?" isn't for scout.
 SCOUT_MENTION = re.compile(r"@scout\b", re.IGNORECASE)
 
