@@ -17,8 +17,9 @@ from scout.best_flights import (
     format_clock,
     format_duration,
 )
-from scout.group_summary import format_window
-from scout.trip import Trip
+from scout.group_summary import format_window, summarize_group
+from scout.itinerary import format_day, format_start
+from scout.trip import ItineraryAddOn, ItineraryDay, Trip
 
 # A tropical palette for destination articles: lagoon teal for headings, palm
 # green for prices and deep sea for names, over a shallows-to-sky gradient.
@@ -176,6 +177,72 @@ def _text(words: str, role: str, color_hex: str | None = None) -> dict:
     if color_hex:
         style["colorHex"] = color_hex
     return {"type": "text", "text": words, "style": style}
+
+
+def itinerary(trip: Trip, destination_photo_url: str) -> dict:
+    """The trip's plan as a timeline, one stop per day with when it starts,
+    then the optional add-ons and who wanted each.
+
+    Expects a trip whose destination, dates and itinerary are set.
+    """
+    pace = summarize_group(trip.members).pace
+    subtitle = format_window(trip.dates)
+    if pace:
+        subtitle += f" · paced for {pace}s"
+    return {
+        "version": 1,
+        "title": trip.destination,
+        "subtitle": subtitle,
+        "accentColorHex": LAGOON_HEX,
+        "background": {"kind": "gradient", "colorsHex": SHALLOWS_GRADIENT_HEX},
+        "root": {
+            "type": "vstack",
+            "spacing": 18,
+            "alignment": "leading",
+            "children": [
+                {
+                    "type": "gallery",
+                    "urls": [destination_photo_url],
+                    "heightPt": 200,
+                    "cornerRadius": 18,
+                },
+                {
+                    "type": "card",
+                    "child": {
+                        "type": "timeline",
+                        "entries": [_timeline_entry(day) for day in trip.itinerary],
+                    },
+                },
+                *_add_ons(trip.itinerary_add_ons),
+                _text(
+                    "Times are a suggestion. Nothing is booked.",
+                    role="footnote",
+                    color_hex=LAGOON_HEX,
+                ),
+            ],
+        },
+    }
+
+
+def _timeline_entry(day: ItineraryDay) -> dict:
+    entry = {"time": format_day(day), "title": day.plan, "state": "future"}
+    start = format_start(day)
+    if start:
+        entry["subtitle"] = f"Starts {start}"
+    return entry
+
+
+def _add_ons(add_ons: list[ItineraryAddOn]) -> list[dict]:
+    if not add_ons:
+        return []
+    rows = [
+        _row(add_on.activity, f"{add_on.wanted_by}'s pick", "plus.circle")
+        for add_on in add_ons
+    ]
+    return [
+        _section_heading("Optional add-ons"),
+        {"type": "card", "child": {"type": "vstack", "spacing": 4, "children": rows}},
+    ]
 
 
 def best_flights(trip: Trip, home_city_flights: list[HomeCityFlight]) -> dict:

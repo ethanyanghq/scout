@@ -9,6 +9,7 @@ from scout.outgoing import Card, Say
 from scout.outside_services import OutsideServices
 from scout.places import Coordinates, PhotographedPlace, Place, PlacesError
 from scout.trip import (
+    Chronotype,
     DateWindow,
     DestinationOption,
     ItineraryAddOn,
@@ -473,6 +474,54 @@ def test_each_destination_gets_its_own_card_named_for_the_place(
 @pytest.fixture
 def maya_actions_with_photos(store, maya_actions):
     return actions_with(store, FakeBrochurePhotos())
+
+
+def test_the_plan_is_a_timeline_card_with_the_text_for_phones_without_it(
+    locked_in_actions, store
+):
+    store.save_preferences(
+        SPACE, MAYA, PreferenceUpdate(chronotype=Chronotype.NIGHT_OWL)
+    )
+    actions = actions_with(store, FakeBrochurePhotos())
+
+    actions.post_itinerary(
+        [
+            plan_day(15, "Night kayak on the bio bay", starts_at=time(21, 30)),
+            plan_day(14, "Land and check in"),
+        ],
+        add_ons=[ItineraryAddOn("Scuba at Escambrón", wanted_by="Leo")],
+    )
+
+    [card] = actions.outbox
+    assert isinstance(card, Card)
+    assert card.thumbnail_url == (
+        "https://lh3.googleusercontent.com/San-Juan,-Puerto-Rico"
+    )
+    assert card.layout["subtitle"] == "Mar 14–19 · paced for night owls"
+    [timeline] = [
+        node["child"]
+        for node in card.layout["root"]["children"]
+        if node.get("child", {}).get("type") == "timeline"
+    ]
+    assert timeline["entries"] == [
+        {"time": "Sun 3/14", "title": "Land and check in", "state": "future"},
+        {
+            "time": "Mon 3/15",
+            "title": "Night kayak on the bio bay",
+            "state": "future",
+            "subtitle": "Starts 9:30 PM",
+        },
+    ]
+    assert "Scuba at Escambrón · Leo's pick" in card.fallback_text
+
+
+def test_the_plan_is_posted_as_text_when_place_search_is_down(locked_in_actions, store):
+    actions = actions_with(store, FakeBrochurePhotos(is_down=True))
+
+    status = actions.post_itinerary([plan_day(14, "Land and check in")], add_ons=[])
+
+    assert said(actions.outbox) == ["the plan:\nSun 3/14 · Land and check in"]
+    assert "place search isn't working" in status
 
 
 class FakeFlights:

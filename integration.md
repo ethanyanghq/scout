@@ -87,7 +87,7 @@ Five things from each person, in the chat, interview style:
 | Vacation interest | "beach", "lakefront", "tropical", "city" | Shapes the three destinations |
 | Chronotype | early riser / late riser / night owl | **Only** used to pace the itinerary |
 
-Vacation interest and chronotype are new. Everything else exists today.
+Vacation interest is new. Everything else exists today.
 
 Chronotype earns its place by doing exactly one job: a group of night owls gets
 late starts and dinner-first days, early risers get sunrise hikes and the
@@ -192,6 +192,14 @@ offered as optional add-ons rather than dropped silently.
 
 Posted as a read-only **itinerary card**, with the text version in the thread
 underneath so it is still readable on a phone without HermesShare installed.
+
+Built: `post_itinerary` (`src/scout/trip_actions.py`), `itinerary.py` for the
+text version, and `cards.itinerary` for the layout, a `timeline` with each day's
+start time under a photo of the destination. The text version is the card's
+`fallback_text`, as with the flight card, rather than a second message. The
+card needs `GOOGLE_PLACES_API_KEY` for its photo; without it the plan goes out
+as text. Until the activity deck exists, the agent builds the plan from what
+people say in the chat, and puts what only one person asked for in the add-ons.
 
 ### Stage 6 — Hotel
 
@@ -395,7 +403,7 @@ Reusing what exists wherever it already works.
 | Need | Reuse | Change |
 | --- | --- | --- |
 | Stages | `TripStage` (`src/scout/trip.py`) | `VOTING` → `CHOOSING_DESTINATION`; add `PICKING_ACTIVITIES`, `BOOKING`, `TRIP_SET` |
-| Interview | `Member`, `PreferenceUpdate` (`src/scout/trip.py`) | add `vacation_interest`, `chronotype` |
+| Interview | `Member`, `PreferenceUpdate` (`src/scout/trip.py`) | add `vacation_interest`; `chronotype` is built |
 | Ballot | `polls.decide_winner`, `count_votes`, `format_result` | unchanged; a submit becomes a vote |
 | Brochure data | `DestinationOption` (`src/scout/trip.py`) | add `hotel`, `amenities`, `photo_url` |
 | Activities | — | new `Activity` and `ActivityVote` |
