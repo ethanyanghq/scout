@@ -5,23 +5,17 @@ Flights has no public API, so SerpApi runs the search and returns the results
 as JSON.
 """
 
-import json
 import logging
 import os
-import urllib.error
-import urllib.parse
-import urllib.request
 from dataclasses import dataclass
 from datetime import datetime
 
 from scout.booking_links import flight_search_link
+from scout.serpapi import SERPAPI_URL, SerpApiError, search_serpapi
 from scout.trip import DateWindow
 
 logger = logging.getLogger(__name__)
 
-SERPAPI_URL = "https://serpapi.com/search.json"
-# A Google Flights search often takes several seconds on SerpApi's side.
-TIMEOUT_SECONDS = 30
 ROUND_TRIP = "1"
 # One adult, so the fare is per person whatever the group's size.
 ADULTS = "1"
@@ -90,22 +84,12 @@ class GoogleFlights:
         return _to_flight(results[0], booking_url, _destination_photo(reply))
 
     def _search(self, params: dict[str, str]) -> dict:
-        query = urllib.parse.urlencode(
-            {"engine": "google_flights", **params, "api_key": self._api_key}
-        )
         try:
-            with urllib.request.urlopen(
-                f"{self._api_url}?{query}", timeout=TIMEOUT_SECONDS
-            ) as reply:
-                return json.load(reply)
-        except urllib.error.HTTPError as error:
-            raise FlightsError(
-                f"search failed with {error.code}: {_error_reason(error)}"
-            ) from None
-        except (urllib.error.URLError, TimeoutError) as error:
-            raise FlightsError(f"search didn't connect: {error}") from None
-        except json.JSONDecodeError as error:
-            raise FlightsError(f"search sent an unexpected reply: {error}") from None
+            return search_serpapi(
+                self._api_url, self._api_key, "google_flights", params
+            )
+        except SerpApiError as error:
+            raise FlightsError(str(error)) from None
 
 
 def connect_flights() -> GoogleFlights | None:
@@ -144,12 +128,3 @@ def _destination_photo(reply: dict) -> str | None:
 
 def _parse_time(text: str) -> datetime:
     return datetime.strptime(text, SERPAPI_TIME_FORMAT)
-
-
-def _error_reason(error: urllib.error.HTTPError) -> str:
-    """SerpApi's own explanation, e.g. "Invalid API key.", if it sent one."""
-    body = error.read().decode(errors="replace")
-    try:
-        return json.loads(body)["error"]
-    except (json.JSONDecodeError, KeyError, TypeError):
-        return body[:200]

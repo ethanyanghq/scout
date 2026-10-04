@@ -4,11 +4,7 @@ SerpApi is the external boundary here, so a small local HTTP server plays it.
 That runs scout's real request code without an API key or a bill.
 """
 
-import json
-import threading
-import urllib.parse
 from datetime import date, datetime
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
@@ -83,57 +79,9 @@ SEARCH_RESULTS = {
 }
 
 
-class FakeSerpApi:
-    """Answers every search with `reply`, and keeps each query it got."""
-
-    def __init__(self):
-        self.queries = []
-        self.reply = (200, SEARCH_RESULTS)
-        self._server = ThreadingHTTPServer(("127.0.0.1", 0), self._handler())
-        threading.Thread(target=self._serve, daemon=True).start()
-
-    @property
-    def url(self):
-        host, port = self._server.server_address
-        return f"http://{host}:{port}/search.json"
-
-    def stop(self):
-        self._server.shutdown()
-        self._server.server_close()
-
-    def _serve(self):
-        # A short poll interval makes shutdown, and so each test, quick.
-        self._server.serve_forever(poll_interval=0.01)
-
-    def _handler(self):
-        fake = self
-
-        class Handler(BaseHTTPRequestHandler):
-            def do_GET(self):
-                query = urllib.parse.urlparse(self.path).query
-                fake.queries.append(dict(urllib.parse.parse_qsl(query)))
-                status, reply = fake.reply
-                encoded = json.dumps(reply).encode()
-                self.send_response(status)
-                self.send_header("Content-Length", str(len(encoded)))
-                self.end_headers()
-                self.wfile.write(encoded)
-
-            def log_message(self, *args):
-                pass  # Keep test output quiet.
-
-        return Handler
-
-
-@pytest.fixture
-def serpapi():
-    fake = FakeSerpApi()
-    yield fake
-    fake.stop()
-
-
 @pytest.fixture
 def flights(serpapi):
+    serpapi.reply = (200, SEARCH_RESULTS)
     return GoogleFlights(API_KEY, api_url=serpapi.url)
 
 
