@@ -4,6 +4,8 @@ import { Hero } from "./Hero";
 import { HowItGoes } from "./HowItGoes";
 import "./App.css";
 
+const DEVPOST_URL = "https://devpost.com/software/scout-pifctu";
+
 export function App() {
   return (
     <>
@@ -27,7 +29,12 @@ export function App() {
           <img src="/logo.png" alt="" />
           scout
         </a>
-        <span>© 2026 scout</span>
+        <p className="site-footer-notes">
+          <a href={DEVPOST_URL} target="_blank" rel="noreferrer">
+            devpost ↗
+          </a>
+          <span>© 2026 scout</span>
+        </p>
       </footer>
     </>
   );

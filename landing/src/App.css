@@ -11,8 +11,10 @@
 
 .site-footer {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
+  row-gap: 14px;
   padding-block: 36px;
   font-size: 14.5px;
 }
@@ -23,4 +25,14 @@
 .site-footer .brand img {
   width: 30px;
   height: 30px;
+}
+.site-footer-notes {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  white-space: nowrap;
+}
+.site-footer-notes a {
+  color: var(--ink);
+  font-weight: 500;
 }
