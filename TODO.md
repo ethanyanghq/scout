@@ -12,14 +12,11 @@ Work top to bottom. Check items off in the commit or PR that finishes them.
 - [ ] Create a Google Cloud key with Places API (New) enabled and billing on, and add a budget alert.
 - [ ] Get a SerpApi key for live Google Flights fares (`SERPAPI_API_KEY`). The free plan's monthly searches cover rehearsals if nobody leaves it in a loop: each flight card uses one search per home city.
 - [ ] Put the keys in `.env` and `bridge/.env` (copy the `.env.example` templates).
-<<<<<<< HEAD
 - [ ] Pick the demo line: one teammate's Linq line, with its `LINQ_API_KEY` in `bridge/.env` on the demo Mac and the `linq` CLI logged into the same line.
 - [ ] Line up the demo phones: at least 3 besides scout (Maya, Leo, Jordan, Priya), one per member, charged and on iMessage. Put their numbers in `bridge/demo/roster.json` (copy `roster.example.json`, never commit it).
-=======
 - [ ] Decide where scout's pages are hosted and stand it up. Every HermesShare card needs an HTTPS thumbnail URL or it won't send, and the host also has to proxy Google Places photos, whose URLs embed the API key. This blocks every card.
 - [ ] Prove the card pipe: clone HermesShare, send one hand-written card to a real Linq group, submit it, and write down what lands in the thread. Answers whether a submit arrives as `HermesSubmission` JSON or as a readable summary, whether the free line accepts `imessage_app` parts, and how big a payload really gets.
 - [ ] Sideload `docs/install/HermesShare.ipa` on every demo phone. Without it, a card is only its fallback text.
->>>>>>> d39c6e1 (Added plan file)
 
 ## 2. First real run
 
@@ -46,14 +43,9 @@ The code for all three milestones is built. What's left waits on section 1: a re
 
 ## 5. Decide
 
-<<<<<<< HEAD
-- [ ] The shared trip album (AL-1, AL-2): cut it from the demo, or build it? It isn't part of the §11 bar, and building it means hosting and storage. If it's cut, take it out of the script and the journey page.
-- [ ] Where scout's web pages are hosted. Link cards need a public HTTPS URL, and so would the album: a tunnel from the demo Mac, or a separate host ([scout-imessage-groups.md](scout-imessage-groups.md), Open questions)? Today the calendar link's card is titled "Google Calendar - Sign in to Access & Edit Your Schedule", which a page of scout's own would replace. scout's contact card also has no photo until there's an HTTPS URL for one, or someone adds it in Linq's dashboard.
-=======
 - [ ] The shared trip album (AL-1, AL-2): cut it from the demo, or build it? The new flow ends on it ([integration.md](integration.md), stage 8), so cutting it means the demo stops on the calendar instead. Hosting is being stood up for the cards anyway, so the remaining cost is storage. If it's cut, take it out of the script and the journey page.
-- [x] Where scout's web pages are hosted. No longer a question, only work: it's a blocker in section 1 above, because no card sends without an HTTPS thumbnail. Still to pick: a tunnel from the demo Mac, or a separate host ([scout-imessage-groups.md](scout-imessage-groups.md), Open questions). Today the calendar link's card is titled "Google Calendar - Sign in to Access & Edit Your Schedule", which a page of scout's own would replace.
+- [x] Where scout's web pages are hosted. No longer a question, only work: it's a blocker in section 1 above, because no card sends without an HTTPS thumbnail. Still to pick: a tunnel from the demo Mac, or a separate host ([scout-imessage-groups.md](scout-imessage-groups.md), Open questions). Today the calendar link's card is titled "Google Calendar - Sign in to Access & Edit Your Schedule", which a page of scout's own would replace. scout's contact card also has no photo until there's an HTTPS URL for one, or someone adds it in Linq's dashboard.
 - [ ] Whether the demo leans on cards or stays in text. If the extension can't be sideloaded on every demo phone in time, fall back to the numbered text poll (DS-5) and show the cards on one phone only.
->>>>>>> d39c6e1 (Added plan file)
 
 ## 6. Script and rehearsal
 
