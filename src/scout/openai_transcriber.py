@@ -16,12 +16,30 @@ PHOTO_MODEL = "gpt-5.5"
 # Describing a photo needs no reasoning, and keeps the reply fast.
 PHOTO_REASONING_EFFORT = "none"
 TRANSCRIPTION_MODEL = "gpt-transcribe"
-DESCRIBE_PHOTO_PROMPT = (
-    "Someone in a group chat planning a trip shared this photo. Describe it in "
-    "a few sentences for a friend who can't see it. Copy any text in it "
-    "exactly: a receipt's merchant, date, items and total, a screenshot's "
-    "words, a sign or a menu. Reply with only the description."
-)
+# The chat log keeps only this description, and the agent splits costs and
+# plans from it, so anything with numbers or details is copied in full.
+DESCRIBE_PHOTO_PROMPT = """\
+Someone in a group chat planning a trip shared this photo. The trip planner \
+reading the chat only gets your description, not the photo, so write down \
+everything it might need.
+
+Start with one line saying what the photo is.
+
+For a receipt, bill or invoice, copy it completely: the merchant and its \
+address, the date and time, every line item with its quantity and price, the \
+subtotal, each tax, fee and service charge, the tip, the final total, the \
+currency, and how it was paid (card brand and last four digits, if shown). \
+Say which number is the final amount paid. If something is cut off, blurry or \
+handwritten, say so rather than guessing.
+
+For a screenshot or anything with text (a booking or flight confirmation, a \
+listing, a ticket, a menu, a map, a message), copy all of its text and \
+numbers exactly: names, dates, times, prices, addresses, confirmation codes, \
+flight numbers.
+
+For a plain photo (a place, people, a view), describe it in a few sentences.
+
+Reply with only the description, as plain text with no markdown."""
 
 
 class OpenAITranscriber:
