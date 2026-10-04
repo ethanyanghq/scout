@@ -1,6 +1,6 @@
 # scout's landing page
 
-One page that says what scout does, shows it working in an iPhone frame, and takes the name and phone number of anyone who wants in. Built with React and Vite, hosted on Netlify.
+One page that says what scout does, shows the demo video, and takes the name and phone number of anyone who wants in. Built with React and Vite, hosted on Netlify.
 
 ```
 bun install
@@ -14,9 +14,11 @@ bun run build      # what Netlify runs; the site lands in dist/
 
 `netlify.toml` at the repository root tells Netlify to build this folder, so connecting the repository to a Netlify site is the only setup.
 
-## The demo recording
+## The demo video
 
-The iPhone frame shows a still chat until there is a screen recording. To add one, put the file in `public/` (for example `public/demo.mp4`) and set `DEMO_RECORDING_URL` in `src/DemoPhone.tsx` to its path (`"/demo.mp4"`). It plays muted on a loop. Record on an iPhone so the video matches the frame's 9:19.5 shape.
+The demo is a YouTube video, but the page shows its own poster and play button, and loads YouTube's player only when someone presses play. To change the video, set `DEMO_VIDEO_ID` in `src/DemoVideo.tsx` and replace `public/demo-poster.jpg` with a 16:9 frame of the new video. YouTube serves one at `https://i.ytimg.com/vi/<video id>/maxresdefault.jpg`.
+
+The play button is placed to sit under the text in the current poster. If the new poster is laid out differently, move it with `top` and `left` on `.demo-video-play` in `src/DemoVideo.css`.
 
 ## Who wants in
 

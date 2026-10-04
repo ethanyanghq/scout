@@ -1,0 +1,108 @@
+.demo-video {
+  width: min(960px, 100%);
+}
+
+.demo-video-screen {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: clamp(18px, 2.6vw, 30px);
+  background: var(--ink);
+  box-shadow:
+    0 0 0 1px rgba(15, 21, 53, 0.08),
+    0 60px 90px -40px rgba(15, 21, 53, 0.45);
+}
+
+.demo-video-player,
+.demo-video-player iframe,
+.demo-video-poster {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  /* Safari can let a playing video poke past its parent's rounded corners,
+     so each layer carries the corners itself. */
+  border-radius: inherit;
+}
+
+/* ---------- the poster shown until the video plays ---------- */
+
+.demo-video-poster {
+  padding: 0;
+  overflow: hidden;
+  background: none;
+  cursor: pointer;
+  /* lets the play button size itself from the poster's width */
+  container-type: inline-size;
+}
+.demo-video-poster img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* The poster is a frame of the video: a phone on the left, a title and a
+   line of text on the right. The play button sits under that text and lines
+   up with its left edge, so it reads as part of the frame. */
+.demo-video-play {
+  position: absolute;
+  top: 62%;
+  left: 52%;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55em;
+  height: 2.7em;
+  padding: 0 1.15em 0 0.95em;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink);
+  font-size: clamp(12px, 3.55cqw, 18px);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  box-shadow: 0 0.6em 1.8em rgba(8, 9, 12, 0.45);
+  transition: transform 0.15s ease;
+}
+.demo-video-play svg {
+  width: 1.05em;
+  height: 1.05em;
+  fill: var(--cobalt);
+}
+
+.demo-video-poster:hover .demo-video-play {
+  transform: translateY(-1px) scale(1.03);
+}
+.demo-video-poster:focus-visible {
+  outline-offset: -5px;
+  outline-color: #fff;
+}
+
+/* While YouTube's player loads, the play button breathes in place. */
+.demo-video-poster:disabled {
+  cursor: default;
+}
+.demo-video-poster:disabled .demo-video-play {
+  animation: demo-video-loading 0.8s ease-in-out infinite alternate;
+}
+@keyframes demo-video-loading {
+  to {
+    opacity: 0.6;
+  }
+}
+
+.demo-video-error {
+  margin-top: 16px;
+  color: #b3261e;
+  font-size: 15px;
+}
+.demo-video-error a {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .demo-video-play {
+    transition: none;
+  }
+}
