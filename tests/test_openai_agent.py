@@ -121,6 +121,15 @@ def test_no_reply_means_scout_stays_quiet(store):
     assert OpenAIScoutAgent(model, store).respond(trip, message) == []
 
 
+def test_each_paragraph_of_a_reply_is_its_own_text(store):
+    trip, message = maya_says(store, "@scout hello!")
+    model = ScriptedOpenAI(says("Hey all, I'm scout 👋\n\nTag me anytime"))
+
+    replies = OpenAIScoutAgent(model, store).respond(trip, message)
+
+    assert said(replies) == ["Hey all, I'm scout 👋", "Tag me anytime"]
+
+
 def test_a_refusal_sends_nothing(store):
     trip, message = maya_says(store, "@scout hi")
     refusal = ChatCompletionMessage(

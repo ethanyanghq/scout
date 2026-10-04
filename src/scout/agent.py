@@ -1,6 +1,7 @@
 """scout's brain: shows Claude the trip and the chat, then runs the tools it picks."""
 
 import logging
+import re
 from datetime import date
 from pathlib import Path
 
@@ -29,6 +30,7 @@ MAX_TOOL_ROUNDS = 6
 # recommended fallback model instead of returning nothing.
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
 NO_REPLY = "NO_REPLY"
+PARAGRAPH_BREAK = re.compile(r"\n\s*\n")
 SYSTEM_PROMPT = (Path(__file__).parent / "system_prompt.md").read_text()
 
 
@@ -72,7 +74,7 @@ class ScoutAgent:
             return actions.outbox
 
         reply = _reply_text(response.content)
-        return [Say(reply), *actions.outbox] if reply else actions.outbox
+        return [*as_text_bubbles(reply), *actions.outbox] if reply else actions.outbox
 
     def _ask_claude(self, conversation: list[dict]):
         return self._client.beta.messages.create(
@@ -103,6 +105,13 @@ class ScoutAgent:
             },
         }
         return [photo, situation]
+
+
+def as_text_bubbles(reply: str) -> list[Say]:
+    """The model's reply as separate texts, the way people text: each
+    paragraph (split by a blank line) becomes its own bubble."""
+    paragraphs = (paragraph.strip() for paragraph in PARAGRAPH_BREAK.split(reply))
+    return [Say(paragraph) for paragraph in paragraphs if paragraph]
 
 
 def describe_situation(store: TripStore, trip: Trip, message: IncomingMessage) -> str:

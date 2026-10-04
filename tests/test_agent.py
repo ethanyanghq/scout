@@ -120,6 +120,22 @@ def test_no_reply_means_scout_stays_quiet(store):
     assert ScoutAgent(claude, store).respond(trip, message) == []
 
 
+def test_each_paragraph_of_a_reply_is_its_own_text(store):
+    trip, message = maya_says(store, "@scout hello!")
+    reply = (
+        "Hey all, I'm scout 👋\n\nWhat I need:\n1. name\n2. dates\n\n  \nTag me anytime"
+    )
+    claude = ScriptedClaude(response("end_turn", text(reply)))
+
+    replies = said(ScoutAgent(claude, store).respond(trip, message))
+
+    assert replies == [
+        "Hey all, I'm scout 👋",
+        "What I need:\n1. name\n2. dates",
+        "Tag me anytime",
+    ]
+
+
 def test_posted_summaries_follow_the_lead_in_line(store):
     trip, message = maya_says(store, "@scout where are we at?")
     claude = ScriptedClaude(

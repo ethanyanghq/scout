@@ -5,9 +5,15 @@ import logging
 
 import openai
 
-from scout.agent import MAX_TOOL_ROUNDS, NO_REPLY, SYSTEM_PROMPT, describe_situation
+from scout.agent import (
+    MAX_TOOL_ROUNDS,
+    NO_REPLY,
+    SYSTEM_PROMPT,
+    as_text_bubbles,
+    describe_situation,
+)
 from scout.agent_tools import TOOL_DEFINITIONS, describe_tool_call, run_tool
-from scout.outgoing import Outgoing, Say
+from scout.outgoing import Outgoing
 from scout.outside_services import NO_OUTSIDE_SERVICES, OutsideServices
 from scout.trip import IncomingMessage, Trip
 from scout.trip_actions import TripActionError, TripActions
@@ -77,7 +83,7 @@ class OpenAIScoutAgent:
         text = (reply.content or "").strip()
         if not text or text == NO_REPLY:
             return actions.outbox
-        return [Say(text), *actions.outbox]
+        return [*as_text_bubbles(text), *actions.outbox]
 
     def _ask_openai(self, conversation: list[dict]):
         response = self._client.chat.completions.create(
