@@ -4,6 +4,7 @@ Claude is the one external service here, so it's the one thing faked. The
 store, polls, and summaries are all real.
 """
 
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
@@ -159,6 +160,32 @@ def test_saying_scouts_name_without_the_at_sign_is_not_a_tag(store):
     replies = send(store, agent, LEO, "scout seems useful")
 
     assert replies == []
+    assert agent.messages_seen == []
+
+
+def test_a_voice_note_that_says_scouts_name_to_it_is_a_tag(store):
+    scout_joins(store)
+    agent = FakeAgent()
+
+    spoken_tags = [
+        "Hey Scout, I'm flying from Boston.",
+        "at scout what's the plan",
+        "Scout, help",
+    ]
+    for number, words in enumerate(spoken_tags):
+        voice_note = replace(BOSTON_VOICE_NOTE, id=f"note{number}", transcript=words)
+        send(store, agent, MAYA, "", media=voice_note)
+
+    assert len(agent.messages_seen) == 3
+
+
+def test_a_voice_note_that_only_talks_about_scout_is_not_a_tag(store):
+    scout_joins(store)
+    agent = FakeAgent()
+    in_passing = replace(BOSTON_VOICE_NOTE, transcript="let's ask scout later")
+
+    send(store, agent, MAYA, "", media=in_passing)
+
     assert agent.messages_seen == []
 
 

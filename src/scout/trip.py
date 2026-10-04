@@ -11,6 +11,12 @@ from scout.places import Place
 # Matches "@scout" and "@Scout?", but not "scout," or "@scouting".
 # Only an explicit tag counts: "someone added a scout bot?" isn't for scout.
 SCOUT_MENTION = re.compile(r"@scout\b", re.IGNORECASE)
+# A voice note can't type the @, so saying scout's name to it counts: "@scout"
+# or "at scout" as a transcript writes it, "hey/hi/okay scout", or opening
+# with "Scout,". Talking about scout ("let's ask scout later") still doesn't.
+SPOKEN_SCOUT_MENTION = re.compile(
+    r"(?:@|\b(?:at|hey|hi|hello|yo|ok|okay)\s+)scout\b|^\W*scout\b", re.IGNORECASE
+)
 
 
 class TripStage(StrEnum):
@@ -52,6 +58,13 @@ class SharedMedia:
     transcript: str | None
 
     @property
+    def addresses_scout(self) -> bool:
+        """Whether a voice note says scout's name to it, like a spoken tag."""
+        if self.kind is not MediaKind.VOICE_NOTE or self.transcript is None:
+            return False
+        return SPOKEN_SCOUT_MENTION.search(self.transcript) is not None
+
+    @property
     def chat_label(self) -> str:
         """How it reads in the chat log, with where the original is kept."""
         if self.transcript is None:
@@ -85,7 +98,9 @@ class IncomingMessage:
 
     @property
     def mentions_scout(self) -> bool:
-        return SCOUT_MENTION.search(self.text) is not None
+        if SCOUT_MENTION.search(self.text) is not None:
+            return True
+        return self.media is not None and self.media.addresses_scout
 
     @property
     def readable_text(self) -> str:
