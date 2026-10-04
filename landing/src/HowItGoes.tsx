@@ -3,19 +3,19 @@ import "./HowItGoes.css";
 const STEPS = [
   {
     title: "add me.",
-    detail: "put my number in the group text. i say hi once and drop a trip card in the chat.",
+    detail: "put my number in the group text.",
   },
   {
     title: "tell me what you want.",
-    detail: "everyone taps through the card: dates, budget, home city, what you’re into. takes like 30 seconds.",
+    detail: "dates, budget, vibe. 30 seconds.",
   },
   {
     title: "pick a place.",
-    detail: "i pitch three places that fit, with real photos, hotels and prices. lock one in, or vote.",
+    detail: "i pitch three that fit. you vote.",
   },
   {
     title: "i plan the rest.",
-    detail: "the days, flights from each home city, the room, and who owes who at the end.",
+    detail: "days, flights, and who owes who.",
   },
 ];
 

@@ -3,13 +3,6 @@
   text-align: center;
 }
 
-.card-shots-lede {
-  max-width: 540px;
-  margin: 20px auto 0;
-  font-size: clamp(17px, 2vw, 19px);
-  text-wrap: balance;
-}
-
 .card-shots-row {
   display: flex;
   justify-content: center;
@@ -24,7 +17,7 @@
 .card-shots-row img {
   height: auto;
   border-radius: 34px;
-  box-shadow: 0 50px 70px -40px rgba(15, 21, 53, 0.55);
+  box-shadow: 0 28px 44px -30px rgba(15, 21, 53, 0.6);
 }
 .card-shots-row figure:first-child {
   transform: rotate(-3deg) translateY(22px);
@@ -43,6 +36,7 @@
   .card-shots-row {
     justify-content: flex-start;
     gap: 20px;
+    padding-bottom: 8px;
     overflow-x: auto;
     scroll-snap-type: x mandatory;
     scrollbar-width: none;
@@ -54,5 +48,17 @@
   .card-shots-row figure:first-child,
   .card-shots-row figure:last-child {
     transform: none;
+  }
+}
+
+/* On a phone the row starts with the first card centered, and the next
+   card peeking in from the edge shows there is more to swipe to. */
+@media (max-width: 560px) {
+  .card-shots-row {
+    --card-width: min(272px, 64vw);
+    padding-inline: calc((100vw - var(--card-width)) / 2);
+  }
+  .card-shots-row figure {
+    width: var(--card-width);
   }
 }

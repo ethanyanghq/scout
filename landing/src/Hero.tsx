@@ -21,15 +21,11 @@ const PLAN_AFTER_SCOUT = [
 export function Hero() {
   return (
     <section className="wrap hero">
-      <p className="hero-tag">an AI trip planner you add to your group text</p>
       <h1>
         trips that make it out of the <em>group chat.</em>
       </h1>
-      <p className="hero-lede quiet">
-        hi, i’m scout. add me to the thread and i’ll get you from “we should go somewhere” to an actual trip.
-      </p>
+      <p className="hero-lede quiet">i’m scout, the AI trip planner you add to your group text.</p>
       <JoinForm />
-      <p className="hero-note quiet">leave your name and number and i’ll text you. that’s the whole sign-up.</p>
 
       <div className="hero-stage">
         <div className="hero-before" aria-hidden="true">

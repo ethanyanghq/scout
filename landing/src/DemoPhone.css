@@ -46,7 +46,7 @@
   flex-direction: column;
   height: 100%;
   color: #111;
-  font-size: calc(var(--phone-width) * 0.041);
+  font-size: calc(var(--phone-width) * 0.04);
   line-height: 1.3;
   text-align: left;
 }
@@ -152,12 +152,17 @@
 }
 .chat-card img {
   width: 100%;
-  height: 5.6em;
+  height: 4.4em;
   object-fit: cover;
   object-position: 0 0;
 }
+/* The brochure screenshot has a dark margin around its photo, so the image
+   is drawn wider than the card and shifted until only the photo shows. */
 .chat-card.is-brochure img {
-  object-position: 0 18%;
+  width: 144%;
+  max-width: none;
+  margin-left: -6.7%;
+  object-position: 0 17%;
 }
 .chat-card p {
   padding: 0.55em 0.9em 0.65em;
