@@ -22,24 +22,30 @@ from scout.trip_store import TripStore
 logger = logging.getLogger(__name__)
 
 MODEL = "gpt-5.5"
-# Chat Completions only allows tools on gpt-5.5 with reasoning off. That also
-# keeps replies well inside the PRD's ~10 second target (§9).
-REASONING_EFFORT = "none"
+# Low effort keeps simple replies near the PRD's ~10 second target (§9). OpenAI
+# warns that web search answers get worse with reasoning off entirely.
+REASONING_EFFORT = "low"
 MAX_OUTPUT_TOKENS = 16_000
+# OpenAI's web search opens and reads pages itself, so it covers both of
+# Claude's web tools. Capped like Claude's to keep replies quick.
+MAX_WEB_LOOKUPS_PER_REPLY = 3
 
 # The Claude tool schemas already meet OpenAI's strict-mode rules (every
 # property required, no extra properties), so they carry over unchanged.
 OPENAI_TOOLS = [
-    {
-        "type": "function",
-        "function": {
+    *(
+        {
+            "type": "function",
             "name": tool["name"],
             "description": tool["description"],
             "parameters": tool["input_schema"],
             "strict": True,
-        },
-    }
-    for tool in TOOL_DEFINITIONS
+        }
+        for tool in TOOL_DEFINITIONS
+    ),
+    # OpenAI runs the searches, so results arrive in its response with
+    # nothing for us to run.
+    {"type": "web_search"},
 ]
 
 
@@ -60,65 +66,102 @@ class OpenAIScoutAgent:
             self._store, trip.space_id, message.sender_phone, self._services
         )
         conversation = [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": describe_situation(self._store, trip, message)},
+            {"role": "user", "content": describe_situation(self._store, trip, message)}
         ]
 
-        reply = self._ask_openai(conversation)
+        response = self._ask_openai(conversation)
         tool_rounds = 0
-        while reply.tool_calls:
+        while tool_calls := _function_calls(response.output):
             tool_rounds += 1
             if tool_rounds > MAX_TOOL_ROUNDS:
                 logger.warning("Gave up after %d tool rounds", MAX_TOOL_ROUNDS)
                 return actions.outbox
-            # The API matches each tool result to a call in this message.
-            conversation.append(reply.model_dump(exclude_none=True))
-            conversation.extend(_run_tool_calls(actions, reply.tool_calls))
-            reply = self._ask_openai(conversation)
+            # Send back everything, not just the calls: the API matches each
+            # result to its call and needs the reasoning that led to it.
+            conversation.extend(response.output)
+            conversation.extend(_run_tool_calls(actions, tool_calls))
+            response = self._ask_openai(conversation)
 
-        if reply.refusal:
-            logger.warning("OpenAI declined to respond: %s", reply.refusal)
+        if refusal := _refusal(response.output):
+            logger.warning("OpenAI declined to respond: %s", refusal)
             return actions.outbox
 
-        text = (reply.content or "").strip()
+        text = _reply_text(response.output)
         if not text or text == NO_REPLY:
             return actions.outbox
         return [*as_text_bubbles(text), *actions.outbox]
 
-    def _ask_openai(self, conversation: list[dict]):
-        response = self._client.chat.completions.create(
+    def _ask_openai(self, conversation: list):
+        response = self._client.responses.create(
             model=MODEL,
-            messages=conversation,
+            instructions=SYSTEM_PROMPT,
+            input=conversation,
             tools=OPENAI_TOOLS,
-            reasoning_effort=REASONING_EFFORT,
-            max_completion_tokens=MAX_OUTPUT_TOKENS,
+            max_tool_calls=MAX_WEB_LOOKUPS_PER_REPLY,
+            reasoning={"effort": REASONING_EFFORT},
+            max_output_tokens=MAX_OUTPUT_TOKENS,
         )
-        return response.choices[0].message
+        _log_web_lookups(response.output)
+        return response
+
+
+def _function_calls(output: list) -> list:
+    return [item for item in output if item.type == "function_call"]
 
 
 def _image_part(photo: MessagePhoto) -> dict:
     photo_url = f"data:{photo.media_type};base64,{photo.base64_data}"
-    return {"type": "image_url", "image_url": {"url": photo_url}}
+    return {"type": "input_image", "image_url": photo_url}
 
 
 def _run_tool_calls(actions: TripActions, tool_calls: list) -> list[dict]:
-    """Runs every tool call in a reply and returns one result message per call,
-    then a message with any photos the AI asked to see."""
+    """Runs every tool call in a response and returns one result per call."""
     results = []
-    photos = []
     for call in tool_calls:
-        tool_input = json.loads(call.function.arguments)
+        tool_input = json.loads(call.arguments)
         try:
-            outcome = run_tool(actions, call.function.name, tool_input)
+            outcome = run_tool(actions, call.name, tool_input)
         except TripActionError as error:
             outcome = f"Error: {error}"
-        logger.info(describe_tool_call(call.function.name, tool_input, outcome))
-        if isinstance(outcome, MessagePhoto):
-            photos.append(_image_part(outcome))
-            outcome = "The photo is in the next message."
-        results.append({"role": "tool", "tool_call_id": call.id, "content": outcome})
-    # Tool results can only be text, so the photos follow them as a user
-    # message.
-    if photos:
-        results.append({"role": "user", "content": photos})
+        logger.info(describe_tool_call(call.name, tool_input, outcome))
+        results.append(
+            {
+                "type": "function_call_output",
+                "call_id": call.call_id,
+                # A photo the AI asked to see comes back as the image itself.
+                "output": (
+                    [_image_part(outcome)]
+                    if isinstance(outcome, MessagePhoto)
+                    else outcome
+                ),
+            }
+        )
     return results
+
+
+def _log_web_lookups(output: list) -> None:
+    for item in output:
+        if item.type == "web_search_call":
+            logger.info("OpenAI ran web_search %s", item.action)
+
+
+def _message_parts(output: list) -> list:
+    return [part for item in output if item.type == "message" for part in item.content]
+
+
+def _refusal(output: list) -> str | None:
+    refusals = (
+        part.refusal for part in _message_parts(output) if part.type == "refusal"
+    )
+    return next(refusals, None)
+
+
+def _reply_text(output: list) -> str:
+    # Text before a web search is the model narrating ("let me check that"),
+    # so only what it wrote after the last search is the reply.
+    last_search = max(
+        (i for i, item in enumerate(output) if item.type == "web_search_call"),
+        default=-1,
+    )
+    parts = _message_parts(output[last_search + 1 :])
+    return "".join(part.text for part in parts if part.type == "output_text").strip()

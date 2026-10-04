@@ -22,6 +22,7 @@ Several tools are planned but not built yet. **If a tool is marked planned, it d
 | Event trace: one bridge log line per message | Built | |
 | Developer console (`devchat`), scripts and `bun run e2e` | Built. Photos and voice notes convert only on a Mac, and a photo can't have a caption yet. | |
 | Photos and voice notes: kept in `media/`, put into words by OpenAI, and photos viewable again by the AI (`view_photo`) | Built. Needs `OPENAI_API_KEY` to transcribe and a Mac to convert. Videos are dropped. | |
+| Web search and page reading for the AI | Built. Anthropic or OpenAI runs the searches, so there's no extra key. Each reply gets at most 3 searches (and, on Claude, 2 page reads). | |
 | Seeded stages and resetting one chat | Built | |
 | Tapbacks, threaded replies and link cards, with console previews | Built, but only tested against a stand-in for Linq's API | |
 | Message effects (confetti) | Planned (design doc, events in, actions out) | Plain text |

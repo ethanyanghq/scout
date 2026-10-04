@@ -4,9 +4,10 @@ import json
 from datetime import datetime
 from types import SimpleNamespace
 
-from openai.types.chat import (
-    ChatCompletionMessage,
-    ChatCompletionMessageFunctionToolCall,
+from openai.types.responses import (
+    ResponseFunctionToolCall,
+    ResponseFunctionWebSearch,
+    ResponseOutputMessage,
 )
 
 from scout.agent import ScoutAgent
@@ -21,32 +22,48 @@ MAYA = "+15550000001"
 
 
 class ScriptedOpenAI:
-    """Returns pre-written replies in order and keeps every request it got."""
+    """Returns pre-written responses in order and keeps every request it got.
+    Each response is the list of items OpenAI would put in its output."""
 
-    def __init__(self, *replies):
-        self._replies = list(replies)
+    def __init__(self, *responses):
+        self._responses = list(responses)
         self.requests = []
-        completions = SimpleNamespace(create=self._create)
-        self.chat = SimpleNamespace(completions=completions)
+        self.responses = SimpleNamespace(create=self._create)
 
     def _create(self, **request):
         # Copy the list: the agent keeps appending to the same conversation.
-        self.requests.append({**request, "messages": list(request["messages"])})
-        reply = self._replies.pop(0)
-        return SimpleNamespace(choices=[SimpleNamespace(message=reply)])
+        self.requests.append({**request, "input": list(request["input"])})
+        return SimpleNamespace(output=self._responses.pop(0))
+
+
+def output_message(*parts):
+    return ResponseOutputMessage(
+        id="msg_1", type="message", role="assistant", status="completed", content=parts
+    )
 
 
 def says(text):
-    return ChatCompletionMessage(role="assistant", content=text)
+    return [output_message({"type": "output_text", "text": text, "annotations": []})]
 
 
 def calls(name, tool_input, call_id="call_1"):
-    call = ChatCompletionMessageFunctionToolCall(
-        id=call_id,
-        type="function",
-        function={"name": name, "arguments": json.dumps(tool_input)},
+    return [
+        ResponseFunctionToolCall(
+            type="function_call",
+            call_id=call_id,
+            name=name,
+            arguments=json.dumps(tool_input),
+        )
+    ]
+
+
+def searches(query):
+    return ResponseFunctionWebSearch(
+        id="ws_1",
+        type="web_search_call",
+        status="completed",
+        action={"type": "search", "query": query},
     )
-    return ChatCompletionMessage(role="assistant", content=None, tool_calls=[call])
 
 
 def said(outgoing):
@@ -72,13 +89,14 @@ def test_bad_tool_input_goes_back_to_openai_as_an_error(store):
 
     replies = OpenAIScoutAgent(model, store).respond(trip, message)
 
-    tool_result = model.requests[1]["messages"][-1]
-    assert tool_result["content"].startswith("Error:")
-    assert "no open poll" in tool_result["content"]
+    tool_result = model.requests[1]["input"][-1]
+    assert tool_result["call_id"] == "call_1"
+    assert tool_result["output"].startswith("Error:")
+    assert "no open poll" in tool_result["output"]
     assert said(replies) == ["There's no poll open yet."]
 
 
-def test_a_photo_openai_asks_to_view_follows_the_tool_results(store, tmp_path):
+def test_a_photo_openai_asks_to_view_comes_back_as_an_image(store, tmp_path):
     trip, message = maya_says(store, "@scout what was the total on that receipt?")
     readable = tmp_path / "a1b2c3d4.readable.jpg"
     readable.write_bytes(b"jpeg bytes")
@@ -95,17 +113,44 @@ def test_a_photo_openai_asks_to_view_follows_the_tool_results(store, tmp_path):
 
     OpenAIScoutAgent(model, store).respond(trip, message)
 
-    tool_result, photos = model.requests[1]["messages"][-2:]
-    assert tool_result["role"] == "tool"
-    assert photos == {
-        "role": "user",
-        "content": [
-            {
-                "type": "image_url",
-                "image_url": {"url": "data:image/jpeg;base64,anBlZyBieXRlcw=="},
-            }
-        ],
-    }
+    tool_result = model.requests[1]["input"][-1]
+    assert tool_result["output"] == [
+        {"type": "input_image", "image_url": "data:image/jpeg;base64,anBlZyBieXRlcw=="}
+    ]
+
+
+def test_openai_can_search_the_web(store):
+    trip, message = maya_says(store, "@scout anything happening in tulum in march?")
+    model = ScriptedOpenAI(says("NO_REPLY"))
+
+    OpenAIScoutAgent(model, store).respond(trip, message)
+
+    offered = [tool["type"] for tool in model.requests[0]["tools"]]
+    assert "web_search" in offered
+
+
+def test_texts_only_what_openai_wrote_after_searching(store):
+    trip, message = maya_says(store, "@scout anything happening in tulum in march?")
+    model = ScriptedOpenAI(
+        [
+            *says("Let me check."),
+            searches("Tulum events March 2027"),
+            *says("Tulum Jazz Festival runs March 10–14."),
+        ]
+    )
+
+    replies = OpenAIScoutAgent(model, store).respond(trip, message)
+
+    assert said(replies) == ["Tulum Jazz Festival runs March 10–14."]
+
+
+def test_a_refusal_sends_nothing(store):
+    trip, message = maya_says(store, "@scout hi")
+    model = ScriptedOpenAI(
+        [output_message({"type": "refusal", "refusal": "Can't help."})]
+    )
+
+    assert OpenAIScoutAgent(model, store).respond(trip, message) == []
 
 
 def test_openai_is_the_fallback_without_a_claude_key(store, monkeypatch):
