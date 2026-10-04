@@ -350,6 +350,30 @@ class TripStore:
                 (space_id, sender_phone, text, sent_at.isoformat()),
             )
 
+    def has_scout_spoken(self, space_id: str) -> bool:
+        """Whether scout has sent anything in the chat yet."""
+        with self._transaction() as db:
+            row = db.execute(
+                "SELECT 1 FROM chat_log WHERE space_id = ? AND sender_phone IS NULL",
+                (space_id,),
+            ).fetchone()
+        return row is not None
+
+    def chat_history(self, space_id: str) -> list[LoggedMessage]:
+        """Every message in the chat since scout joined, oldest first."""
+        with self._transaction() as db:
+            rows = db.execute(
+                "SELECT sender_phone, text, sent_at FROM chat_log "
+                "WHERE space_id = ? ORDER BY id",
+                (space_id,),
+            ).fetchall()
+        return [
+            LoggedMessage(
+                row["sender_phone"], row["text"], datetime.fromisoformat(row["sent_at"])
+            )
+            for row in rows
+        ]
+
     def recent_messages(self, space_id: str, limit: int) -> list[LoggedMessage]:
         """The latest messages in the chat, oldest first."""
         with self._transaction() as db:

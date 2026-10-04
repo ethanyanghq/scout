@@ -64,20 +64,31 @@ class TripActions:
         self._services = services
         self.outbox: list[Outgoing] = []
 
-    def save_sender_preferences(self, update: PreferenceUpdate) -> str:
+    def save_member_preferences(
+        self, member_label: str, update: PreferenceUpdate
+    ) -> str:
+        """Saves what one member shared about themselves anywhere in the chat,
+        so scout can catch up on details people shared without tagging it."""
         from_date, to_date = update.available_from, update.available_to
         if from_date and to_date and from_date > to_date:
             raise TripActionError(f"available_from {from_date} is after {to_date}")
         if update.budget_usd is not None and update.budget_usd <= 0:
             raise TripActionError("budget_usd must be a positive whole number")
-
-        self._store.save_preferences(self._space_id, self._sender_phone, update)
         trip = self._load_trip()
-        sender = trip.find_member(self._sender_phone)
+        member = trip.find_member_by_label(member_label)
+        if member is None:
+            labels = ", ".join(m.label for m in trip.members)
+            raise TripActionError(
+                f"no single member is called {member_label!r}; members are: {labels}"
+            )
+
+        self._store.save_preferences(self._space_id, member.phone, update)
+        trip = self._load_trip()
+        member = trip.find_member(member.phone)
         still_waiting_on = summarize_group(trip.members).members_still_to_share
         return (
-            f"Saved. {sender.label} is still missing: "
-            f"{', '.join(sender.missing_preferences) or 'nothing'}. "
+            f"Saved. {member.label} is still missing: "
+            f"{', '.join(member.missing_preferences) or 'nothing'}. "
             f"Group still waiting on: "
             f"{', '.join(m.label for m in still_waiting_on) or 'nobody'}."
         )

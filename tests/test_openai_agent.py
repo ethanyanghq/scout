@@ -67,6 +67,7 @@ def maya_says(store, words, photo=None):
 def test_saves_preferences_and_confirms(store):
     trip, message = maya_says(store, "i'm maya, $800")
     preferences = {
+        "member": "…0001",
         "display_name": "Maya",
         "available_from": None,
         "available_to": None,
@@ -75,7 +76,7 @@ def test_saves_preferences_and_confirms(store):
         "must_haves": None,
     }
     model = ScriptedOpenAI(
-        calls("save_sender_preferences", preferences),
+        calls("save_member_preferences", preferences),
         says("Got it, Maya: ~$800. Dates and home city?"),
     )
 

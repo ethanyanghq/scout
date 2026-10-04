@@ -18,17 +18,24 @@ def _nullable(json_type: str, description: str) -> dict:
 # every property to be listed in `required`; optional ones are nullable instead.
 TOOL_DEFINITIONS = [
     {
-        "name": "save_sender_preferences",
+        "name": "save_member_preferences",
         "description": (
-            "Save trip preferences shared by the person who sent the newest "
-            "message. Pass null for anything they didn't mention; it keeps "
-            "whatever was saved before. Only save what this person said about "
-            "themselves."
+            "Save trip preferences one member shared about themselves in the "
+            "chat, tagged or not. Pass null for anything they didn't mention; "
+            "it keeps whatever was saved before. Only save what this member "
+            "said in their own messages, never what someone said for them."
         ),
         "strict": True,
         "input_schema": {
             "type": "object",
             "properties": {
+                "member": {
+                    "type": "string",
+                    "description": (
+                        "Who shared these details, exactly as the chat labels "
+                        "them, like 'Maya' or '…0002'."
+                    ),
+                },
                 "display_name": _nullable("string", "Their first name."),
                 "available_from": _nullable(
                     "string", "First day they can travel, as YYYY-MM-DD."
@@ -50,6 +57,7 @@ TOOL_DEFINITIONS = [
                 },
             },
             "required": [
+                "member",
                 "display_name",
                 "available_from",
                 "available_to",
@@ -485,8 +493,10 @@ TOOL_DEFINITIONS = [
 def run_tool(actions: TripActions, name: str, tool_input: dict[str, Any]) -> str:
     """Runs one tool call. Raises TripActionError if the input can't be used."""
     match name:
-        case "save_sender_preferences":
-            return actions.save_sender_preferences(_to_preference_update(tool_input))
+        case "save_member_preferences":
+            return actions.save_member_preferences(
+                tool_input["member"], _to_preference_update(tool_input)
+            )
         case "post_group_summary":
             return actions.post_group_summary()
         case "start_destination_poll":

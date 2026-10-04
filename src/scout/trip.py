@@ -8,11 +8,8 @@ from enum import StrEnum
 from scout.places import Place
 
 # Matches "@scout", "scout,", "Scout?" but not "scouting".
-SCOUT_MENTION = re.compile(r"\bscout\b", re.IGNORECASE)
-# Matches "$164", "$ 40", "164 dollars", "40 bucks", "12.50 usd".
-MONEY_MENTION = re.compile(
-    r"\$\s?\d|\b\d[\d,]*(\.\d+)?\s?(dollars|bucks|usd)\b", re.IGNORECASE
-)
+# Only an explicit tag counts: "someone added a scout bot?" isn't for scout.
+SCOUT_MENTION = re.compile(r"@scout\b", re.IGNORECASE)
 
 
 class TripStage(StrEnum):
@@ -54,10 +51,6 @@ class IncomingMessage:
     @property
     def mentions_scout(self) -> bool:
         return SCOUT_MENTION.search(self.text) is not None
-
-    @property
-    def mentions_money(self) -> bool:
-        return MONEY_MENTION.search(self.text) is not None
 
 
 @dataclass(frozen=True)
@@ -206,3 +199,14 @@ class Trip:
             if member.phone == phone:
                 return member
         raise KeyError(f"{phone} is not a member of trip {self.space_id}")
+
+    def find_member_by_label(self, label: str) -> Member | None:
+        """The one member scout calls `label` in the chat (their name, or …1234
+        before they've shared it), or None if no single member matches."""
+        wanted = label.strip().casefold()
+        matches = [
+            member
+            for member in self.members
+            if wanted in (member.label.casefold(), f"…{member.phone[-4:]}")
+        ]
+        return matches[0] if len(matches) == 1 else None

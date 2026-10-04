@@ -48,7 +48,7 @@ iPhone in the group
 - **Actions fall back to text.** If a line can't send a tapback, a threaded reply or a link card, or the bridge can't find the message it targets, the plain-text version goes instead.
 - **The bridge drops** private chats (in Linq mode), scout's own messages, messages with nothing to read (stickers, voice memos) and repeat deliveries.
 - **The bridge logs one line per message**: `handled` with the reply count and time, `skipped` with the reason, or `failed` with the error.
-- **The service decides whether to speak** (`conversation.py`). The first message in a chat gets the introduction. A plain vote ("2"), a 👍 or ❤️ on a poll option, and a pick of a nearby place are handled in code. Tagged messages, threaded replies under a poll option, and untagged messages at certain stages go to Claude. Everything else gets no reply.
+- **The service decides whether to speak** (`conversation.py`). A plain vote ("2"), a 👍 or ❤️ on a poll option, and a pick of a nearby place are handled in code. Only a message that tags `@scout` goes to the AI, which reads the whole chat to catch up: it introduces itself the first time, and saves the details everyone shared about themselves without tagging it. If that AI call fails, scout says it hit a snag. Everything else gets no reply and costs no AI call.
 - **Votes stay quiet.** A vote by number gets a 👍 tapback, and a tapback vote gets a reply threaded under the option, instead of a new line in the chat.
 - **Each chat is one trip**, saved in `scout.db` under the chat's ID (`space_id`).
 
@@ -133,7 +133,7 @@ Lines starting with `#` are comments. Check the trip's state, or a word a reply 
 
 `bridge/e2e/` holds a script for each critical user journey in AGENTS.md. `cd bridge && bun run e2e` starts a throwaway service on a free port, plays every script, and stops the service. `bun run e2e votes-and-winner.chat` runs one script. The service's log and database stay in `bridge/.devchat/e2e/` so you can look into failures.
 
-Most journeys go through the AI. Without `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`, only the introduction and the vote pass.
+Most journeys go through the AI. Without `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`, only the vote passes.
 
 ### Without the bridge: scout-simulate and curl
 
@@ -194,7 +194,7 @@ This needs a Mac (the bridge converts iPhone photos with macOS's `sips`) and you
 
 1. **Find the bridge's line for the message** (`[bridge]` in `bun run dev`). `skipped` says why: a private chat, scout's own message, nothing to read, or a repeat delivery. `failed` shows the error from Linq's API or the service. `handled … scout stayed quiet` means the service chose not to reply (step 3).
 2. **No line at all?** The message never reached the bridge. Is the relay running (`[relay]` in `bun run dev`)? Did the sender text scout privately first? The free line ignores anyone who hasn't.
-3. **Did scout choose to stay quiet?** The service log shows each request. An untagged message only reaches Claude while preferences are being collected, or after a destination is chosen if it mentions money or has a photo (`_needs_agent_untagged` in `conversation.py`).
+3. **Was scout tagged?** Only messages with `@scout` reach the AI. Saying "scout" without the @ is just chat.
 4. **Did the database layout change?** There are no migrations. Delete `scout.db`, and every group gets the introduction again.
 
 ## Add a group chat feature

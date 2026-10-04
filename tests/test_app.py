@@ -1,6 +1,6 @@
 """What the bridge sends scout over HTTP, and the actions it gets back."""
 
-from datetime import date
+from datetime import date, datetime
 
 import pytest
 from fastapi.testclient import TestClient
@@ -26,6 +26,7 @@ class UnusedAgent:
 @pytest.fixture
 def client(store):
     store.create_trip(SPACE)
+    store.log_message(SPACE, None, "Hey all, I'm scout 👋", datetime(2026, 10, 3, 9, 0))
     store.add_members(SPACE, [MAYA, LEO])
     store.open_poll(SPACE, OPTIONS)
     return TestClient(create_app(store, UnusedAgent()))

@@ -14,7 +14,7 @@ from scout.trip_store import TripStore
 
 def connect_agent(store: TripStore) -> Agent:
     # With neither key set, scout still starts on Claude: replies that need
-    # the model fail, but the ones that don't (like the introduction) work.
+    # the model fail, but the ones handled in code (like counting votes) work.
     if not os.environ.get("ANTHROPIC_API_KEY") and os.environ.get("OPENAI_API_KEY"):
         return OpenAIScoutAgent(openai.OpenAI(), store, connect_outside_services())
     return ScoutAgent(anthropic.Anthropic(), store, connect_outside_services())

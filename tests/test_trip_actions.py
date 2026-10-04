@@ -82,8 +82,8 @@ def plan_day(day_of_march, plan):
 
 
 def test_saving_preferences_reports_what_is_still_missing(maya_actions):
-    status = maya_actions.save_sender_preferences(
-        PreferenceUpdate(display_name="Maya", budget_usd=800)
+    status = maya_actions.save_member_preferences(
+        "…0001", PreferenceUpdate(display_name="Maya", budget_usd=800)
     )
 
     assert "Maya is still missing: dates, home city" in status
@@ -92,11 +92,31 @@ def test_saving_preferences_reports_what_is_still_missing(maya_actions):
 
 def test_rejects_dates_that_end_before_they_start(maya_actions):
     with pytest.raises(TripActionError):
-        maya_actions.save_sender_preferences(
+        maya_actions.save_member_preferences(
+            "…0001",
             PreferenceUpdate(
                 available_from=date(2027, 3, 20), available_to=date(2027, 3, 13)
-            )
+            ),
         )
+
+
+def test_saves_details_another_member_shared_earlier_in_the_chat(maya_actions, store):
+    maya_actions.save_member_preferences("…0002", PreferenceUpdate(budget_usd=600))
+
+    assert store.get_trip(SPACE).find_member(LEO).budget_usd == 600
+
+
+def test_finds_a_member_by_the_name_they_shared(maya_actions, store):
+    store.save_preferences(SPACE, LEO, PreferenceUpdate(display_name="Leo"))
+
+    maya_actions.save_member_preferences("leo", PreferenceUpdate(home_city="NYC"))
+
+    assert store.get_trip(SPACE).find_member(LEO).home_city == "NYC"
+
+
+def test_rejects_preferences_for_someone_not_in_the_chat(maya_actions):
+    with pytest.raises(TripActionError, match="members are: …0001, …0002"):
+        maya_actions.save_member_preferences("Sam", PreferenceUpdate(budget_usd=500))
 
 
 def test_starting_a_poll_posts_it_to_the_chat(maya_actions):

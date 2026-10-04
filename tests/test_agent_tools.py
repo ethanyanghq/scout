@@ -42,6 +42,7 @@ def test_agent_votes_use_the_numbers_shown_in_the_poll(maya_actions, store):
 
 def test_agent_dates_must_be_real_calendar_dates(maya_actions):
     tool_input = {
+        "member": "…0001",
         "display_name": None,
         "available_from": "March 13",
         "available_to": None,
@@ -51,7 +52,7 @@ def test_agent_dates_must_be_real_calendar_dates(maya_actions):
     }
 
     with pytest.raises(TripActionError, match="YYYY-MM-DD"):
-        run_tool(maya_actions, "save_sender_preferences", tool_input)
+        run_tool(maya_actions, "save_member_preferences", tool_input)
 
 
 def test_agent_itinerary_dates_become_planned_days(maya_actions, store):

@@ -117,6 +117,30 @@ def test_recent_messages_come_back_oldest_first_and_limited(store):
     assert [m.text for m in recent] == ["message 3", "message 4"]
 
 
+def test_scout_has_spoken_only_once_it_sent_something_in_that_chat(store):
+    store.create_trip(SPACE)
+    store.create_trip("other-chat")
+    store.log_message(SPACE, MAYA, "hey everyone", datetime(2026, 10, 2, 9, 0))
+    store.log_message("other-chat", None, "Hey all", datetime(2026, 10, 2, 9, 1))
+    assert not store.has_scout_spoken(SPACE)
+
+    store.log_message(SPACE, None, "Hey all", datetime(2026, 10, 2, 9, 2))
+
+    assert store.has_scout_spoken(SPACE)
+
+
+def test_chat_history_has_every_message_oldest_first(store):
+    store.create_trip(SPACE)
+    for minute in range(40):
+        store.log_message(
+            SPACE, MAYA, f"message {minute}", datetime(2026, 10, 2, 9, minute)
+        )
+
+    history = store.chat_history(SPACE)
+
+    assert [m.text for m in history] == [f"message {i}" for i in range(40)]
+
+
 def test_expenses_come_back_in_the_order_they_were_logged(store):
     store.create_trip(SPACE)
 

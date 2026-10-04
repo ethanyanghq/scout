@@ -74,8 +74,9 @@ def test_saves_preferences_and_confirms(store):
         response(
             "tool_use",
             tool_call(
-                "save_sender_preferences",
+                "save_member_preferences",
                 {
+                    "member": "…0001",
                     "display_name": "Maya",
                     "available_from": None,
                     "available_to": None,
@@ -150,6 +151,44 @@ def test_tells_claude_whether_it_was_tagged(store):
     situation = situation_text(claude)
     assert "It tags or addresses you." in situation
     assert "[…0001] @scout hi" in situation
+
+
+def test_tells_claude_when_it_hasnt_spoken_in_the_chat_yet(store):
+    trip, message = maya_says(store, "@scout you there?")
+    claude = ScriptedClaude(response("end_turn", text("Hey all, I'm scout")))
+
+    ScoutAgent(claude, store).respond(trip, message)
+
+    assert "You haven't said anything in this chat yet." in situation_text(claude)
+
+
+def test_doesnt_ask_claude_to_introduce_itself_twice(store):
+    trip, message = maya_says(store, "@scout you there?")
+    store.log_message(SPACE, None, "Hey all, I'm scout", datetime(2026, 10, 2, 9, 1))
+    claude = ScriptedClaude(response("end_turn", text("Yep!")))
+
+    ScoutAgent(claude, store).respond(trip, message)
+
+    assert "You haven't said anything" not in situation_text(claude)
+
+
+def test_shows_claude_the_whole_chat_not_just_the_latest_messages(store):
+    store.create_trip(SPACE)
+    store.add_members(SPACE, [MAYA])
+    for minute in range(40):
+        store.log_message(
+            SPACE, MAYA, f"chat {minute}", datetime(2026, 10, 2, 8, minute)
+        )
+    store.log_message(SPACE, MAYA, "@scout catch up", datetime(2026, 10, 2, 9, 0))
+    message = IncomingMessage(SPACE, MAYA, "@scout catch up", datetime(2026, 10, 2, 9))
+    trip = store.get_trip(SPACE)
+    claude = ScriptedClaude(response("end_turn", text("Caught up!")))
+
+    ScoutAgent(claude, store).respond(trip, message)
+
+    situation = situation_text(claude)
+    assert "[…0001] chat 0\n" in situation
+    assert "[…0001] @scout catch up" in situation
 
 
 def test_tells_claude_which_message_a_threaded_reply_answers(store):

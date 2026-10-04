@@ -7,7 +7,7 @@ store, polls, and summaries are all real.
 from datetime import date, datetime
 
 from scout.conversation import (
-    INTRODUCTION,
+    INTRODUCTION_SNAG_REPLY,
     SNAG_REPLY,
     handle_message,
     handle_reaction,
@@ -85,8 +85,14 @@ def send_from_line(store, agent, sender, text, message_id):
     return handle_message(message, store, agent)
 
 
-def start_voting(store):
+def scout_joins(store):
+    """A chat scout already introduced itself in."""
     store.create_trip(SPACE)
+    store.log_message(SPACE, None, "Hey all, I'm scout 👋", datetime(2026, 10, 2, 8, 0))
+
+
+def start_voting(store):
+    scout_joins(store)
     store.add_members(SPACE, list(EVERYONE))
     store.open_poll(SPACE, OPTIONS)
 
@@ -97,10 +103,30 @@ def choose_san_juan(store):
     store.close_poll(poll_id, "San Juan, Puerto Rico", None)
 
 
-def test_first_message_in_a_chat_gets_the_introduction(store):
-    replies = send(store, FakeAgent(replies=[]), MAYA, "hey everyone")
+def test_scout_introduces_itself_in_one_message_written_by_the_agent(store):
+    agent = FakeAgent(replies=["Hey all, I'm scout 👋 Yep, I'm here!"])
 
-    assert replies == [INTRODUCTION]
+    replies = send(store, agent, MAYA, "@scout you there?")
+
+    assert agent.messages_seen == ["@scout you there?"]
+    assert replies == ["Hey all, I'm scout 👋 Yep, I'm here!"]
+
+
+def test_scout_says_it_hit_a_snag_when_it_cant_introduce_itself(store):
+    replies = send(store, BrokenAgent(), MAYA, "@scout hey")
+
+    assert replies == [INTRODUCTION_SNAG_REPLY]
+
+
+def test_scout_stays_silent_in_a_new_chat_until_someone_tags_it(store):
+    agent = FakeAgent(replies=["Hey all, I'm scout 👋"])
+
+    first = send(store, agent, MAYA, "hey everyone, someone added a bot?")
+    tagged = send(store, agent, LEO, "@scout you there?")
+
+    assert first == []
+    assert agent.messages_seen == ["@scout you there?"]
+    assert tagged == ["Hey all, I'm scout 👋"]
 
 
 def test_everyone_in_the_chat_joins_the_trip_including_quiet_members(store):
@@ -110,14 +136,24 @@ def test_everyone_in_the_chat_joins_the_trip_including_quiet_members(store):
     assert {member.phone for member in members} == set(EVERYONE)
 
 
-def test_untagged_messages_go_to_the_agent_while_collecting_preferences(store):
+def test_saying_scouts_name_without_the_at_sign_is_not_a_tag(store):
+    scout_joins(store)
     agent = FakeAgent()
-    send(store, agent, MAYA, "hey everyone")
+
+    replies = send(store, agent, LEO, "scout seems useful")
+
+    assert replies == []
+    assert agent.messages_seen == []
+
+
+def test_untagged_trip_details_wait_for_someone_to_tag_scout(store):
+    scout_joins(store)
+    agent = FakeAgent()
 
     replies = send(store, agent, LEO, "mar 14-20, $600, nyc")
 
-    assert agent.messages_seen[-1] == "mar 14-20, $600, nyc"
-    assert replies == ["agent reply"]
+    assert replies == []
+    assert agent.messages_seen == []
 
 
 def test_untagged_chatter_is_ignored_once_preferences_are_done(store):
@@ -225,7 +261,7 @@ def test_scout_apologizes_when_it_fails_on_a_message_addressed_to_it(store):
 
 
 def test_scout_stays_quiet_when_it_fails_on_a_message_not_addressed_to_it(store):
-    store.create_trip(SPACE)
+    scout_joins(store)
 
     replies = send(store, BrokenAgent(), LEO, "mar 14-20, $600, nyc")
 
@@ -233,24 +269,23 @@ def test_scout_stays_quiet_when_it_fails_on_a_message_not_addressed_to_it(store)
 
 
 def test_replies_are_saved_so_the_agent_sees_them_next_time(store):
-    send(store, FakeAgent(replies=["Got it, Maya"]), MAYA, "hey, I'm maya")
+    send(store, FakeAgent(replies=["Got it, Maya"]), MAYA, "@scout hey, I'm maya")
 
     logged = [(m.sender_phone, m.text) for m in store.recent_messages(SPACE, 10)]
     assert logged == [
-        (MAYA, "hey, I'm maya"),
-        (None, INTRODUCTION),
+        (MAYA, "@scout hey, I'm maya"),
         (None, "Got it, Maya"),
     ]
 
 
-def test_untagged_expenses_reach_the_agent_once_a_destination_is_chosen(store):
+def test_untagged_expenses_wait_for_someone_to_tag_scout(store):
     choose_san_juan(store)
     agent = FakeAgent()
 
     replies = send(store, agent, LEO, "fyi I paid the airbnb, $1,240")
 
-    assert agent.messages_seen == ["fyi I paid the airbnb, $1,240"]
-    assert replies == ["agent reply"]
+    assert replies == []
+    assert agent.messages_seen == []
 
 
 def test_untagged_chatter_without_an_amount_is_ignored_on_the_trip(store):
@@ -273,13 +308,13 @@ def test_price_talk_during_the_vote_is_not_treated_as_an_expense(store):
     assert agent.messages_seen == []
 
 
-def test_untagged_photos_reach_the_agent_once_a_destination_is_chosen(store):
+def test_untagged_receipt_photos_wait_for_someone_to_tag_scout(store):
     choose_san_juan(store)
     agent = FakeAgent()
 
     send(store, agent, PRIYA, "casa brisa dinner 👆", photo=RECEIPT_PHOTO)
 
-    assert agent.messages_seen == ["casa brisa dinner 👆"]
+    assert agent.messages_seen == []
 
 
 def test_untagged_photos_during_the_vote_are_ignored(store):
@@ -292,14 +327,15 @@ def test_untagged_photos_during_the_vote_are_ignored(store):
     assert agent.messages_seen == []
 
 
-def test_the_payer_can_confirm_a_receipt_without_tagging_scout(store):
+def test_the_payer_confirms_a_receipt_by_tagging_scout(store):
     choose_san_juan(store)
     store.save_pending_receipt(SPACE, PendingReceipt(PRIYA, "Casa Brisa", 16_400))
     agent = FakeAgent()
 
     send(store, agent, PRIYA, "yep, all 3")
+    send(store, agent, PRIYA, "@scout yep, all 3")
 
-    assert agent.messages_seen == ["yep, all 3"]
+    assert agent.messages_seen == ["@scout yep, all 3"]
 
 
 def test_only_the_payer_confirms_their_receipt(store):
@@ -448,13 +484,13 @@ def reply_in_thread(store, agent, sender, text, replying_to):
     return handle_message(message, store, agent)
 
 
-def test_a_threaded_reply_under_a_poll_option_reaches_the_agent_untagged(store):
+def test_an_untagged_threaded_reply_under_a_poll_option_is_just_chat(store):
     start_voting(store)
     agent = FakeAgent()
 
     reply_in_thread(store, agent, LEO, "this one!", replying_to=SAN_JUAN_OPTION)
 
-    assert agent.messages_seen == ["this one!"]
+    assert agent.messages_seen == []
 
 
 def test_a_threaded_reply_under_anything_else_stays_untagged_chatter(store):

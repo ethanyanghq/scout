@@ -83,7 +83,7 @@ def seed_trip(
         )
 
     store.open_poll(space_id, SEED_POLL_OPTIONS)
-    # The agent reads the recent chat, so it should see the poll it "posted".
+    # The agent reads the chat, so it should see the poll it "posted".
     for text in polls.format_poll(SEED_POLL_OPTIONS):
         store.log_message(space_id, None, text, datetime.now())
     if stage == SeedStage.DESTINATION_CHOSEN:

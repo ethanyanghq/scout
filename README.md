@@ -35,8 +35,8 @@ My number is a [Linq](https://linqapp.com) line, a real iMessage number you can 
 
 | File | What it does |
 | --- | --- |
-| `conversation.py` | Decides what happens with each message: introduce scout, count a vote, ask the agent, or stay quiet. |
-| `agent.py` | Shows Claude the trip and the recent chat, then runs the tools Claude picks. |
+| `conversation.py` | Decides what happens with each message: count a vote, ask the agent when someone tags @scout, or stay quiet. |
+| `agent.py` | Shows Claude the trip and the whole chat, then runs the tools Claude picks. |
 | `system_prompt.md` | scout's instructions: when to speak, how to text, the planning flow. |
 | `agent_tools.py` | The tools Claude can call, and how each call maps onto a trip action. |
 | `trip_actions.py` | The changes scout can make to a trip (save preferences, post a poll, record a vote). |

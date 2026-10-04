@@ -25,7 +25,6 @@ MAX_OUTPUT_TOKENS = 16_000
 # Enough for a busy turn (save, summarize, poll) without letting a confused
 # model loop forever.
 MAX_TOOL_ROUNDS = 6
-RECENT_MESSAGE_COUNT = 30
 # If a safety classifier declines a request, the API retries it on a
 # recommended fallback model instead of returning nothing.
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
@@ -107,12 +106,11 @@ class ScoutAgent:
 
 
 def describe_situation(store: TripStore, trip: Trip, message: IncomingMessage) -> str:
-    """The trip, the recent chat, and the newest message, in words for the model."""
-    recent = store.recent_messages(trip.space_id, RECENT_MESSAGE_COUNT)
+    """The trip, the whole chat, and the newest message, in words for the model."""
     labels = {member.phone: member.label for member in trip.members}
     chat = "\n".join(
         f"[{labels.get(logged.sender_phone, 'scout')}] {logged.text}"
-        for logged in recent
+        for logged in store.chat_history(trip.space_id)
     )
     sender = trip.find_member(message.sender_phone)
     tagged = (
@@ -124,11 +122,13 @@ def describe_situation(store: TripStore, trip: Trip, message: IncomingMessage) -
         tagged += " It comes with the photo above."
     if message.reply_to_text is not None:
         tagged += f' It replies in a thread to: "{message.reply_to_text}".'
+    if not store.has_scout_spoken(trip.space_id):
+        tagged += " You haven't said anything in this chat yet."
     today = date.today()
     return (
         f"Today is {today:%A, %B} {today.day}, {today.year}.\n\n"
         f"# Trip state\n{_describe_trip(trip)}\n\n"
-        f"# Recent chat, oldest first\n{chat}\n\n"
+        f"# The chat so far, oldest first\n{chat}\n\n"
         f"# Newest message\nFrom {sender.label}. {tagged}\n"
         f"{message.text}"
     )
