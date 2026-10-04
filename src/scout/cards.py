@@ -490,8 +490,8 @@ def _add_ons(add_ons: list[ItineraryAddOn]) -> list[dict]:
 
 
 def best_flights(trip: Trip, home_city_flights: list[HomeCityFlight]) -> dict:
-    """A departure board for each home city's flight, with its fare and a
-    button that opens it on Google Flights.
+    """A departure board for each home city's recommended flight, with its fare
+    and a button that opens it on Google Flights.
 
     Expects a trip whose destination and dates are locked in.
     """
@@ -559,7 +559,7 @@ def _flight_nodes(trip: Trip, home_city_flight: HomeCityFlight) -> list[dict]:
             ],
         },
     }
-    return [board, fare]
+    return [_section_heading("Recommended flight"), board, fare]
 
 
 def _row(key: str, value: str, sf_symbol: str) -> dict:

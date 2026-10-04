@@ -783,6 +783,12 @@ def test_flights_are_one_card_with_a_departure_board_per_home_city(
         ("BOS", "SJU"),
         ("NYC", "SJU"),
     ]
+    headings = [
+        node["text"]
+        for node in card.layout["root"]["children"]
+        if node["type"] == "text"
+    ]
+    assert headings == ["RECOMMENDED FLIGHT", "RECOMMENDED FLIGHT"]
     assert boards[0]["departTime"] == "6:15 AM"
     assert boards[0]["status"] == "1 stop · FLL"
     assert boards[1]["status"] == "Nonstop"

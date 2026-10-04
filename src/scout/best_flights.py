@@ -58,11 +58,12 @@ def find_best_flights(
 
 def format_best_flights(trip: Trip, home_city_flights: list[HomeCityFlight]) -> str:
     """The flights as text, for the chat log and phones that can't open the card."""
-    lines = [f"best flights to {trip.destination}, {format_window(trip.dates)}"]
+    lines = [f"recommended flights to {trip.destination}, {format_window(trip.dates)}"]
     for home_city_flight in home_city_flights:
         lines.extend(_format_home_city_flight(home_city_flight))
     lines.append(
-        "live google flights fares, so they can change until you book. "
+        "google flights' top pick from each city, so it may not be the shortest "
+        "or the cheapest. live fares can change until you book. "
         "whoever books, tell me what you paid and i'll split it."
     )
     return "\n".join(lines)
