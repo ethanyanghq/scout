@@ -16,6 +16,7 @@ from pathlib import Path
 from scout.ai_provider import connect_agent
 from scout.conversation import Agent, handle_message
 from scout.outgoing import as_plain_text
+from scout.outside_services import connect_outside_services
 from scout.trip import IncomingMessage
 from scout.trip_store import TripStore
 
@@ -37,7 +38,7 @@ def main() -> None:
     }
     with tempfile.TemporaryDirectory() as scratch:
         store = TripStore(Path(scratch) / "simulated.db")
-        agent = connect_agent(store)
+        agent = connect_agent(store, connect_outside_services())
         print(f"Group chat with {', '.join(args.people)}. Ctrl-D to quit.")
         _chat(phones, store, agent)
 

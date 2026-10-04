@@ -9,16 +9,16 @@ import openai
 from scout.agent import ScoutAgent
 from scout.conversation import Agent
 from scout.openai_agent import OpenAIScoutAgent
-from scout.outside_services import connect_outside_services
+from scout.outside_services import OutsideServices
 from scout.trip_store import TripStore
 
 logger = logging.getLogger(__name__)
 
 
-def connect_agent(store: TripStore) -> Agent:
+def connect_agent(store: TripStore, services: OutsideServices) -> Agent:
     # With neither key set, scout still starts on Claude: replies that need
     # the model fail, but the ones handled in code (like counting votes) work.
     if not os.environ.get("ANTHROPIC_API_KEY") and os.environ.get("OPENAI_API_KEY"):
         logger.info("Tagged messages go to OpenAI, since no ANTHROPIC_API_KEY is set")
-        return OpenAIScoutAgent(openai.OpenAI(), store, connect_outside_services())
-    return ScoutAgent(anthropic.Anthropic(), store, connect_outside_services())
+        return OpenAIScoutAgent(openai.OpenAI(), store, services)
+    return ScoutAgent(anthropic.Anthropic(), store, services)

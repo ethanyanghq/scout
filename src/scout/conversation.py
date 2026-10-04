@@ -15,6 +15,7 @@ from typing import Protocol
 
 from scout import polls
 from scout.outgoing import Outgoing, React, Say, Tapback, as_plain_text
+from scout.outside_services import NO_OUTSIDE_SERVICES, OutsideServices
 from scout.trip import IncomingMessage, IncomingReaction, Trip
 from scout.trip_actions import TripActions
 from scout.trip_store import TripStore
@@ -35,7 +36,10 @@ class Agent(Protocol):
 
 
 def handle_message(
-    message: IncomingMessage, store: TripStore, agent: Agent
+    message: IncomingMessage,
+    store: TripStore,
+    agent: Agent,
+    services: OutsideServices = NO_OUTSIDE_SERVICES,
 ) -> list[Outgoing]:
     """Records the message and returns what scout should send back."""
     if store.get_trip(message.space_id) is None:

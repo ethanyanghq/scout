@@ -13,6 +13,7 @@ from scout.agent import ScoutAgent
 from scout.ai_provider import connect_agent
 from scout.openai_agent import OpenAIScoutAgent
 from scout.outgoing import Say
+from scout.outside_services import NO_OUTSIDE_SERVICES
 from scout.trip import IncomingMessage, MediaKind, SharedMedia
 
 SPACE = "group-chat-1"
@@ -111,11 +112,11 @@ def test_openai_is_the_fallback_without_a_claude_key(store, monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
-    assert isinstance(connect_agent(store), OpenAIScoutAgent)
+    assert isinstance(connect_agent(store, NO_OUTSIDE_SERVICES), OpenAIScoutAgent)
 
 
 def test_claude_is_the_default_without_any_key(store, monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
-    assert isinstance(connect_agent(store), ScoutAgent)
+    assert isinstance(connect_agent(store, NO_OUTSIDE_SERVICES), ScoutAgent)

@@ -17,6 +17,11 @@ from scout.dev_endpoints import create_dev_router
 from scout.media import Attachment, MediaLibrary
 from scout.openai_transcriber import connect_transcriber
 from scout.outgoing import Card, Link, Outgoing, React, Say
+from scout.outside_services import (
+    NO_OUTSIDE_SERVICES,
+    OutsideServices,
+    connect_outside_services,
+)
 from scout.trip import IncomingMessage, IncomingReaction
 from scout.trip_store import TripStore
 
@@ -67,7 +72,12 @@ class Actions(BaseModel):
     actions: list[dict]
 
 
-def create_app(store: TripStore, agent: Agent, media: MediaLibrary) -> FastAPI:
+def create_app(
+    store: TripStore,
+    agent: Agent,
+    media: MediaLibrary,
+    services: OutsideServices = NO_OUTSIDE_SERVICES,
+) -> FastAPI:
     app = FastAPI(title="scout")
 
     # A plain `def` (not `async def`) makes FastAPI run this in a worker
@@ -89,7 +99,7 @@ def create_app(store: TripStore, agent: Agent, media: MediaLibrary) -> FastAPI:
             message_id=incoming.message_id,
             reply_to_text=incoming.reply_to_text,
         )
-        return _as_actions(handle_message(message, store, agent))
+        return _as_actions(handle_message(message, store, agent, services))
 
     @app.post("/reactions")
     def receive_reaction(incoming: IncomingTapback) -> Actions:
@@ -115,7 +125,8 @@ def _as_actions(outgoing: list[Outgoing]) -> Actions:
 def main() -> None:
     _log_decisions_only()
     store = TripStore(Path(os.environ.get("SCOUT_DB_PATH", DEFAULT_DB_PATH)))
-    agent = connect_agent(store)
+    services = connect_outside_services()
+    agent = connect_agent(store, services)
     media = MediaLibrary(
         Path(os.environ.get("SCOUT_MEDIA_DIR", DEFAULT_MEDIA_DIR)),
         connect_transcriber(),
@@ -124,7 +135,7 @@ def main() -> None:
     logger.info("scout service is listening on http://%s:%d", HOST, port)
     # The bridge logs every message, so a line per request would only repeat it.
     uvicorn.run(
-        create_app(store, agent, media),
+        create_app(store, agent, media, services),
         host=HOST,
         port=port,
         access_log=False,
