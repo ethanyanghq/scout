@@ -10,7 +10,13 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
-from scout.places import Coordinates, GooglePlaces, Place, PlacesError
+from scout.places import (
+    Coordinates,
+    GooglePlaces,
+    PhotographedPlace,
+    Place,
+    PlacesError,
+)
 
 API_KEY = "test-key"
 CONDADO = Coordinates(18.4574, -66.0745)
@@ -22,10 +28,20 @@ TACO_SPOT = {
     "editorialSummary": {"text": "Open-air food park with local vendors."},
     "primaryTypeDisplayName": {"text": "Food court"},
 }
+BEACH_RESORT = {
+    "displayName": {"text": "Hotel Xcaret Arte"},
+    "rating": 4.7,
+    "photos": [
+        {"name": "places/resort-1/photos/pool"},
+        {"name": "places/resort-1/photos/beach"},
+        {"name": "places/resort-1/photos/lobby"},
+    ],
+}
 
 
 class FakePlaces:
-    """Answers every search with `reply`, and keeps each request it got."""
+    """Answers every search with `reply`, and each photo with a public link
+    named after it. Keeps each request it got."""
 
     def __init__(self):
         self.requests = []
@@ -36,7 +52,7 @@ class FakePlaces:
     @property
     def url(self):
         host, port = self._server.server_address
-        return f"http://{host}:{port}/v1/places:searchText"
+        return f"http://{host}:{port}/v1"
 
     def stop(self):
         self._server.shutdown()
@@ -61,6 +77,16 @@ class FakePlaces:
                 self.end_headers()
                 self.wfile.write(encoded)
 
+            def do_GET(self):
+                fake.requests.append({"headers": self.headers, "path": self.path})
+                photo = self.path.split("/photos/")[1].split("/media")[0]
+                reply = {"photoUri": f"https://lh3.googleusercontent.com/{photo}"}
+                encoded = json.dumps(reply).encode()
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(encoded)))
+                self.end_headers()
+                self.wfile.write(encoded)
+
             def log_message(self, *args):
                 pass  # Keep test output quiet.
 
@@ -76,7 +102,7 @@ def google():
 
 @pytest.fixture
 def places(google):
-    return GooglePlaces(API_KEY, search_url=google.url)
+    return GooglePlaces(API_KEY, api_url=google.url)
 
 
 def test_search_results_become_places_with_a_price_and_summary(places):
@@ -150,7 +176,47 @@ def test_a_refused_search_says_why(places, google):
 
 def test_an_unreachable_places_api_raises_a_places_error(google):
     google.stop()
-    places = GooglePlaces(API_KEY, search_url=google.url)
+    places = GooglePlaces(API_KEY, api_url=google.url)
 
     with pytest.raises(PlacesError, match="didn't connect"):
         places.search("tacos", limit=3)
+
+
+def test_a_photographed_place_has_its_rating_and_public_photo_links(places, google):
+    google.reply = (200, {"places": [BEACH_RESORT]})
+
+    resort = places.find_photographed("best resort in Cancun", photo_count=2)
+
+    assert resort == PhotographedPlace(
+        name="Hotel Xcaret Arte",
+        rating=4.7,
+        photo_urls=[
+            "https://lh3.googleusercontent.com/pool",
+            "https://lh3.googleusercontent.com/beach",
+        ],
+    )
+
+
+def test_photo_links_are_asked_for_without_following_the_keyed_redirect(places, google):
+    google.reply = (200, {"places": [BEACH_RESORT]})
+
+    places.find_photographed("best resort in Cancun", photo_count=1)
+
+    photo_request = google.requests[1]
+    assert "skipHttpRedirect=true" in photo_request["path"]
+    assert photo_request["headers"]["X-Goog-Api-Key"] == API_KEY
+    assert "places.photos" in google.requests[0]["headers"]["X-Goog-FieldMask"]
+
+
+def test_a_place_without_photos_or_rating_still_comes_back(places, google):
+    google.reply = (200, {"places": [{"displayName": {"text": "Playa Norte"}}]})
+
+    beach = places.find_photographed("Playa Norte", photo_count=3)
+
+    assert beach == PhotographedPlace(name="Playa Norte", rating=None, photo_urls=[])
+
+
+def test_no_photographed_match_is_none(places, google):
+    google.reply = (200, {})
+
+    assert places.find_photographed("igloo bar", photo_count=1) is None
