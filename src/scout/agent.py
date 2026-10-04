@@ -7,6 +7,7 @@ from pathlib import Path
 
 import anthropic
 
+from scout.activity_deck import describe_ratings
 from scout.agent_tools import TOOL_DEFINITIONS, describe_tool_call, run_tool
 from scout.expense_report import describe_split
 from scout.group_summary import DateWindow, format_window, summarize_group
@@ -224,7 +225,8 @@ def _describe_trip(trip: Trip) -> str:
 
 
 def _describe_activity_deck(trip: Trip) -> list[str]:
-    """Each deck activity and who's in for it, and who hasn't sent picks."""
+    """Each deck activity and who swiped yeah or meh on it, and who hasn't sent
+    picks."""
     deck = trip.activity_deck
     waiting_on = [m.label for m in trip.members if m.phone not in deck.picks]
     lines = [
@@ -232,12 +234,9 @@ def _describe_activity_deck(trip: Trip) -> list[str]:
         f"{', '.join(waiting_on) or 'nobody'}):"
     ]
     for number, activity in enumerate(deck.activities, start=1):
-        fans = [
-            m.label for m in trip.members if number - 1 in deck.picks.get(m.phone, [])
-        ]
         lines.append(
             f"  {number}. {activity.name} (~${activity.estimated_cost_usd}) "
-            f"in: {', '.join(fans) or 'nobody'}"
+            f"{describe_ratings(deck, trip.members, number - 1)}"
         )
     return lines
 

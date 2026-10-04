@@ -30,7 +30,7 @@ This flow keeps the engine and changes the surface and the order:
 | --- | --- |
 | Preferences: name, dates, budget, home city, must-have | Adds vacation interest and chronotype |
 | Destination poll as four text messages, vote by number or 👍 | One brochure card; each person's submit is their vote |
-| Itinerary written from must-haves | Itinerary written from what the group actually ticked |
+| Itinerary written from must-haves | Itinerary written from what the group actually swiped yeah on |
 | Flight and stay search links for every home city | One hotel and one flight, each confirmed into the ledger |
 | Calendar link right after the poll closes | Calendar at the end, with every booking and activity on it |
 | Album "coming soon" | Album link closes the flow |
@@ -147,24 +147,21 @@ the chat beats a half-finished poll.
 Everything in this stage is tied to the chosen destination **and its hotel** —
 activities at the hotel, or close enough to reach from it.
 
-One **deck card**, around eight activities. Each row collapses to a name and a
-price; tapping it opens a photo, a description and the details. Each row carries
-its own two-option picker, and the card has one submit bar at the bottom.
+One **deck card**, around eight activities, shown as a stack to swipe through,
+Hinge or Tinder style. Each card is a photo, a name, a price and a line on what
+it is. Swipe **left for nah, up for meh, right for yeah** (three buttons do the
+same for anyone who'd rather tap). The card has one submit bar at the end.
 
 ```
 ┌──────────────────────────────────────┐
 │ Cancun — what are you up for?        │
-│ Tick what you'd do, then send        │
-│ ──────────────────────────────────── │
-│ ▼ 🤿 Scuba at Cozumel Reef    $120   │
-│   [photo]  ★4.8 · 3 hrs              │
-│   Boat from the hotel dock,          │
-│   gear included.                     │
-│     ( Interested )    ( Pass )       │
-│ ▶ ⛵ Catamaran sunset          $85   │
-│ ▶ 🍌 Banana boat, Playa Norte  $35   │
-│ ▶ 🏛 Chichén Itzá day trip     $95   │
-│ ▶ 🍴 Downtown food tour        $60   │
+│ ┌──────────────────────────────────┐ │
+│ │ [photo]                          │ │
+│ │ Scuba at Cozumel Reef       $120 │ │
+│ │ Boat from the hotel dock,        │ │
+│ │ gear included.                   │ │
+│ └──────────────────────────────────┘ │
+│   ( ✕ Nah )    ( – Meh )   ( ♥ Yeah ) │
 │ ──────────────────────────────────── │
 │ [         Send my picks         ]    │
 └──────────────────────────────────────┘
@@ -172,7 +169,7 @@ its own two-option picker, and the card has one submit bar at the bottom.
 
 **Nothing sends until the submit bar is tapped.** That is a property of the
 renderer, not a choice (see §3): a control with a `fieldId` holds its state and
-fires nothing. So four people ticking eight activities produces four messages,
+fires nothing. So four people swiping eight activities produces four messages,
 not thirty-two.
 
 It is one deck for the whole group, in the group thread, so people can see each
@@ -180,26 +177,49 @@ other's picks. That is not Tinder — there is no privacy until a match — but 
 suits a friend group arguing about whether to get up for the ruins.
 
 scout stays silent for every submit except the last. When the final person
-sends, it posts the aggregate: what everyone wants, what most people want, and
-what only one person wants.
+sends, it posts the tally, best-liked first, naming who said yeah and who said
+meh to each. A yeah is worth 2 and a meh 1, so a meh keeps an activity alive
+without beating a yeah, and the itinerary schedules the highest scorers.
 
 Built: `send_activity_deck` (`src/scout/trip_actions.py`), `activity_deck.py`
-for reading picks and the tally, and `cards.activity_deck` for the layout. A
+for reading swipes and the tally, and `cards.activity_deck` for the layout. A
 card's own submit never reaches scout (Linq flattens it to one character), so
 the deck works like the trip interview: Send fills in a text, "@scout my picks:
-Night kayak · Pass · Food tour", from the labels people tapped, and
-`conversation.py` counts it in code without a Claude call. Each "in" option is
-labeled with its activity so the text names what was picked. Instead of
-silence, each submit before the last gets a 👍 tapback, as plain votes do.
-Without a Places key the deck goes out as a numbered list, answered with
-"@scout my picks: 1, 3".
+Night kayak yeah · Food tour nah · Hike meh", and `conversation.py` counts it
+in code without a Claude call. A rating left off means yeah and an activity
+left out means nah. Instead of silence, each submit before the last gets a 👍
+tapback, as plain votes do. Without a Places key, or on a phone without the
+card, the deck goes out as a numbered list, answered with
+"@scout my picks: 1 yeah, 2 meh, 3 nah".
+
+**The `swipeDeck` node.** The deck needs a layout node HermesShare's renderer
+has to draw (our fork adds it; upstream has no swipe component):
+
+```json
+{
+  "type": "swipeDeck",
+  "fieldId": "activities",
+  "cards": [{"id": "activity-0", "title": "Scuba", "subtitle": "~$120 · Boat…", "imageUrl": "https://…"}],
+  "choices": [
+    {"id": "nah", "label": "Nah", "swipeDirection": "left", "systemImage": "xmark"},
+    {"id": "meh", "label": "Meh", "swipeDirection": "up", "systemImage": "minus"},
+    {"id": "yeah", "label": "Yeah", "swipeDirection": "right", "systemImage": "heart.fill"}
+  ]
+}
+```
+
+It holds one choice id per card, and its text summary, which the Send action
+appends after the `lead`, is each card's `title`, a space and its choice id
+(`Scuba yeah`), joined with ` · `. A card nobody swiped is left out, which
+scout reads as nah. `imageUrl` is optional.
 
 ### Stage 5 — Itinerary
 
 Built from the aggregate, not from must-haves. One anchor activity per day,
 first and last days kept light for travel, paced by the group's chronotype.
-Activities everyone ticked are scheduled; activities one person ticked are
-offered as optional add-ons rather than dropped silently.
+Activities the group scores highest (a yeah is 2, a meh 1) are scheduled;
+activities only one person said yeah to are offered as optional add-ons rather
+than dropped silently.
 
 Posted as a read-only **itinerary card**, with the text version in the thread
 underneath so it is still readable on a phone without HermesShare installed.

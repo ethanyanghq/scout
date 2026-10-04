@@ -2,9 +2,11 @@ import sqlite3
 from datetime import date, time
 
 from scout.trip import (
+    DeckActivity,
     DestinationOption,
     ItineraryDay,
     PreferenceUpdate,
+    Rating,
 )
 from scout.trip_store import TripStore
 
@@ -135,3 +137,28 @@ def test_an_expense_saved_before_shares_were_kept_is_split_evenly(store):
     [expense] = store.get_trip("chat").expenses
 
     assert expense.shares == {"+15550000001": 5_001, "+15550000002": 5_000}
+
+
+def test_activity_ratings_survive_a_reload(store):
+    store.create_trip(SPACE)
+    store.replace_activity_deck(SPACE, [DeckActivity("Kayak", "", 60)] * 3)
+
+    store.save_activity_picks(SPACE, MAYA, {0: Rating.YEAH, 2: Rating.MEH})
+
+    assert store.get_trip(SPACE).activity_deck.picks == {
+        MAYA: {0: Rating.YEAH, 2: Rating.MEH}
+    }
+
+
+def test_picks_saved_before_swiping_count_as_yeahs(store):
+    store.create_trip(SPACE)
+    store.replace_activity_deck(SPACE, [DeckActivity("Kayak", "", 60)] * 3)
+    with store._transaction() as db:
+        db.execute(
+            "INSERT INTO activity_picks (space_id, phone, positions) VALUES (?, ?, ?)",
+            (SPACE, MAYA, "[0, 2]"),
+        )
+
+    assert store.get_trip(SPACE).activity_deck.picks == {
+        MAYA: {0: Rating.YEAH, 2: Rating.YEAH}
+    }

@@ -15,8 +15,8 @@ from scout import polls
 from scout.activity_deck import (
     MAX_DECK_ACTIVITIES,
     MIN_DECK_ACTIVITIES,
-    PASS_LABEL,
     PICK_SEPARATOR,
+    RATING_WORDS,
     find_deck_photos,
     format_deck,
     format_tally,
@@ -82,6 +82,7 @@ from scout.trip import (
     NewExpense,
     PendingReceipt,
     PreferenceUpdate,
+    Rating,
     Settlement,
     Trip,
 )
@@ -617,30 +618,36 @@ class TripActions:
         return "Activity deck posted."
 
     def record_sender_picks(
-        self, positions: list[int], confirm: Callable[[str], Outgoing] = Say
+        self,
+        ratings: dict[int, Rating],
+        confirm: Callable[[str], Outgoing] = Say,
     ) -> str:
-        """Saves the activities the sender is in for. Unless they're the last
-        to send, `confirm` turns the confirmation text into what scout sends."""
-        return self._record_picks(self._sender_phone, positions, confirm)
+        """Saves how the sender rated the activities (those left out are nah).
+        Unless they're the last to send, `confirm` turns the confirmation text
+        into what scout sends."""
+        return self._record_picks(self._sender_phone, ratings, confirm)
 
-    def record_member_picks(self, member_label: str, positions: list[int]) -> str:
-        """Saves the activities any member is in for, including picks a friend
-        reported for them."""
+    def record_member_picks(self, member_label: str, ratings: dict[int, Rating]) -> str:
+        """Saves how any member rated the activities, including ratings a
+        friend reported for them."""
         member = self._find_member(member_label)
-        return self._record_picks(member.phone, positions, Say)
+        return self._record_picks(member.phone, ratings, Say)
 
     def _record_picks(
-        self, phone: str, positions: list[int], confirm: Callable[[str], Outgoing]
+        self,
+        phone: str,
+        ratings: dict[int, Rating],
+        confirm: Callable[[str], Outgoing],
     ) -> str:
         trip = self._load_trip()
         deck = trip.activity_deck
         if deck is None:
             raise TripActionError("there is no activity deck; send one first")
-        for position in positions:
+        for position in ratings:
             if not 0 <= position < len(deck.activities):
                 raise TripActionError(f"activity {position + 1} isn't on the deck")
 
-        picks = sorted(set(positions))
+        picks = {p: r for p, r in sorted(ratings.items()) if r != Rating.NAH}
         self._store.save_activity_picks(self._space_id, phone, picks)
         deck.picks[phone] = picks
         if len(deck.picks) == len(trip.members):
@@ -839,8 +846,11 @@ def _check_deck_activities(activities: list[DeckActivity]) -> None:
         # The sent picks are names separated by these, so a name can't have one.
         if PICK_SEPARATOR.search(activity.name):
             raise TripActionError(f"{activity.name!r} can't contain '·' or ','")
-        if activity.name.strip().casefold() == PASS_LABEL.casefold():
-            raise TripActionError(f"an activity can't be called {PASS_LABEL!r}")
+        # "Food tour meh" is a rating, so a name can't end in a rating word.
+        if activity.name.strip().casefold().split()[-1] in RATING_WORDS:
+            raise TripActionError(
+                f"{activity.name!r} can't end in {' or '.join(RATING_WORDS)}"
+            )
         if activity.estimated_cost_usd < 0:
             raise TripActionError(f"{activity.name!r} can't cost less than $0")
 

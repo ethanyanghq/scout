@@ -15,6 +15,7 @@ from scout.trip import (
     ItineraryDay,
     MessagePhoto,
     PreferenceUpdate,
+    Rating,
 )
 from scout.trip_actions import ExpenseDraft, ItemDraft, TripActionError, TripActions
 
@@ -218,9 +219,10 @@ TOOL_DEFINITIONS = [
     {
         "name": "record_member_picks",
         "description": (
-            "Record which deck activities one member is in for, from what they "
-            "or a friend said in words. Replaces their earlier picks. Posts the "
-            "tally automatically once everyone has sent picks."
+            "Record how one member rated the deck activities, from what they "
+            "or a friend said in words. Replaces their earlier ratings; any "
+            "activity in neither list counts as nah. Posts the tally "
+            "automatically once everyone has sent picks."
         ),
         "strict": False,
         "input_schema": {
@@ -233,16 +235,24 @@ TOOL_DEFINITIONS = [
                         "them, like 'Maya' or '…0002'."
                     ),
                 },
-                "activity_numbers": {
+                "yeah_numbers": {
                     "type": "array",
                     "items": {"type": "integer"},
                     "description": (
-                        "Every activity they're in for, by its number on the "
-                        "deck. Empty if they're in for none."
+                        "Every activity they're definitely in for, by its "
+                        "number on the deck. Empty if none."
+                    ),
+                },
+                "meh_numbers": {
+                    "type": "array",
+                    "items": {"type": "integer"},
+                    "description": (
+                        "Every activity they'd do but aren't excited about, "
+                        "by its number on the deck. Empty if none."
                     ),
                 },
             },
-            "required": ["member", "activity_numbers"],
+            "required": ["member", "yeah_numbers", "meh_numbers"],
             "additionalProperties": False,
         },
     },
@@ -832,7 +842,10 @@ def run_tool(
         case "record_member_picks":
             return actions.record_member_picks(
                 tool_input["member"],
-                [number - 1 for number in tool_input["activity_numbers"]],
+                {
+                    **{n - 1: Rating.MEH for n in tool_input["meh_numbers"]},
+                    **{n - 1: Rating.YEAH for n in tool_input["yeah_numbers"]},
+                },
             )
         case "lock_in_group_choice":
             return actions.lock_in_group_choice(tool_input["destination"])

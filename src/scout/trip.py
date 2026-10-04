@@ -3,7 +3,7 @@
 import re
 from dataclasses import dataclass, field
 from datetime import date, datetime, time
-from enum import StrEnum
+from enum import IntEnum, StrEnum
 from pathlib import Path
 
 from scout.places import Place
@@ -225,15 +225,30 @@ class DeckActivity:
     photo_url: str | None = None
 
 
+class Rating(IntEnum):
+    """How a member swiped on an activity. The value is its weight in the
+    group's tally, so a meh keeps an activity alive without beating a yeah."""
+
+    NAH = 0
+    MEH = 1
+    YEAH = 2
+
+
 @dataclass
 class ActivityDeck:
-    """The activities scout put to the group, and who's in for which (AC-1)."""
+    """The activities scout put to the group, and how each member rated them
+    (AC-1)."""
 
     activities: list[DeckActivity]
-    # Member phone -> 0-based indexes of the activities they're in for. Only
-    # members who have sent their picks are here, so an empty list means
-    # "sent, and in for nothing".
-    picks: dict[str, list[int]]
+    # Member phone -> 0-based index of an activity -> their rating. Only
+    # members who have sent their picks are here, and only activities they
+    # rated meh or yeah, so an empty dict means "sent, and nah to everything".
+    picks: dict[str, dict[int, Rating]]
+
+    def score(self, activity_index: int) -> int:
+        return sum(
+            ratings.get(activity_index, Rating.NAH) for ratings in self.picks.values()
+        )
 
 
 @dataclass(frozen=True)

@@ -12,20 +12,18 @@ from dataclasses import replace
 
 from scout import polls
 from scout.places import GooglePlaces
-from scout.trip import ActivityDeck, DeckActivity, Member
+from scout.trip import ActivityDeck, DeckActivity, Member, Rating
 
 PICKS_LEAD = "@scout my picks:"
-# What the card calls not wanting an activity. It's in the sent text, but it
-# isn't a pick.
-PASS_LABEL = "Pass"
+RATING_WORDS = {rating.name.lower(): rating for rating in Rating}
 MIN_DECK_ACTIVITIES = 3
 MAX_DECK_ACTIVITIES = 8
 # The card joins picks with " · ", and people typing use commas.
 PICK_SEPARATOR = re.compile(r"[·,]")
 
 
-def parse_picks(text: str, activity_names: list[str]) -> list[int] | None:
-    """The 0-based indexes of the activities a picks message is in for.
+def parse_picks(text: str, activity_names: list[str]) -> dict[int, Rating] | None:
+    """The meh and yeah ratings in a picks message, by 0-based activity index.
 
     None if the message isn't a picks message, or names something that isn't
     on the deck, so a person can sort it out in words instead.
@@ -33,17 +31,26 @@ def parse_picks(text: str, activity_names: list[str]) -> list[int] | None:
     message = text.strip()
     if not message.casefold().startswith(PICKS_LEAD.casefold()):
         return None
-    picks = []
+    ratings: dict[int, Rating] = {}
     for answer in PICK_SEPARATOR.split(message[len(PICKS_LEAD) :]):
         answer = answer.strip()
-        if not answer or answer.casefold() == PASS_LABEL.casefold():
+        if not answer:
             continue
-        index = polls.parse_vote(answer, activity_names)
+        activity, rating = _split_rating(answer)
+        index = polls.parse_vote(activity, activity_names)
         if index is None:
             return None
-        if index not in picks:
-            picks.append(index)
-    return sorted(picks)
+        ratings[index] = rating
+    return {index: r for index, r in sorted(ratings.items()) if r != Rating.NAH}
+
+
+def _split_rating(answer: str) -> tuple[str, Rating]:
+    """ "Food tour meh" as ("Food tour", MEH). With no rating word it's a yeah."""
+    activity, _, last_word = answer.rpartition(" ")
+    rating = RATING_WORDS.get(last_word.strip(":").casefold())
+    if rating is None or not activity:
+        return answer, Rating.YEAH
+    return activity.strip().rstrip(":"), rating
 
 
 def format_deck(destination: str, activities: list[DeckActivity]) -> str:
@@ -52,38 +59,36 @@ def format_deck(destination: str, activities: list[DeckActivity]) -> str:
     for number, activity in enumerate(activities, start=1):
         lines.append(f"{number}. {activity.name} · ~${activity.estimated_cost_usd:,}")
         lines.append(f"   {activity.description}")
-    lines.append(f'reply with the numbers you\'d do, like "{PICKS_LEAD} 1, 3"')
+    lines.append(
+        "reply with how you feel about each number (yeah, meh or nah), "
+        f'like "{PICKS_LEAD} 1 yeah, 2 meh, 3 nah"'
+    )
     return "\n".join(lines)
 
 
 def format_tally(deck: ActivityDeck, members: list[Member]) -> str:
-    """Who's in for what, once everyone has sent their picks: the activities
-    everyone wants first, down to the ones nobody does."""
-    fans = [
-        [m.label for m in members if index in deck.picks.get(m.phone, [])]
-        for index in range(len(deck.activities))
-    ]
-    lines = ["everyone's picks are in:"]
-    for count in sorted({len(f) for f in fans}, reverse=True):
-        who_wants = _describe_fan_count(count, len(members))
-        names = [
-            # Naming who keeps one person's pick from looking like nobody's.
-            f"{activity.name} ({who[0]})" if who_wants == "just one" else activity.name
-            for activity, who in zip(deck.activities, fans, strict=True)
-            if len(who) == count
-        ]
-        lines.append(f"{who_wants}: {', '.join(names)}")
+    """Everyone's swipes once all are in, best-liked activity first (a yeah
+    counts double a meh), naming who swiped what so one person's yeah doesn't
+    look like nobody's."""
+    by_score = sorted(range(len(deck.activities)), key=lambda index: -deck.score(index))
+    lines = ["everyone's picks are in, best first:"]
+    for index in by_score:
+        lines.append(
+            f"{deck.activities[index].name}: {describe_ratings(deck, members, index)}"
+        )
     return "\n".join(lines)
 
 
-def _describe_fan_count(count: int, member_count: int) -> str:
-    if count == member_count:
-        return "everyone"
-    if count == 1:
-        return "just one"
-    if count == 0:
-        return "nobody"
-    return f"{count} of {member_count}"
+def describe_ratings(deck: ActivityDeck, members: list[Member], index: int) -> str:
+    """Who said yeah and who said meh to one activity, or "nobody"."""
+    parts = []
+    for rating in (Rating.YEAH, Rating.MEH):
+        who = [
+            m.label for m in members if deck.picks.get(m.phone, {}).get(index) == rating
+        ]
+        if who:
+            parts.append(f"{rating.name.lower()} {', '.join(who)}")
+    return " · ".join(parts) or "nobody"
 
 
 def find_deck_photos(

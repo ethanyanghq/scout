@@ -15,7 +15,7 @@ import urllib.parse
 from dataclasses import dataclass
 from datetime import date
 
-from scout.activity_deck import PASS_LABEL, PICKS_LEAD
+from scout.activity_deck import PICKS_LEAD
 from scout.best_flights import (
     HomeCityFlight,
     describe_stops,
@@ -27,7 +27,14 @@ from scout.group_summary import format_window, summarize_group
 from scout.itinerary import format_day, format_start
 from scout.money import format_usd
 from scout.settle_up import plan_payments
-from scout.trip import DeckActivity, Expense, ItineraryAddOn, ItineraryDay, Trip
+from scout.trip import (
+    DeckActivity,
+    Expense,
+    ItineraryAddOn,
+    ItineraryDay,
+    Rating,
+    Trip,
+)
 
 # Every scout card is white text on HermesShare's near-black `atmosphere`
 # background, so it looks the same whatever mode the phone is in. Scout blue is
@@ -43,6 +50,12 @@ INTERVIEW_ANSWER_LEAD = "@scout my trip:"
 # Linq's limit on a card's data: URL, mirrored from bridge/hermes-card.ts.
 MAX_CARD_URL_CHARS = 16_384
 CARD_URL_PREFIX = "data:application/json;base64,"
+# The activity deck's swipes. (rating, label, swipe direction, SF Symbol)
+SWIPE_CHOICES = [
+    (Rating.NAH, "Nah", "left", "xmark"),
+    (Rating.MEH, "Meh", "up", "minus"),
+    (Rating.YEAH, "Yeah", "right", "heart.fill"),
+]
 # The budget slider, per person in US dollars: $0 to $3,000 in $100 steps,
 # labeled every $500 and starting at $1,000.
 BUDGET_SLIDER_MAX_USD = 3_000
@@ -350,8 +363,8 @@ def fits_in_one_message(layout: dict) -> bool:
 def activity_deck(
     destination: str, activities: list[DeckActivity], destination_photo_url: str | None
 ) -> dict:
-    """A deck of things to do, each with its own in-or-pass picker. Send puts
-    the activities someone is in for in the chat as text."""
+    """A stack of things to do to swipe through: left is nah, up is meh, right
+    is yeah. Send puts the swipes in the chat as text."""
     lead = urllib.parse.quote(PICKS_LEAD)
     photo = (
         [
@@ -380,14 +393,12 @@ def activity_deck(
             "children": [
                 *photo,
                 _text(
-                    "Tick what you'd do, then send. Your picks drop into the chat.",
+                    "Swipe left for nah, up for meh, right for yeah. "
+                    "Then send, and your picks drop into the chat.",
                     role="body",
                     color_hex=SOFT_GRAY_HEX,
                 ),
-                *[
-                    _activity_picker(position, activity)
-                    for position, activity in enumerate(activities)
-                ],
+                _swipe_deck(activities),
                 _text(
                     "Prices are estimates per person. Nothing is booked.",
                     role="footnote",
@@ -407,20 +418,36 @@ def activity_deck(
     }
 
 
-def _activity_picker(position: int, activity: DeckActivity) -> dict:
-    # Each activity is its own single-select field, because HermesShare's form
-    # holds one answer per field. The "in" option is labeled with the activity
-    # itself, so the sent text names what someone picked.
-    picked = _option(
-        "in",
-        activity.name,
-        f"~${activity.estimated_cost_usd:,} · {activity.description}",
-        "checkmark.circle",
-    )
+def _swipe_deck(activities: list[DeckActivity]) -> dict:
+    # A swipeDeck is a form input like a picker: it holds one choice per card
+    # and fires nothing until Send. Its text summary is each card's title and
+    # the chosen choice's id, "Night kayak yeah", joined with " · ", which is
+    # what parse_picks reads back.
+    return {
+        "type": "swipeDeck",
+        "fieldId": "activities",
+        "cards": [_swipe_card(position, a) for position, a in enumerate(activities)],
+        "choices": [
+            {
+                "id": rating.name.lower(),
+                "label": label,
+                "swipeDirection": direction,
+                "systemImage": sf_symbol,
+            }
+            for rating, label, direction, sf_symbol in SWIPE_CHOICES
+        ],
+    }
+
+
+def _swipe_card(position: int, activity: DeckActivity) -> dict:
+    card = {
+        "id": f"activity-{position}",
+        "title": activity.name,
+        "subtitle": f"~${activity.estimated_cost_usd:,} · {activity.description}",
+    }
     if activity.photo_url:
-        picked["imageUrl"] = activity.photo_url
-    passed = _option("pass", PASS_LABEL, "Not for me", "xmark.circle")
-    return _picker(f"activity-{position}", "list", [picked, passed])
+        card["imageUrl"] = activity.photo_url
+    return card
 
 
 def itinerary(trip: Trip, destination_photo_url: str) -> dict:

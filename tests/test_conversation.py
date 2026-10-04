@@ -23,6 +23,7 @@ from scout.trip import (
     IncomingMessage,
     IncomingReaction,
     MediaKind,
+    Rating,
     SharedMedia,
     TripStage,
 )
@@ -451,7 +452,11 @@ def test_picks_sent_from_the_deck_are_saved_without_the_agent(store):
     agent = FakeAgent()
 
     replies = send_from_line(
-        store, agent, LEO, "@scout my picks: Pass · Food tour", message_id="leo-picks"
+        store,
+        agent,
+        LEO,
+        "@scout my picks: Night kayak nah · Food tour meh",
+        message_id="leo-picks",
     )
 
     assert agent.messages_seen == []
@@ -460,7 +465,7 @@ def test_picks_sent_from_the_deck_are_saved_without_the_agent(store):
             "leo-picks", Tapback.LIKE, fallback_text="got …0002's picks (1 of 3 sent)"
         )
     ]
-    assert store.get_trip(SPACE).activity_deck.picks == {LEO: [1]}
+    assert store.get_trip(SPACE).activity_deck.picks == {LEO: {1: Rating.MEH}}
 
 
 def tapback(store, sender, on_text, kind="like", on_id="option-message"):

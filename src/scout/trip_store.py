@@ -26,6 +26,7 @@ from scout.trip import (
     PendingReceipt,
     Poll,
     PreferenceUpdate,
+    Rating,
     Settlement,
     SharedMedia,
     Trip,
@@ -101,6 +102,7 @@ CREATE TABLE IF NOT EXISTS deck_activities (
 );
 
 -- One row per member who has sent their picks; sending again replaces them.
+-- `positions` is a JSON object of deck position -> rating (1 meh, 2 yeah).
 CREATE TABLE IF NOT EXISTS activity_picks (
     space_id  TEXT NOT NULL REFERENCES trips (space_id),
     phone     TEXT NOT NULL,
@@ -411,14 +413,14 @@ class TripStore:
             )
 
     def save_activity_picks(
-        self, space_id: str, phone: str, positions: list[int]
+        self, space_id: str, phone: str, ratings: dict[int, Rating]
     ) -> None:
-        """Saves the activities one member is in for, replacing earlier picks."""
+        """Saves how one member rated the activities, replacing earlier picks."""
         with self._transaction() as db:
             db.execute(
                 "INSERT OR REPLACE INTO activity_picks (space_id, phone, positions) "
                 "VALUES (?, ?, ?)",
-                (space_id, phone, json.dumps(positions)),
+                (space_id, phone, json.dumps(ratings)),
             )
 
     def add_expense(self, space_id: str, expense: NewExpense) -> int:
@@ -673,6 +675,14 @@ def _load_itinerary_add_ons(
     return [ItineraryAddOn(row["activity"], row["wanted_by"]) for row in rows]
 
 
+def _load_ratings(stored: str) -> dict[int, Rating]:
+    parsed = json.loads(stored)
+    if isinstance(parsed, list):
+        # Picks saved before swiping were a list of the positions someone was in for.
+        return {position: Rating.YEAH for position in parsed}
+    return {int(position): Rating(rating) for position, rating in parsed.items()}
+
+
 def _load_activity_deck(db: sqlite3.Connection, space_id: str) -> ActivityDeck | None:
     rows = db.execute(
         "SELECT * FROM deck_activities WHERE space_id = ? ORDER BY position",
@@ -694,7 +704,7 @@ def _load_activity_deck(db: sqlite3.Connection, space_id: str) -> ActivityDeck |
             )
             for row in rows
         ],
-        picks={pick["phone"]: json.loads(pick["positions"]) for pick in picks},
+        picks={pick["phone"]: _load_ratings(pick["positions"]) for pick in picks},
     )
 
 
