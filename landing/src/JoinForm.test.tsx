@@ -11,7 +11,7 @@ afterEach(() => {
 function fillInAndSubmit(name: string, phone: string) {
   fireEvent.change(screen.getByLabelText("your name"), { target: { value: name } });
   fireEvent.change(screen.getByLabelText("your phone number"), { target: { value: phone } });
-  fireEvent.click(screen.getByRole("button", { name: "text me" }));
+  fireEvent.click(screen.getByRole("button", { name: "join the waitlist" }));
 }
 
 test("sends the name and phone number to Netlify's join form", async () => {
@@ -32,14 +32,14 @@ test("sends the name and phone number to Netlify's join form", async () => {
   });
 });
 
-test("tells the person by name that scout will text them", async () => {
+test("tells the person by name that they are on the waitlist", async () => {
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 200 })));
   render(<JoinForm />);
 
   fillInAndSubmit("Maya", "(555) 010-0142");
 
   const confirmation = await screen.findByRole("status");
-  expect(confirmation.textContent).toBe("got it, maya. i’ll text you soon.");
+  expect(confirmation.textContent).toBe("got it, maya. you’re on the waitlist.");
 });
 
 test("asks the person to try again when Netlify does not record the request", async () => {
@@ -51,5 +51,5 @@ test("asks the person to try again when Netlify does not record the request", as
 
   const error = await screen.findByRole("alert");
   expect(error.textContent).toBe("that didn’t go through. check your connection and try again.");
-  expect(screen.getByRole("button", { name: "text me" })).toBeDefined();
+  expect(screen.getByRole("button", { name: "join the waitlist" })).toBeDefined();
 });
