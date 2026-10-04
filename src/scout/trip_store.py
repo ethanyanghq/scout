@@ -194,11 +194,20 @@ class LoggedMessage:
     sent_at: datetime
 
 
+# Columns added to tables after databases already existed. CREATE TABLE IF NOT
+# EXISTS leaves an existing table as it was, so these are added when one opens.
+ADDED_COLUMNS = [
+    ("members", "chronotype", "TEXT"),
+    ("itinerary_days", "starts_at", "TEXT"),
+]
+
+
 class TripStore:
     def __init__(self, db_path: Path):
         self._db_path = db_path
         with self._transaction() as db:
             db.executescript(SCHEMA)
+            _add_missing_columns(db)
 
     def get_trip(self, space_id: str) -> Trip | None:
         with self._transaction() as db:
@@ -721,6 +730,13 @@ def _load_place_suggestions(db: sqlite3.Connection, space_id: str) -> list[Place
         )
         for row in rows
     ]
+
+
+def _add_missing_columns(db: sqlite3.Connection) -> None:
+    for table, column, column_type in ADDED_COLUMNS:
+        existing = {row["name"] for row in db.execute(f"PRAGMA table_info({table})")}
+        if column not in existing:
+            db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {column_type}")
 
 
 def _parse_chronotype(value: str | None) -> Chronotype | None:

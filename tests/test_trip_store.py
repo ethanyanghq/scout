@@ -1,9 +1,12 @@
-from datetime import date
+import sqlite3
+from datetime import date, time
 
 from scout.trip import (
     DestinationOption,
+    ItineraryDay,
     PreferenceUpdate,
 )
+from scout.trip_store import TripStore
 
 SPACE = "group-chat-1"
 MAYA = "+15550000001"
@@ -68,3 +71,34 @@ def test_deleting_a_trip_leaves_other_chats_alone(store):
 
     assert store.get_trip(SPACE) is None
     assert [member.phone for member in store.get_trip("other-chat").members] == [MAYA]
+
+
+def test_a_database_from_before_chronotypes_and_start_times_still_opens(tmp_path):
+    path = tmp_path / "scout.db"
+    with sqlite3.connect(path) as db:
+        db.executescript(
+            """
+            CREATE TABLE members (
+                space_id TEXT NOT NULL, phone TEXT NOT NULL, display_name TEXT,
+                available_from TEXT, available_to TEXT, budget_usd INTEGER,
+                home_city TEXT, must_haves TEXT NOT NULL DEFAULT '[]',
+                PRIMARY KEY (space_id, phone)
+            );
+            CREATE TABLE itinerary_days (
+                space_id TEXT NOT NULL, day TEXT NOT NULL, plan TEXT NOT NULL,
+                PRIMARY KEY (space_id, day)
+            );
+            """
+        )
+    db.close()
+
+    store = TripStore(path)
+    store.create_trip("chat-1")
+    store.add_members("chat-1", ["+15550000001"])
+    store.replace_itinerary(
+        "chat-1", [ItineraryDay(date(2027, 3, 14), "Snorkel", time(9, 0))], []
+    )
+
+    trip = store.get_trip("chat-1")
+    assert trip.members[0].chronotype is None
+    assert trip.itinerary[0].starts_at == time(9, 0)
