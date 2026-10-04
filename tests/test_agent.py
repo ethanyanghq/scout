@@ -1,11 +1,12 @@
 """The agent loop, with a scripted stand-in for the Claude API."""
 
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 
 from scout.agent import ScoutAgent
-from scout.outgoing import Say
+from scout.outgoing import Say, Tapback
 from scout.trip import (
     IncomingMessage,
     MediaKind,
@@ -101,6 +102,35 @@ def test_saves_preferences_and_confirms(store):
     tool_result = claude.requests[1]["messages"][-1]["content"][0]
     assert tool_result["tool_use_id"] == "call_1"
     assert not tool_result["is_error"]
+
+
+def test_saving_the_senders_details_puts_a_thumbs_up_on_their_message(store):
+    trip, message = maya_says(store, "i'm maya, $800")
+    message = replace(message, message_id="line-message-1")
+    claude = ScriptedClaude(
+        response(
+            "tool_use",
+            tool_call(
+                "save_member_preferences",
+                {
+                    "member": "…0001",
+                    "display_name": "Maya",
+                    "available_from": None,
+                    "available_to": None,
+                    "budget_usd": 800,
+                    "home_city": None,
+                    "must_haves": None,
+                    "chronotype": None,
+                },
+            ),
+        ),
+        response("end_turn", text("NO_REPLY")),
+    )
+
+    replies = ScoutAgent(claude, store).respond(trip, message)
+
+    assert [reply.message_id for reply in replies] == ["line-message-1"]
+    assert replies[0].tapback == Tapback.LIKE
 
 
 def test_bad_tool_input_goes_back_to_claude_as_an_error(store):

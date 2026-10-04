@@ -75,7 +75,11 @@ class ScoutAgent:
     def respond(self, trip: Trip, message: IncomingMessage) -> list[Outgoing]:
         """Returns what scout should send in reply, possibly nothing."""
         actions = TripActions(
-            self._store, trip.space_id, message.sender_phone, self._services
+            self._store,
+            trip.space_id,
+            message.sender_phone,
+            self._services,
+            message.message_id,
         )
         conversation = [
             {"role": "user", "content": describe_situation(self._store, trip, message)}

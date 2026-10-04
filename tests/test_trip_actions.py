@@ -7,7 +7,7 @@ from scout.best_flights import HomeAirport
 from scout.brochures import ActivityPitch, DestinationPitch
 from scout.cards import fits_in_one_message
 from scout.flights import Flight, FlightsError
-from scout.outgoing import Card, Say
+from scout.outgoing import Card, React, Say, Tapback
 from scout.outside_services import OutsideServices
 from scout.places import Coordinates, PhotographedPlace, Place, PlacesError
 from scout.trip import (
@@ -104,6 +104,62 @@ def test_saving_preferences_reports_what_is_still_missing(maya_actions):
 
     assert "Maya is still missing: dates, home city" in status
     assert "waiting on: Maya, …0002" in status
+
+
+def test_saving_the_senders_own_details_confirms_with_a_thumbs_up(store):
+    store.create_trip(SPACE)
+    store.add_members(SPACE, [MAYA, LEO])
+    actions = TripActions(store, SPACE, MAYA, message_id="msg-1")
+
+    status = actions.save_member_preferences("…0001", MAYA_PREFERENCES)
+
+    assert actions.outbox == [
+        React(
+            "msg-1",
+            Tapback.LIKE,
+            fallback_text="got it maya: mar 13–20 · ~$800 · boston",
+        )
+    ]
+    assert "A 👍 is going on their newest message" in status
+
+
+def test_the_thumbs_up_fallback_text_never_names_someone_by_their_number(store):
+    store.create_trip(SPACE)
+    store.add_members(SPACE, [MAYA])
+    actions = TripActions(store, SPACE, MAYA, message_id="msg-1")
+
+    actions.save_member_preferences("…0001", PreferenceUpdate(budget_usd=800))
+
+    assert actions.outbox[0].fallback_text == "got it: ~$800"
+
+
+def test_saving_a_friends_details_is_confirmed_in_text_not_a_thumbs_up(store):
+    store.create_trip(SPACE)
+    store.add_members(SPACE, [MAYA, LEO])
+    actions = TripActions(store, SPACE, MAYA, message_id="msg-1")
+
+    status = actions.save_member_preferences("…0002", LEO_PREFERENCES)
+
+    assert actions.outbox == []
+    assert "👍" not in status
+
+
+def test_without_a_message_to_react_on_nothing_is_sent(maya_actions):
+    status = maya_actions.save_member_preferences("…0001", MAYA_PREFERENCES)
+
+    assert maya_actions.outbox == []
+    assert "👍" not in status
+
+
+def test_saving_twice_from_one_message_gives_only_one_thumbs_up(store):
+    store.create_trip(SPACE)
+    store.add_members(SPACE, [MAYA])
+    actions = TripActions(store, SPACE, MAYA, message_id="msg-1")
+
+    actions.save_member_preferences("…0001", PreferenceUpdate(budget_usd=800))
+    actions.save_member_preferences("…0001", PreferenceUpdate(home_city="Boston"))
+
+    assert len(actions.outbox) == 1
 
 
 def test_rejects_dates_that_end_before_they_start(maya_actions):

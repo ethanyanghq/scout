@@ -54,12 +54,12 @@ from scout.expense_report import (
 )
 from scout.expense_split import split_by_items, split_evenly
 from scout.flights import FlightsError
-from scout.group_summary import format_group_summary, summarize_group
+from scout.group_summary import format_group_summary, format_window, summarize_group
 from scout.itinerary import format_itinerary
 from scout.media import load_photo
 from scout.money import format_usd
 from scout.nearby import directions_link, format_directions, format_nearby_places
-from scout.outgoing import Card, Link, Outgoing, Say
+from scout.outgoing import Card, Link, Outgoing, React, Say, Tapback
 from scout.outside_services import NO_OUTSIDE_SERVICES, OutsideServices
 from scout.places import Coordinates, GooglePlaces, PlacesError
 from scout.settle_up import (
@@ -140,11 +140,15 @@ class TripActions:
         space_id: str,
         sender_phone: str,
         services: OutsideServices = NO_OUTSIDE_SERVICES,
+        message_id: str | None = None,
     ):
         self._store = store
         self._space_id = space_id
         self._sender_phone = sender_phone
         self._services = services
+        # The sender's newest message, which a confirmation can be a 👍 on.
+        # None where there's no line to react on, as in scout-simulate.
+        self._message_id = message_id
         self.outbox: list[Outgoing] = []
 
     def save_member_preferences(
@@ -163,12 +167,38 @@ class TripActions:
         trip = self._load_trip()
         member = trip.find_member(member.phone)
         still_waiting_on = summarize_group(trip.members).members_still_to_share
-        return (
+        status = (
             f"Saved. {member.label} is still missing: "
             f"{', '.join(member.missing_preferences) or 'nothing'}. "
             f"Group still waiting on: "
             f"{', '.join(m.label for m in still_waiting_on) or 'nobody'}."
         )
+        if self._confirm_with_thumbs_up(member):
+            status += (
+                " A 👍 is going on their newest message to confirm it, so "
+                "don't confirm in text unless something is unclear."
+            )
+        return status
+
+    def _confirm_with_thumbs_up(self, saved: Member) -> bool:
+        """Confirms a save with a 👍 on the sender's message instead of a text,
+        when the details are the sender's own. A friend's details get a text,
+        so the friend can correct them."""
+        if saved.phone != self._sender_phone or self._message_id is None:
+            return False
+        already_confirmed = any(
+            isinstance(sent, React) and sent.message_id == self._message_id
+            for sent in self.outbox
+        )
+        if not already_confirmed:
+            self.outbox.append(
+                React(
+                    self._message_id,
+                    Tapback.LIKE,
+                    fallback_text=_describe_saved_details(saved),
+                )
+            )
+        return True
 
     def post_group_summary(self) -> str:
         trip = self._load_trip()
@@ -756,6 +786,26 @@ class TripActions:
         if trip is None:
             raise LookupError(f"no trip for space {self._space_id}")
         return trip
+
+
+def _describe_saved_details(member: Member) -> str:
+    """What scout saved for someone, as a short text: "got it maya: mar 13–20 ·
+    ~$800 · boston · beach"."""
+    details = []
+    if member.available_from and member.available_to:
+        details.append(
+            format_window(DateWindow(member.available_from, member.available_to))
+        )
+    if member.budget_usd is not None:
+        details.append(f"~${member.budget_usd}")
+    if member.home_city:
+        details.append(member.home_city)
+    details.extend(member.must_haves)
+    if member.chronotype:
+        details.append(member.chronotype)
+    # Someone whose name isn't known is left out, never called by their number.
+    who = f" {member.display_name}" if member.display_name else ""
+    return f"got it{who}: {' · '.join(details)}".lower()
 
 
 def _find_sender_payment(trip: Trip, sender_phone: str, payee_label: str) -> Payment:
