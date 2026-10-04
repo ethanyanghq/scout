@@ -78,7 +78,7 @@ def format_group_summary(summary: GroupSummary, members: list[Member]) -> str:
     if summary.must_haves:
         lines.append(f"must-haves: {', '.join(summary.must_haves)}")
     if summary.pace:
-        lines.append(f"pace: {summary.pace}s")
+        lines.append(f"sleep schedule: {summary.pace}s")
     if summary.members_still_to_share:
         waiting_on = ", ".join(m.label for m in summary.members_still_to_share)
         lines.append(f"still waiting on: {waiting_on}")

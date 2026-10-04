@@ -120,7 +120,7 @@ def test_the_summary_says_the_group_pace():
 
     summary_text = format_group_summary(summarize_group(members), members)
 
-    assert "pace: night owls" in summary_text.split("\n")
+    assert "sleep schedule: night owls" in summary_text.split("\n")
 
 
 def test_formats_windows_the_way_people_text_them():
