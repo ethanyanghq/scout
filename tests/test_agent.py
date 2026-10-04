@@ -49,6 +49,16 @@ def tool_call(name, tool_input, call_id="call_1"):
     return SimpleNamespace(type="tool_use", id=call_id, name=name, input=tool_input)
 
 
+def web_search(query, call_id="srvtoolu_1"):
+    return SimpleNamespace(
+        type="server_tool_use", id=call_id, name="web_search", input={"query": query}
+    )
+
+
+def web_search_result(call_id="srvtoolu_1"):
+    return SimpleNamespace(type="web_search_tool_result", tool_use_id=call_id)
+
+
 def situation_text(claude):
     """The words of scout's first prompt."""
     return claude.requests[0]["messages"][0]["content"]
@@ -236,3 +246,46 @@ def test_claude_reads_a_voice_notes_words_as_the_newest_message(store):
         "[voice note e5f6a7b8 (media/group-chat-1/e5f6a7b8.caf): "
         '"I\'m flying from Boston."] @scout'
     )
+
+
+def test_claude_can_search_and_read_the_web(store):
+    trip, message = maya_says(store, "@scout anything happening in tulum in march?")
+    claude = ScriptedClaude(response("end_turn", text("NO_REPLY")))
+
+    ScoutAgent(claude, store).respond(trip, message)
+
+    offered = {tool["name"] for tool in claude.requests[0]["tools"]}
+    assert {"web_search", "web_fetch"} <= offered
+
+
+def test_texts_only_what_claude_wrote_after_searching(store):
+    trip, message = maya_says(store, "@scout anything happening in tulum in march?")
+    claude = ScriptedClaude(
+        response(
+            "end_turn",
+            text("Let me check."),
+            web_search("Tulum events March 2027"),
+            web_search_result(),
+            text("Tulum Jazz Festival runs "),
+            text("March 10–14."),
+        )
+    )
+
+    replies = said(ScoutAgent(claude, store).respond(trip, message))
+
+    assert replies == ["Tulum Jazz Festival runs March 10–14."]
+
+
+def test_a_paused_web_search_resumes_where_it_left_off(store):
+    trip, message = maya_says(store, "@scout is the tulum ruins open on mondays?")
+    paused = response("pause_turn", web_search("Tulum ruins opening days"))
+    claude = ScriptedClaude(
+        paused,
+        response("end_turn", web_search_result(), text("Yep, open every day.")),
+    )
+
+    replies = said(ScoutAgent(claude, store).respond(trip, message))
+
+    assert replies == ["Yep, open every day."]
+    resumed = claude.requests[1]["messages"]
+    assert resumed[-1] == {"role": "assistant", "content": paused.content}

@@ -29,6 +29,26 @@ MAX_TOOL_ROUNDS = 6
 # If a safety classifier declines a request, the API retries it on a
 # recommended fallback model instead of returning nothing.
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
+# Anthropic runs web searches and page fetches on its own servers, so their
+# results arrive inside Claude's response with nothing for us to run. They're
+# kept out of TOOL_DEFINITIONS because the OpenAI agent can't use them. The caps
+# keep a curious model from blowing the ~10 second reply target.
+MAX_WEB_SEARCHES_PER_REPLY = 3
+MAX_WEB_FETCHES_PER_REPLY = 2
+MAX_FETCHED_PAGE_TOKENS = 10_000
+WEB_TOOLS = [
+    {
+        "type": "web_search_20260209",
+        "name": "web_search",
+        "max_uses": MAX_WEB_SEARCHES_PER_REPLY,
+    },
+    {
+        "type": "web_fetch_20260209",
+        "name": "web_fetch",
+        "max_uses": MAX_WEB_FETCHES_PER_REPLY,
+        "max_content_tokens": MAX_FETCHED_PAGE_TOKENS,
+    },
+]
 NO_REPLY = "NO_REPLY"
 PARAGRAPH_BREAK = re.compile(r"\n\s*\n")
 SYSTEM_PROMPT = (Path(__file__).parent / "system_prompt.md").read_text()
@@ -56,7 +76,7 @@ class ScoutAgent:
 
         response = self._ask_claude(conversation)
         tool_rounds = 0
-        while response.stop_reason == "tool_use":
+        while response.stop_reason in ("tool_use", "pause_turn"):
             tool_rounds += 1
             if tool_rounds > MAX_TOOL_ROUNDS:
                 logger.warning("Gave up after %d tool rounds", MAX_TOOL_ROUNDS)
@@ -64,9 +84,15 @@ class ScoutAgent:
             # Append the whole response, not just its text: the API needs the
             # tool_use blocks (and thinking) to match up the results we send.
             conversation.append({"role": "assistant", "content": response.content})
-            conversation.append(
-                {"role": "user", "content": _run_tool_calls(actions, response.content)}
-            )
+            # On pause_turn, Anthropic paused a long web lookup: sending the
+            # conversation back unchanged lets it pick up where it left off.
+            if response.stop_reason == "tool_use":
+                conversation.append(
+                    {
+                        "role": "user",
+                        "content": _run_tool_calls(actions, response.content),
+                    }
+                )
             response = self._ask_claude(conversation)
 
         if response.stop_reason == "refusal":
@@ -77,16 +103,18 @@ class ScoutAgent:
         return [*as_text_bubbles(reply), *actions.outbox] if reply else actions.outbox
 
     def _ask_claude(self, conversation: list[dict]):
-        return self._client.beta.messages.create(
+        response = self._client.beta.messages.create(
             model=MODEL,
             max_tokens=MAX_OUTPUT_TOKENS,
             system=SYSTEM_PROMPT,
-            tools=TOOL_DEFINITIONS,
+            tools=[*TOOL_DEFINITIONS, *WEB_TOOLS],
             messages=conversation,
             output_config={"effort": EFFORT},
             betas=[FALLBACK_BETA],
             fallbacks="default",
         )
+        _log_web_lookups(response.content)
+        return response
 
 
 def _image_block(photo: MessagePhoto) -> dict:
@@ -260,8 +288,22 @@ def _run_tool_calls(actions: TripActions, content: list) -> list[dict]:
     return results
 
 
+def _log_web_lookups(content: list) -> None:
+    for block in content:
+        if block.type == "server_tool_use":
+            logger.info("Claude ran %s %s", block.name, block.input)
+
+
 def _reply_text(content: list) -> str | None:
-    text = "".join(block.text for block in content if block.type == "text").strip()
+    # Text before a web lookup is Claude narrating ("let me check that"), so
+    # only what it wrote after the last result is the reply.
+    last_result = max(
+        (i for i, block in enumerate(content) if block.type.endswith("_tool_result")),
+        default=-1,
+    )
+    text = "".join(
+        block.text for block in content[last_result + 1 :] if block.type == "text"
+    ).strip()
     if not text or text == NO_REPLY:
         return None
     return text
