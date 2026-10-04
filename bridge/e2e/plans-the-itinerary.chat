@@ -1,0 +1,13 @@
+# Journey: a member asks for a plan, and scout posts a day-by-day itinerary
+# paced to the group, offering what only one person wants as an add-on.
+# Needs Claude (or OpenAI).
+members maya leo priya
+from destination-chosen
+
+maya: @scout heads up, all three of us are night owls
+expect state members ~ "night owl"
+leo: @scout i really want to go scuba diving, nobody else is into it lol
+priya: @scout can you make us a plan?
+expect scout ~ "the plan"
+expect state itinerary ~ "2027-03-14"
+expect state itinerary_add_ons ~ "leo"

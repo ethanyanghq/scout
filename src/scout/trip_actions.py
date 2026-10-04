@@ -30,6 +30,7 @@ from scout.cards import (
     best_flights,
     destination_article,
     flights_thumbnail_url,
+    itinerary,
     trip_interview,
 )
 from scout.flights import FlightsError
@@ -224,7 +225,34 @@ class TripActions:
 
         in_order = sorted(days, key=lambda day: day.day)
         self._store.replace_itinerary(self._space_id, in_order, add_ons)
-        self.outbox.append(Say(format_itinerary(in_order, add_ons)))
+        return self._send_itinerary(self._load_trip())
+
+    def _send_itinerary(self, trip: Trip) -> str:
+        """Sends the plan as a card, or as text when there's no photo of the
+        destination to show on the card, and says which happened."""
+        text = format_itinerary(trip.itinerary, trip.itinerary_add_ons)
+        places = self._services.places
+        if places is None:
+            self.outbox.append(Say(text))
+            return "Itinerary posted as text: place search isn't set up."
+        try:
+            destination = places.find_photographed(trip.destination, photo_count=1)
+        except PlacesError as error:
+            self.outbox.append(Say(text))
+            return f"Itinerary posted as text: place search isn't working: {error}"
+        if destination is None or not destination.photo_urls:
+            self.outbox.append(Say(text))
+            return f"Itinerary posted as text: no photo of {trip.destination}."
+
+        photo_url = destination.photo_urls[0]
+        self.outbox.append(
+            Card(
+                layout=itinerary(trip, photo_url),
+                caption=f"The plan for {trip.destination}",
+                thumbnail_url=photo_url,
+                fallback_text=text,
+            )
+        )
         return "Itinerary posted."
 
     def send_booking_links(self) -> str:
