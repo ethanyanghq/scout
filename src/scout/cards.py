@@ -20,12 +20,12 @@ from scout.best_flights import (
 from scout.group_summary import format_window
 from scout.trip import Trip
 
-# A tropical palette for destination articles: lagoon teal for headings, palm
-# green for prices and deep sea for names, over a shallows-to-sky gradient.
-LAGOON_HEX = "#0E7C86"
-PALM_HEX = "#2E9E6B"
-DEEP_SEA_HEX = "#0B4F6C"
-SHALLOWS_GRADIENT_HEX = ["#DDF6EE", "#D3ECFA"]
+# Destination articles are white text on near-black, with one muted sea-glass
+# accent and soft gray for the small print, so nothing fights the photos.
+SEA_GLASS_HEX = "#8FC1B5"
+SOFT_GRAY_HEX = "#A1A1AA"
+# Tints the atmosphere background's glow; this dark it reads as plain black.
+NIGHT_GLOW_HEX = "#1B2422"
 # A departure-board blue, matching HermesShare's own flight cards.
 FLIGHT_ACCENT_HEX = "#0A84FF"
 NONSTOP_HEX = "#30D158"
@@ -82,8 +82,9 @@ def destination_article(brochure: Brochure, nights: int) -> dict:
         "version": 1,
         "title": brochure.place_name,
         "subtitle": brochure.region,
-        "accentColorHex": LAGOON_HEX,
-        "background": {"kind": "gradient", "colorsHex": SHALLOWS_GRADIENT_HEX},
+        "accentColorHex": SEA_GLASS_HEX,
+        # `atmosphere` draws a near-black card and switches its text to white.
+        "background": {"kind": "atmosphere", "colorsHex": [NIGHT_GLOW_HEX]},
         "root": {
             "type": "vstack",
             "spacing": 18,
@@ -94,11 +95,11 @@ def destination_article(brochure: Brochure, nights: int) -> dict:
                     "type": "statusBadge",
                     "label": f"~${brochure.estimated_cost_per_person_usd:,} "
                     "per person, all in",
-                    "colorHex": PALM_HEX,
+                    "colorHex": SEA_GLASS_HEX,
                 },
                 _text(brochure.detail, role="body"),
                 _section_heading("Where you'll stay"),
-                _text(brochure.hotel, role="headline", color_hex=DEEP_SEA_HEX),
+                _text(brochure.hotel, role="headline"),
                 _section_heading("Things to do"),
                 *[_activity(activity) for activity in brochure.activities],
                 _section_heading("What it costs"),
@@ -106,7 +107,7 @@ def destination_article(brochure: Brochure, nights: int) -> dict:
                 _text(
                     f"Estimates for {nights} nights. Nothing is booked.",
                     role="footnote",
-                    color_hex=LAGOON_HEX,
+                    color_hex=SOFT_GRAY_HEX,
                 ),
             ],
         },
@@ -136,11 +137,11 @@ def _activity(activity: Activity) -> dict:
         "spacing": 2,
         "alignment": "leading",
         "children": [
-            _text(activity.name, role="headline", color_hex=DEEP_SEA_HEX),
+            _text(activity.name, role="headline"),
             _text(
                 f"~${activity.estimated_cost_usd:,} per person",
                 role="footnote",
-                color_hex=PALM_HEX,
+                color_hex=SOFT_GRAY_HEX,
             ),
         ],
     }
@@ -166,7 +167,7 @@ def _cost_breakdown(brochure: Brochure) -> dict:
 
 
 def _section_heading(title: str) -> dict:
-    heading = _text(title.upper(), role="subheadline", color_hex=LAGOON_HEX)
+    heading = _text(title.upper(), role="subheadline", color_hex=SEA_GLASS_HEX)
     heading["style"]["weight"] = "bold"
     return heading
 

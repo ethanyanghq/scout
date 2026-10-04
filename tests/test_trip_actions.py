@@ -419,7 +419,6 @@ def test_each_destination_gets_its_own_card_named_for_the_place(
     cards = maya_actions_with_photos.outbox
     assert all(isinstance(card, Card) for card in cards)
     assert [card.caption for card in cards] == ["Tulum", "Punta Cana", "San Juan"]
-    assert {card.subcaption for card in cards} == {"3 locations for you to consider"}
     assert cards[0].thumbnail_url == "https://lh3.googleusercontent.com/Tulum,-Mexico"
 
 

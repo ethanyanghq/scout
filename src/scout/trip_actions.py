@@ -415,7 +415,6 @@ class TripActions:
             Card(
                 layout=destination_article(brochure, nights),
                 caption=brochure.place_name,
-                subcaption=f"{len(brochures)} locations for you to consider",
                 thumbnail_url=brochure.hero_photo_url,
                 fallback_text=format_brochure(brochure, nights),
             )
