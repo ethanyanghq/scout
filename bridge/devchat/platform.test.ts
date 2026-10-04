@@ -206,6 +206,25 @@ describe("the developer console's group chat", () => {
     ]);
   });
 
+  test("shows scout's card with its text and why Linq would refuse it", async () => {
+    const card = { layout: {}, caption: "3 spots to look around", thumbnail_url: null, fallback_text: "Tulum · ~$1,100" };
+    respond = () => Response.json({ actions: [{ type: "card", ...card }] });
+
+    const exchange = await inChat([MAYA], (chat) => chat.say("maya", "@scout somewhere tropical?"));
+
+    expect(exchange.replies).toEqual([
+      {
+        id: "m2",
+        from: "scout",
+        text:
+          "🗂 card: 3 spots to look around\n" +
+          "thumbnail (none)\n" +
+          "⚠ Linq sends a card only with an HTTPS thumbnail\n" +
+          "Tulum · ~$1,100",
+      },
+    ]);
+  });
+
   test("refuses a tapback on words scout never sent", async () => {
     const tapping = inChat([MAYA], (chat) => chat.react("maya", "Paris", "like"));
 

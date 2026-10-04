@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from scout.ai_provider import connect_agent
 from scout.conversation import Agent, handle_message, handle_reaction
 from scout.dev_endpoints import create_dev_router
-from scout.outgoing import Link, Outgoing, React, Say
+from scout.outgoing import Card, Link, Outgoing, React, Say
 from scout.trip import IncomingMessage, IncomingReaction, MessagePhoto
 from scout.trip_store import TripStore
 
@@ -22,7 +22,7 @@ from scout.trip_store import TripStore
 HOST = "127.0.0.1"
 DEFAULT_PORT = 8787
 DEFAULT_DB_PATH = "scout.db"
-ACTION_TYPES = {Say: "say", React: "react", Link: "link"}
+ACTION_TYPES = {Say: "say", React: "react", Link: "link", Card: "card"}
 
 
 class IncomingPhoto(BaseModel):
@@ -57,7 +57,7 @@ class IncomingTapback(BaseModel):
 
 
 class Actions(BaseModel):
-    # Each action is its type ("say", "react" or "link") plus that type's
+    # Each action is its type ("say", "react", "link" or "card") plus that type's
     # fields in outgoing.py, which the bridge turns into iMessages.
     actions: list[dict]
 

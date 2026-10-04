@@ -13,6 +13,7 @@ import {
 import z from "zod";
 import { relaySpectrumMessages, threadedReplySchema } from "../spectrum";
 import { tapbackEmoji, tapbackNamed, type Tapback } from "../tapbacks";
+import { cardProblems, type HermesCard } from "../hermes-card";
 import { previewLinkCard, type LinkCard } from "./link-card";
 import type { MessageOutcome } from "../trace";
 
@@ -208,9 +209,19 @@ function describeScoutContent(content: Content): Omit<ChatEntry, "id" | "from"> 
       };
     case "reply":
       return { ...describeScoutContent(content.content), replyTo: content.target.id };
+    case "custom":
+      return { text: describeHermesCard(content.raw as HermesCard) };
     default:
       return { text: `[${content.type}]` };
   }
+}
+
+// A card as the console shows it: its caption, the text phones without the
+// extension get, and why Linq would refuse to send it.
+function describeHermesCard(card: HermesCard): string {
+  const warnings = cardProblems(card).map((problem) => `⚠ ${problem}`);
+  const thumbnail = `thumbnail ${card.thumbnail_url ?? "(none)"}`;
+  return [`🗂 card: ${card.caption}`, thumbnail, ...warnings, card.fallback_text].join("\n");
 }
 
 // Spectrum only needs a message's id and content to aim a tapback at it.

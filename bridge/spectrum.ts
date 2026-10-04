@@ -3,6 +3,7 @@
 
 import {
   UnsupportedError,
+  custom,
   reaction,
   reply,
   richlink,
@@ -107,6 +108,14 @@ async function perform(space: Space, action: ScoutAction, recent: RecentMessages
     case "link":
       await sendOrFallBack(space, richlink(action.url), action.url, recent);
       return;
+    case "card": {
+      // Spectrum carries the card as custom content, so it still goes through
+      // Photon's SDK; only the Linq platform knows how to put it on the wire.
+      // Lines without an iMessage app part send the caption instead.
+      const text = `${action.caption}\n${action.fallback_text}`;
+      await sendOrFallBack(space, custom(action), text, recent);
+      return;
+    }
   }
 }
 

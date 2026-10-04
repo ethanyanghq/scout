@@ -15,6 +15,7 @@ import {
   type ProviderMessageRecord,
 } from "spectrum-ts/authoring";
 import z from "zod";
+import { cardPart, cardProblems, type HermesCard } from "./hermes-card";
 import { LINQ_API_URL, callLinq, type LinqApi, type LinqHandle } from "./linq-api";
 import { threadedReplySchema } from "./spectrum";
 import { isTapback, tapbackEmoji, tapbackNamed } from "./tapbacks";
@@ -233,6 +234,7 @@ async function sendContent(
   content: Content,
 ): Promise<ProviderMessageRecord> {
   if (content.type === "reaction") return sendTapback(api, chatId, content);
+  if (content.type === "custom") return sendCard(api, chatId, content);
   if (content.type === "richlink") return sendParts(api, chatId, content, [{ type: "link", value: content.url }]);
   const threadUnder = content.type === "reply" ? content.target.id : null;
   const words = content.type === "reply" ? content.content : content;
@@ -256,6 +258,22 @@ async function sendParts(
         ...(threadUnder ? { reply_to: { message_id: threadUnder, part_index: 0 } } : {}),
       },
     },
+  })) as { message: { id: string } };
+  return { id: sent.message.id, content, space: { id: chatId }, timestamp: new Date() };
+}
+
+// A card the line can't send throws UnsupportedError, so the relay sends its
+// text instead.
+async function sendCard(
+  api: LinqApi,
+  chatId: string,
+  content: Extract<Content, { type: "custom" }>,
+): Promise<ProviderMessageRecord> {
+  const card = content.raw as HermesCard;
+  const problems = cardProblems(card);
+  if (problems.length > 0) throw UnsupportedError.content("custom", PLATFORM, problems.join("; "));
+  const sent = (await callLinq(api, `/chats/${chatId}/messages`, {
+    body: { message: { parts: [cardPart(card)] } },
   })) as { message: { id: string } };
   return { id: sent.message.id, content, space: { id: chatId }, timestamp: new Date() };
 }

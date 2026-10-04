@@ -37,7 +37,15 @@ export type ScoutAction =
   | { type: "say"; text: string; reply_to: string | null }
   | { type: "react"; message_id: string; tapback: Tapback; fallback_text: string }
   // A link sent on its own, so iMessage shows it as a card.
-  | { type: "link"; url: string };
+  | { type: "link"; url: string }
+  // A HermesShare card: a native GUI the group opens from the bubble.
+  | {
+      type: "card";
+      layout: unknown;
+      caption: string;
+      thumbnail_url: string | null;
+      fallback_text: string;
+    };
 
 // Read on each call, so tests and the end-to-end runner can point the bridge
 // at their own service.

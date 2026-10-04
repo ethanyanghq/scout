@@ -280,6 +280,37 @@ describe("a Linq group chat through Spectrum", () => {
     ]);
   });
 
+  test("sends scout's card to Linq as a HermesShare part carrying its layout", async () => {
+    const layout = { version: 1, title: "Where should we go?" };
+    scoutActions = [{ type: "card", ...BROCHURE_CARD, layout }];
+
+    await deliver(messageReceived({}));
+
+    const [part] = (linqReceived[0]!.body as { message: { parts: Record<string, unknown>[] } }).message.parts;
+    expect(part).toMatchObject({
+      type: "imessage_app",
+      app: { name: "HermesShare" },
+      fallback_text: "Tulum · ~$1,100",
+      interactive: false,
+      layout: { caption: "3 spots to look around", image_url: "https://lh3.googleusercontent.com/tulum" },
+    });
+    const encoded = (part!.url as string).replace("data:application/json;base64,", "");
+    expect(JSON.parse(Buffer.from(encoded, "base64").toString())).toEqual(layout);
+  });
+
+  test("sends a card without an HTTPS thumbnail as its text, since Linq would refuse it", async () => {
+    scoutActions = [{ type: "card", ...BROCHURE_CARD, thumbnail_url: null }];
+
+    await deliver(messageReceived({}));
+
+    expect(linqReceived).toEqual([
+      {
+        path: "/chats/group-chat-1/messages",
+        body: { message: { parts: [{ type: "text", value: "3 spots to look around\nTulum · ~$1,100" }] } },
+      },
+    ]);
+  });
+
   test("sends scout's tapback to Linq on the member's message", async () => {
     scoutActions = [{ type: "react", message_id: "message-1", tapback: "like", fallback_text: "Got it" }];
 
@@ -290,6 +321,13 @@ describe("a Linq group chat through Spectrum", () => {
     ]);
   });
 });
+
+const BROCHURE_CARD = {
+  layout: {},
+  caption: "3 spots to look around",
+  thumbnail_url: "https://lh3.googleusercontent.com/tulum",
+  fallback_text: "Tulum · ~$1,100",
+};
 
 function findFreePort(): number {
   const probe = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response() });

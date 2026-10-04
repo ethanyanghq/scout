@@ -1,4 +1,4 @@
-"""What scout sends to a chat: texts, tapbacks and link cards.
+"""What scout sends to a chat: texts, tapbacks, link cards and GUI cards.
 
 The bridge turns each one into an iMessage on whatever line the group uses,
 and falls back to plain text where a line can't do the rest.
@@ -39,7 +39,23 @@ class Link:
     url: str
 
 
-Outgoing = Say | React | Link
+@dataclass(frozen=True)
+class Card:
+    """A HermesShare card: a native GUI the group can open and scroll.
+
+    `layout` is the card's node tree (scout.cards). The bubble shows
+    `thumbnail_url` unopened, and phones without the extension installed show
+    `fallback_text`, so every card needs a text equivalent in the chat too.
+    """
+
+    layout: dict
+    # One line on the unopened bubble, under the picture.
+    caption: str
+    thumbnail_url: str | None = None
+    fallback_text: str = "Open in HermesShare"
+
+
+Outgoing = Say | React | Link | Card
 
 
 def as_plain_text(outgoing: Outgoing) -> str:
@@ -52,3 +68,5 @@ def as_plain_text(outgoing: Outgoing) -> str:
             return f"({tapback} tapback) {fallback_text}"
         case Link(url=url):
             return url
+        case Card(caption=caption):
+            return f"[card] {caption}"
