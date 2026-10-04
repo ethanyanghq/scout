@@ -8,8 +8,11 @@ from types import SimpleNamespace
 from scout.agent import ScoutAgent
 from scout.outgoing import Say, Tapback
 from scout.trip import (
+    DeckActivity,
     IncomingMessage,
     MediaKind,
+    PreferenceUpdate,
+    Rating,
     SharedMedia,
 )
 
@@ -191,6 +194,46 @@ def test_a_refusal_sends_nothing(store):
     claude = ScriptedClaude(refusal)
 
     assert ScoutAgent(claude, store).respond(trip, message) == []
+
+
+LEO = "+15550000002"
+PRIYA = "+15550000003"
+FULL_PREFERENCES = PreferenceUpdate(
+    available_from=datetime(2027, 3, 13).date(),
+    available_to=datetime(2027, 3, 20).date(),
+    budget_usd=800,
+    home_city="Boston",
+)
+
+
+def situation_for(store, trip):
+    message = IncomingMessage(SPACE, MAYA, "@scout hi", datetime(2026, 10, 2, 9, 0))
+    claude = ScriptedClaude(response("end_turn", text("NO_REPLY")))
+    ScoutAgent(claude, store).respond(trip, message)
+    return situation_text(claude)
+
+
+def test_tells_claude_not_to_wait_once_a_majority_has_shared(store):
+    store.create_trip(SPACE)
+    store.add_members(SPACE, [MAYA, LEO, PRIYA])
+    store.save_preferences(SPACE, MAYA, FULL_PREFERENCES)
+    store.save_preferences(SPACE, LEO, FULL_PREFERENCES)
+
+    situation = situation_for(store, store.get_trip(SPACE))
+
+    assert "a majority has shared, so don't wait on them" in situation
+
+
+def test_tells_claude_to_plan_once_a_majority_has_sent_picks(store):
+    store.create_trip(SPACE)
+    store.add_members(SPACE, [MAYA, LEO, PRIYA])
+    store.replace_activity_deck(SPACE, [DeckActivity("Night kayak", "", 60)])
+    store.save_activity_picks(SPACE, MAYA, {0: Rating.YEAH})
+    store.save_activity_picks(SPACE, LEO, {0: Rating.YEAH})
+
+    situation = situation_for(store, store.get_trip(SPACE))
+
+    assert "a majority has sent picks, so plan without waiting on: …0003" in situation
 
 
 def test_tells_claude_whether_it_was_tagged(store):

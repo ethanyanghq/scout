@@ -1,10 +1,12 @@
-# Journey: once everyone has shared, scout posts the summary and three destination brochures without being asked, then asks for the group's final decision.
+# Journey: once a majority has shared (2 of 3), scout posts the summary and three destination brochures without being asked or waiting on the rest,
+# then asks for the group's final decision. Details shared later are still saved, without redoing the brochures.
 # Needs Claude.
 members maya leo priya
 
 maya: i'm maya, free mar 13-20, ~$800, flying from boston, need a beach
 leo: leo here, mar 14-22, 600, nyc, anything works
-priya: priya, mar 13-21, 700, chicago, want good food
 expect scout ~ "here's where everyone landed"
 expect scout ~ "final decision"
+priya: priya, mar 13-21, 700, chicago, want good food
+expect scout !~ "final decision"
 expect state members.2.home_city ~ "chicago"

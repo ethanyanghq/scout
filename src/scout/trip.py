@@ -146,6 +146,12 @@ class PreferenceUpdate:
     chronotype: Chronotype | None = None
 
 
+def is_majority(count: int, group_size: int) -> bool:
+    """More than half the group: 2 of 3, 3 of 4, or both of 2. scout moves on
+    once a majority has answered rather than waiting on everyone."""
+    return count * 2 > group_size
+
+
 @dataclass
 class Member:
     phone: str
@@ -248,8 +254,9 @@ class ActivityDeck:
     # rated meh or yeah, so an empty dict means "sent, and nah to everything".
     picks: dict[str, dict[int, Rating]]
 
-    def has_picks_from_everyone(self, members: list[Member]) -> bool:
-        return all(member.phone in self.picks for member in members)
+    def has_picks_from_a_majority(self, members: list[Member]) -> bool:
+        sent = sum(1 for member in members if member.phone in self.picks)
+        return is_majority(sent, len(members))
 
     def score(self, activity_index: int) -> int:
         return sum(

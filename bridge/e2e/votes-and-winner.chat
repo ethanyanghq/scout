@@ -1,6 +1,7 @@
-# Journey: members vote by number and scout announces the winner. Votes are
-# counted in code, so this one doesn't need Claude. scout confirms each vote
-# with a 👍 tapback rather than another line in the chat.
+# Journey: members vote by number and scout announces the winner as soon as one
+# place has a majority; a split vote stays open. Votes are counted in code, so
+# this one doesn't need Claude. scout confirms each vote with a 👍 tapback
+# rather than another line in the chat.
 members maya leo priya
 from poll-open
 
@@ -8,8 +9,10 @@ maya: 2
 expect scout reacted like
 leo: lol this is taking forever
 expect scout quiet
-leo: 2
-priya: 1
+leo: 1
+expect scout reacted like
+expect state stage = "voting"
+priya: 2
 expect scout ~ "San Juan, Puerto Rico wins"
 expect state destination = "San Juan, Puerto Rico"
 expect state stage = "destination_chosen"

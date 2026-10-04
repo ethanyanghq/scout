@@ -151,7 +151,8 @@ TOOL_DEFINITIONS = [
         "description": (
             "Record one member's vote in the open poll: the sender's, or one a "
             "friend reported for them. Closes the poll and announces the winner "
-            "automatically once everyone has voted."
+            "automatically once a majority of the group has voted for one "
+            "place, or everyone has voted."
         ),
         "strict": True,
         "input_schema": {

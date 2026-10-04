@@ -10,13 +10,25 @@ import anthropic
 from scout.activity_deck import describe_ratings
 from scout.agent_tools import TOOL_DEFINITIONS, describe_tool_call, run_tool
 from scout.expense_report import describe_split
-from scout.group_summary import DateWindow, format_window, summarize_group
+from scout.group_summary import (
+    DateWindow,
+    GroupSummary,
+    format_window,
+    summarize_group,
+)
 from scout.money import format_usd
 from scout.outgoing import Outgoing, Say
 from scout.outside_services import NO_OUTSIDE_SERVICES, OutsideServices
 from scout.settle_up import plan_payments
 from scout.speak_gate import is_addressed_to_scout
-from scout.trip import IncomingMessage, ItineraryDay, Member, MessagePhoto, Trip
+from scout.trip import (
+    IncomingMessage,
+    ItineraryDay,
+    Member,
+    MessagePhoto,
+    Trip,
+    is_majority,
+)
 from scout.trip_actions import TripActionError, TripActions
 from scout.trip_store import TripStore
 
@@ -199,8 +211,7 @@ def _describe_trip(trip: Trip) -> str:
         lines.append("Dates that work for everyone: none, they conflict")
     if summary.pace:
         lines.append(f"Group pace: {summary.pace}s")
-    waiting_on = ", ".join(m.label for m in summary.members_still_to_share)
-    lines.append(f"Still waiting on: {waiting_on or 'nobody'}")
+    lines.append(_describe_who_still_has_to_share(trip.members, summary))
     if trip.open_poll:
         lines.append("Open poll:")
         for number, option in enumerate(trip.open_poll.options, start=1):
@@ -225,15 +236,36 @@ def _describe_trip(trip: Trip) -> str:
     return "\n".join(lines)
 
 
+def _describe_who_still_has_to_share(
+    members: list[Member], summary: GroupSummary
+) -> str:
+    still_to_share = summary.members_still_to_share
+    if not still_to_share:
+        return "Still waiting on: nobody"
+    waiting_on = ", ".join(m.label for m in still_to_share)
+    if is_majority(len(members) - len(still_to_share), len(members)):
+        return (
+            f"Still waiting on: {waiting_on} (a majority has shared, so don't "
+            "wait on them)"
+        )
+    return f"Still waiting on: {waiting_on}"
+
+
 def _describe_activity_deck(trip: Trip) -> list[str]:
     """Each deck activity and who said yeah or meh to it, and who hasn't sent
     picks."""
     deck = trip.activity_deck
-    waiting_on = [m.label for m in trip.members if m.phone not in deck.picks]
-    lines = [
-        "Activity deck (still waiting on picks from: "
-        f"{', '.join(waiting_on) or 'nobody'}):"
-    ]
+    waiting_on = ", ".join(m.label for m in trip.members if m.phone not in deck.picks)
+    if not waiting_on:
+        heading = "Activity deck (everyone has sent picks):"
+    elif deck.has_picks_from_a_majority(trip.members):
+        heading = (
+            "Activity deck (a majority has sent picks, so plan without "
+            f"waiting on: {waiting_on}):"
+        )
+    else:
+        heading = f"Activity deck (still waiting on picks from: {waiting_on}):"
+    lines = [heading]
     for number, activity in enumerate(deck.activities, start=1):
         lines.append(
             f"  {number}. {activity.name} (~${activity.estimated_cost_usd}) "

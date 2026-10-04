@@ -1,17 +1,18 @@
-# Journey: scout sends the activity deck, everyone sends their picks, and once
-# the last picks are in, scout posts the plan without being asked: it schedules
-# what the group shares and offers solo picks as add-ons.
+# Journey: scout sends the activity deck, and once a majority has sent picks
+# (2 of 3), scout posts the plan without being asked or waiting on the rest: it
+# schedules what the group shares and offers solo picks as add-ons. Picks sent
+# later are saved without a second plan.
 # Picks are counted in code; asking for the deck and the plan needs Claude.
 members maya leo priya
 from destination-chosen
 
 maya: @scout what should we do while we're there?
 expect state activity_deck.activities ~ "name"
-maya: @scout my picks: 1 yeah, 2 meh
+maya: @scout my picks: 1 yeah, 3 yeah
 expect scout reacted like
-leo: @scout my picks: 1 meh
-priya: @scout my picks: 1 yeah, 3 yeah
+leo: @scout my picks: 1 yeah
 expect scout ~ "the plan"
-expect state activity_deck.picks ~ "{"
 expect state itinerary_add_ons ~ "maya"
-expect state itinerary_add_ons ~ "priya"
+priya: @scout my picks: 1 yeah, 2 meh
+expect scout reacted like
+expect scout !~ "the plan"

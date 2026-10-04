@@ -109,7 +109,32 @@ def test_saving_preferences_reports_what_is_still_missing(maya_actions):
     )
 
     assert "Maya is still missing: dates, home city" in status
-    assert "waiting on: Maya, …0002" in status
+    assert "Still to share: Maya, …0002" in status
+
+
+def test_the_save_that_makes_a_majority_moves_the_group_on(store):
+    store.create_trip(SPACE)
+    store.add_members(SPACE, [MAYA, LEO, PRIYA])
+    actions = TripActions(store, SPACE, MAYA)
+
+    first = actions.save_member_preferences("…0001", MAYA_PREFERENCES)
+    second = actions.save_member_preferences("…0002", LEO_PREFERENCES)
+
+    assert "call post_group_summary" not in first
+    assert "Still to share: …0003" in second
+    assert "call post_group_summary" in second
+
+
+def test_a_save_after_the_majority_doesnt_move_the_group_on_again(store):
+    store.create_trip(SPACE)
+    store.add_members(SPACE, [MAYA, LEO, PRIYA])
+    actions = TripActions(store, SPACE, MAYA)
+    actions.save_member_preferences("…0001", MAYA_PREFERENCES)
+    actions.save_member_preferences("…0002", LEO_PREFERENCES)
+
+    late = actions.save_member_preferences("…0003", MAYA_PREFERENCES)
+
+    assert "call post_group_summary" not in late
 
 
 def test_saving_the_senders_own_details_confirms_with_a_thumbs_up(store):

@@ -92,6 +92,7 @@ from scout.trip import (
     Rating,
     Settlement,
     Trip,
+    is_majority,
 )
 from scout.trip_store import TripStore
 
@@ -176,6 +177,7 @@ class TripActions:
         if update.budget_usd is not None and update.budget_usd <= 0:
             raise TripActionError("budget_usd must be a positive whole number")
         member = self._find_member(member_label)
+        had_a_majority = _has_majority_sharing(self._load_trip().members)
 
         self._store.save_preferences(self._space_id, member.phone, update)
         trip = self._load_trip()
@@ -184,9 +186,15 @@ class TripActions:
         status = (
             f"Saved. {member.label} is still missing: "
             f"{', '.join(member.missing_preferences) or 'nothing'}. "
-            f"Group still waiting on: "
+            f"Still to share: "
             f"{', '.join(m.label for m in still_waiting_on) or 'nobody'}."
         )
+        if not had_a_majority and _has_majority_sharing(trip.members):
+            status += (
+                " A majority of the group has now shared, so don't wait on the "
+                "rest: in this same turn, call post_group_summary and send the "
+                "destination brochures."
+            )
         if self._confirm_with_thumbs_up(member):
             status += (
                 " A 👍 is going on their newest message to confirm it, so "
@@ -259,7 +267,11 @@ class TripActions:
 
         self._store.record_vote(poll.id, voter_phone, option_index)
         poll.votes[voter_phone] = option_index
-        if len(poll.votes) == len(trip.members):
+        # A place a majority voted for can't lose, so the rest needn't vote.
+        has_majority_choice = is_majority(
+            max(polls.count_votes(poll)), len(trip.members)
+        )
+        if has_majority_choice or len(poll.votes) == len(trip.members):
             return self._close(trip)
 
         voter = trip.find_member(voter_phone)
@@ -669,8 +681,8 @@ class TripActions:
         confirm: Callable[[str], Outgoing] = Say,
     ) -> str:
         """Saves how the sender rated the activities (those left out are nah).
-        Unless they're the last to send, `confirm` turns the confirmation text
-        into what scout sends."""
+        Unless theirs are the picks that make a majority, `confirm` turns the
+        confirmation text into what scout sends."""
         return self._record_picks(self._sender_phone, ratings, confirm)
 
     def record_member_picks(self, member_label: str, ratings: dict[int, Rating]) -> str:
@@ -693,13 +705,15 @@ class TripActions:
             if not 0 <= position < len(deck.activities):
                 raise TripActionError(f"activity {position + 1} isn't on the deck")
 
+        had_a_majority = deck.has_picks_from_a_majority(trip.members)
         picks = {p: r for p, r in sorted(ratings.items()) if r != Rating.NAH}
         self._store.save_activity_picks(self._space_id, phone, picks)
         deck.picks[phone] = picks
-        if len(deck.picks) == len(trip.members):
+        if not had_a_majority and deck.has_picks_from_a_majority(trip.members):
             return (
-                "Picks recorded. Everyone has sent theirs. Don't wait to be "
-                "asked: in this same turn, call post_itinerary as the next step."
+                "Picks recorded. A majority of the group has sent theirs, so "
+                "don't wait on the rest or to be asked: in this same turn, call "
+                "post_itinerary as the next step."
             )
 
         member = trip.find_member(phone)
@@ -781,7 +795,7 @@ class TripActions:
         # edits can't quietly move a trip people have started booking.
         dates = summarize_group(trip.members).shared_window
         self._store.close_poll(trip.open_poll.id, result.winner.name, dates)
-        self.outbox.append(Say(polls.format_result(result, len(trip.open_poll.votes))))
+        self.outbox.append(Say(polls.format_result(result, len(trip.members))))
         return (
             f"Poll closed. Destination is now {result.winner.name}. "
             f"{_describe_dates_and_next_step(dates)}"
@@ -940,6 +954,11 @@ def _introduce_flights(home_city_flights: list[HomeCityFlight]) -> str:
     if len(home_city_flights) == 1:
         return "this flight seems like the best deal"
     return "these flights seem like the best deals"
+
+
+def _has_majority_sharing(members: list[Member]) -> bool:
+    still_to_share = summarize_group(members).members_still_to_share
+    return is_majority(len(members) - len(still_to_share), len(members))
 
 
 def _check_every_home_city_has_an_airport(

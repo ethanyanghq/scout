@@ -130,13 +130,15 @@ def _respond(
         picks = parse_picks(message.text, activity_names)
         if picks is not None:
             logger.info("Activity picks %s, saved without the AI", picks)
+            had_a_majority = trip.activity_deck.has_picks_from_a_majority(trip.members)
             actions = TripActions(store, trip.space_id, message.sender_phone)
             actions.record_sender_picks(picks, confirm=_tapback_on(message))
             trip = store.get_trip(trip.space_id)
-            if not trip.activity_deck.has_picks_from_everyone(trip.members):
+            has_a_majority = trip.activity_deck.has_picks_from_a_majority(trip.members)
+            if had_a_majority or not has_a_majority:
                 return actions.outbox
-            # The last picks are in, so the AI posts the itinerary.
-            logger.info("Everyone has sent picks, so asking the AI for the plan")
+            # These picks make a majority, so the AI posts the itinerary.
+            logger.info("A majority has sent picks, so asking the AI for the plan")
             is_addressed = is_addressed_to_scout(store, message)
             return [
                 *actions.outbox,

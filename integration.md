@@ -54,9 +54,9 @@ Stated here rather than buried, because they cut a lot of scope:
 | --- | --- | --- | --- |
 | 1. Join | A member adds scout's number | Introduces itself, then opens the interview | — |
 | 2. Logistics | Immediately after the intro | Saves each reply, confirms it in one line, chases what's missing | — |
-| 3. Destination | Everyone has answered | Posts the summary, then three brochures | **Brochure** |
+| 3. Destination | A majority has answered | Posts the summary, then three brochures | **Brochure** |
 | 4. Activities | The destination is locked | Posts a deck of activities at that destination and hotel | **Deck** |
-| 5. Itinerary | Everyone has submitted their picks | Builds the plan from the aggregate | **Itinerary** |
+| 5. Itinerary | A majority has submitted their picks | Builds the plan from the aggregate | **Itinerary** |
 | 6. Hotel | The itinerary is posted | Asks the member who added scout to book the room | **Booking** |
 | 7. Flight | The hotel is in the ledger | Posts the one best-value flight | **Booking** |
 | 8. Wrap | The flight is in the ledger | Calendar for everything, then the album link | — |
@@ -136,7 +136,8 @@ estimated total for the whole trip per person.
 **The card is the ballot.** Each person's submit is their vote. This keeps the
 vote counting, the tie-break and the quiet-member tracking that are already
 built and tested (`polls.py`): most votes wins, a tie goes to the cheapest
-option, and scout announces the result when everyone has submitted.
+option, and scout announces the result as soon as one place has a majority of
+the group (2 of 3), or when everyone has voted.
 
 The group can still settle it in words. "@scout we'd like to go to Cancun" locks
 the destination immediately, whatever the ballot says, because an agreement in
@@ -176,9 +177,9 @@ It is one deck for the whole group, in the group thread, so people can see each
 other's picks. That is not Tinder — there is no privacy until a match — but it
 suits a friend group arguing about whether to get up for the ruins.
 
-scout stays silent for every submit except the last. When the final person
-sends, it posts the tally, best-liked first, naming who said yeah and who said
-meh to each. A yeah is worth 2 and a meh 1, so a meh keeps an activity alive
+scout stays silent for every submit until a majority of the group (2 of 3,
+3 of 4) has sent picks. Then it goes straight on to the plan without waiting
+on the rest; later picks are saved without a second plan. A yeah is worth 2 and a meh 1, so a meh keeps an activity alive
 without beating a yeah, and the itinerary schedules the highest scorers.
 
 Built: `send_activity_deck` (`src/scout/trip_actions.py`), `activity_deck.py`

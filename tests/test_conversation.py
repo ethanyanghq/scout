@@ -339,25 +339,37 @@ def test_a_plain_vote_gets_a_thumbs_up_instead_of_a_line_in_the_chat(store):
 def test_the_vote_that_closes_the_poll_gets_the_announcement_not_a_tapback(store):
     start_voting(store)
     send_from_line(store, FakeAgent(), MAYA, "1", message_id="maya-vote")
-    send_from_line(store, FakeAgent(), LEO, "1", message_id="leo-vote")
 
-    replies = send_from_line(store, FakeAgent(), PRIYA, "3", message_id="priya-vote")
+    replies = send_from_line(store, FakeAgent(), LEO, "1", message_id="leo-vote")
 
     assert replies[0] == Say("poll's closed: Tulum, Mexico wins with 2 of 3 votes 🎉")
 
 
-def test_last_vote_closes_the_poll_and_announces_the_winner(store):
+def test_a_majority_for_one_place_closes_the_poll_without_waiting_on_the_rest(store):
     start_voting(store)
     agent = FakeAgent()
 
     send(store, agent, MAYA, "1")
-    send(store, agent, LEO, "1")
-    replies = send(store, agent, PRIYA, "3")
+    replies = send(store, agent, LEO, "1")
 
     trip = store.get_trip(SPACE)
     assert trip.stage == TripStage.DESTINATION_CHOSEN
     assert trip.destination == "Tulum, Mexico"
     assert replies == ["poll's closed: Tulum, Mexico wins with 2 of 3 votes 🎉"]
+
+
+def test_a_split_vote_stays_open_until_a_place_has_a_majority(store):
+    start_voting(store)
+    agent = FakeAgent()
+    send(store, agent, MAYA, "1")
+    send(store, agent, LEO, "2")
+
+    assert store.get_trip(SPACE).open_poll is not None
+
+    replies = send(store, agent, PRIYA, "2")
+
+    assert store.get_trip(SPACE).destination == "San Juan, Puerto Rico"
+    assert replies == ["poll's closed: San Juan, Puerto Rico wins with 2 of 3 votes 🎉"]
 
 
 def test_scout_apologizes_when_it_fails_on_a_message_addressed_to_it(store):
@@ -475,7 +487,24 @@ def test_picks_sent_from_the_deck_are_saved_without_the_agent(store):
     assert store.get_trip(SPACE).activity_deck.picks == {LEO: {1: Rating.MEH}}
 
 
-def test_the_last_picks_from_the_deck_bring_the_agent_in_to_plan(store):
+def test_the_picks_that_make_a_majority_bring_the_agent_in_to_plan(store):
+    choose_san_juan(store)
+    store.replace_activity_deck(SPACE, [DeckActivity("Night kayak", "", 60)])
+    agent = FakeAgent(replies=["the plan: ..."])
+    send_from_line(
+        store, agent, MAYA, "@scout my picks: Night kayak yeah", message_id="maya"
+    )
+    assert agent.messages_seen == []
+
+    replies = send_from_line(
+        store, agent, LEO, "@scout my picks: Night kayak yeah", message_id="leo"
+    )
+
+    assert agent.messages_seen == ["@scout my picks: Night kayak yeah"]
+    assert replies == [Say("the plan: ...")]
+
+
+def test_picks_sent_after_the_majority_dont_plan_again(store):
     choose_san_juan(store)
     store.replace_activity_deck(SPACE, [DeckActivity("Night kayak", "", 60)])
     agent = FakeAgent(replies=["the plan: ..."])
@@ -483,14 +512,16 @@ def test_the_last_picks_from_the_deck_bring_the_agent_in_to_plan(store):
         send_from_line(
             store, agent, sender, "@scout my picks: Night kayak yeah", message_id="x"
         )
-    assert agent.messages_seen == []
 
     replies = send_from_line(
-        store, agent, PRIYA, "@scout my picks: Night kayak yeah", message_id="priya"
+        store, agent, PRIYA, "@scout my picks: Night kayak meh", message_id="priya"
     )
 
-    assert agent.messages_seen == ["@scout my picks: Night kayak yeah"]
-    assert replies == [Say("the plan: ...")]
+    assert len(agent.messages_seen) == 1
+    assert replies == [
+        React("priya", Tapback.LIKE, fallback_text="got …0003's picks (3 of 3 sent)")
+    ]
+    assert store.get_trip(SPACE).activity_deck.picks[PRIYA] == {0: Rating.MEH}
 
 
 def tapback(store, sender, on_text, kind="like", on_id="option-message"):
