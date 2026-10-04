@@ -24,8 +24,8 @@ Several tools are planned but not built yet. **If a tool is marked planned, it d
 | Seeded stages and resetting one chat | Built | |
 | Tapbacks, threaded replies and link cards, with console previews | Built, but only tested against a stand-in for Linq's API | |
 | Message effects (confetti) | Planned (design doc, events in, actions out) | Plain text |
-| HermesShare cards (brochure, activity deck, itinerary, booking) | Planned ([integration.md](integration.md), milestone 4 of the group chat plan). Blocked on HTTPS hosting and on sideloading the extension. | Plain text, and the numbered text poll for voting |
-| Card previews in the console | Planned | Nothing — a card can't be sent yet |
+| HermesShare cards (brochure, activity deck, itinerary, booking) | The destination brochure is built (`send_destination_brochures`), but only tested against a stand-in for Linq's API. Its photos are Google's own keyless links, so it needs no hosting. Taps don't reach scout, and the rest are planned ([integration.md](integration.md)). | The numbered text poll for voting |
+| Card previews in the console | Built: the caption, thumbnail, the text phones without the extension get, and why Linq would refuse it | |
 | Demo group commands (`bun run demo`) | Built, but only tested against a stand-in for Linq's API | |
 
 When a pull request ships one of these, it updates this table and the instructions below.
@@ -40,7 +40,7 @@ iPhone in the group
   → bridge/spectrum.ts, the one relay loop, which posts to the service:
       a message to 127.0.0.1:8787/messages, a tapback to /reactions
   → src/scout/conversation.py decides what to do
-  ← actions (src/scout/outgoing.py): say (maybe threaded), react, or link. A card action is planned.
+  ← actions (src/scout/outgoing.py): say (maybe threaded), react, link, or card
   ← the relay performs each one through Spectrum and Linq
 ```
 

@@ -123,3 +123,23 @@ def test_agent_picks_use_the_numbers_shown_in_the_list(maya_actions, store):
     lead_in, link = maya_actions.outbox
     assert lead_in == Say("🧭 Directions to Taco Bar:")
     assert isinstance(link, Link)
+
+
+def test_brochure_tool_input_reaches_the_action(maya_actions):
+    destination = {
+        "name": "Tulum, Mexico",
+        "region": "Quintana Roo, Mexico",
+        "description": "White sand and cenotes.",
+        "flights_usd": 400,
+        "hotel_usd": 500,
+        "food_and_activities_usd": 200,
+        "activities": [{"name": "Swim a cenote", "estimated_cost_usd": 30}],
+    }
+
+    # Without place search the action refuses, which shows the input parsed.
+    with pytest.raises(TripActionError, match="brochures aren't available"):
+        run_tool(
+            maya_actions,
+            "send_destination_brochures",
+            {"nights": 5, "destinations": [destination] * 3},
+        )

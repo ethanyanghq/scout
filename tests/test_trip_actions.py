@@ -2,9 +2,10 @@ from datetime import date
 
 import pytest
 
-from scout.outgoing import Link, Say
+from scout.brochures import ActivityPitch, DestinationPitch
+from scout.outgoing import Card, Link, Say
 from scout.outside_services import OutsideServices
-from scout.places import Coordinates, Place, PlacesError
+from scout.places import Coordinates, PhotographedPlace, Place, PlacesError
 from scout.trip import (
     DateWindow,
     DestinationOption,
@@ -515,3 +516,113 @@ def test_picking_a_place_that_was_not_suggested_is_refused(maya_actions, store):
 def test_no_directions_without_suggestions(maya_actions):
     with pytest.raises(TripActionError, match="no place suggestions"):
         maya_actions.send_directions(0)
+
+
+class FakeBrochurePhotos:
+    """Stands in for Google Places' photo lookups.
+
+    Every search finds a place with one photo named after the search, and a
+    hotel search finds a 4.7-star resort, unless `has_hotels` is off.
+    """
+
+    def __init__(self, has_hotels=True, is_down=False):
+        self.has_hotels = has_hotels
+        self.is_down = is_down
+
+    def find_photographed(self, text_query, photo_count):
+        if self.is_down:
+            raise PlacesError("search didn't connect: timed out")
+        if text_query.startswith("top rated hotel"):
+            if not self.has_hotels:
+                return None
+            return PhotographedPlace("Playa Resort", 4.7, [])
+        photo = f"https://lh3.googleusercontent.com/{text_query.replace(' ', '-')}"
+        return PhotographedPlace(text_query, None, [photo][:photo_count])
+
+
+def tropical_pitch(name):
+    return DestinationPitch(
+        name=name,
+        region="Caribbean",
+        description="White sand and warm water.",
+        flights_usd=400,
+        hotel_usd=500,
+        food_and_activities_usd=200,
+        activities=[ActivityPitch("Snorkel the reef", 60)],
+    )
+
+
+TROPICAL_PITCHES = [
+    tropical_pitch("Tulum, Mexico"),
+    tropical_pitch("Punta Cana, Dominican Republic"),
+    tropical_pitch("San Juan, Puerto Rico"),
+]
+
+
+def test_brochures_are_one_card_with_real_photos_and_an_all_in_price(
+    maya_actions_with_photos,
+):
+    maya_actions_with_photos.send_destination_brochures(TROPICAL_PITCHES, nights=5)
+
+    [card] = maya_actions_with_photos.outbox
+    assert isinstance(card, Card)
+    tulum = card.layout["root"]["catalogItems"][0]
+    assert tulum["title"] == "Tulum, Mexico"
+    assert tulum["priceText"] == "~$1,100"
+    assert tulum["heroImageUrl"] == "https://lh3.googleusercontent.com/Tulum,-Mexico"
+    assert "Playa Resort (★ 4.7)" in tulum["detail"]
+    assert [tile["label"] for tile in tulum["amenities"]] == [
+        "Flights ~$400",
+        "Hotel ~$500",
+        "Food & fun ~$200",
+    ]
+    [snorkel] = tulum["rooms"]
+    assert snorkel["name"] == "Snorkel the reef"
+    assert snorkel["imageUrl"].startswith("https://lh3.googleusercontent.com/Snorkel")
+    assert card.thumbnail_url == tulum["heroImageUrl"]
+
+
+def test_brochures_read_the_same_as_text_on_phones_without_the_card_app(
+    maya_actions_with_photos,
+):
+    maya_actions_with_photos.send_destination_brochures(TROPICAL_PITCHES, nights=5)
+
+    [card] = maya_actions_with_photos.outbox
+    assert card.fallback_text.startswith("Estimates per person for 5 nights.")
+    assert (
+        "Tulum, Mexico · ~$1,100\n"
+        "Flights ~$400 · Hotel ~$500 · Food & fun ~$200\n"
+        "White sand and warm water.\n"
+        "Stay: Playa Resort (★ 4.7)\n"
+        "Do: Snorkel the reef (~$60)"
+    ) in card.fallback_text
+
+
+def test_brochures_need_exactly_three_destinations(maya_actions_with_photos):
+    with pytest.raises(TripActionError, match="expected 3 destinations, got 2"):
+        maya_actions_with_photos.send_destination_brochures(TROPICAL_PITCHES[:2], 5)
+
+
+def test_a_destination_without_a_hotel_asks_for_another_pick(store, maya_actions):
+    actions = actions_with(store, FakeBrochurePhotos(has_hotels=False))
+
+    with pytest.raises(TripActionError, match="no hotel found in Tulum"):
+        actions.send_destination_brochures(TROPICAL_PITCHES, nights=5)
+    assert actions.outbox == []
+
+
+def test_brochures_say_so_when_place_search_is_down(store, maya_actions):
+    actions = actions_with(store, FakeBrochurePhotos(is_down=True))
+
+    with pytest.raises(TripActionError, match="place search isn't working"):
+        actions.send_destination_brochures(TROPICAL_PITCHES, nights=5)
+
+
+def test_brochures_need_place_search_set_up(maya_actions):
+    with pytest.raises(TripActionError, match="brochures aren't available"):
+        maya_actions.send_destination_brochures(TROPICAL_PITCHES, nights=5)
+
+
+@pytest.fixture
+def maya_actions_with_photos(store, maya_actions):
+    return actions_with(store, FakeBrochurePhotos())

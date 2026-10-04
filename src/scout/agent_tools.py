@@ -4,6 +4,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Any
 
+from scout.brochures import ActivityPitch, DestinationPitch
 from scout.money import CENTS_PER_DOLLAR
 from scout.trip import DestinationOption, ItineraryDay, PreferenceUpdate
 from scout.trip_actions import TripActionError, TripActions
@@ -254,6 +255,108 @@ TOOL_DEFINITIONS = [
         },
     },
     {
+        "name": "send_destination_brochures",
+        "description": (
+            "Post a card the group can tap and scroll: exactly 3 destinations, "
+            "each with a real photo, its top-rated hotel, things to do with "
+            "photos, and an all-in price estimate per person. Use it when "
+            "someone asks to see or browse destinations. It doesn't start a vote."
+        ),
+        "strict": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "nights": {
+                    "type": "integer",
+                    "description": (
+                        "How many nights the estimates assume: the trip's dates "
+                        "if set, otherwise what the group said, otherwise 5."
+                    ),
+                },
+                "destinations": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string",
+                                "description": "Destination, e.g. 'Tulum, Mexico'.",
+                            },
+                            "region": {
+                                "type": "string",
+                                "description": (
+                                    "Where it is, e.g. 'Quintana Roo, Mexico'."
+                                ),
+                            },
+                            "description": {
+                                "type": "string",
+                                "description": (
+                                    "What it's like and why it fits the group, "
+                                    "under 30 words."
+                                ),
+                            },
+                            "flights_usd": {
+                                "type": "integer",
+                                "description": (
+                                    "Estimated round-trip flight per person "
+                                    "from the group's home cities."
+                                ),
+                            },
+                            "hotel_usd": {
+                                "type": "integer",
+                                "description": (
+                                    "Estimated hotel cost per person for all "
+                                    "nights, sharing rooms."
+                                ),
+                            },
+                            "food_and_activities_usd": {
+                                "type": "integer",
+                                "description": (
+                                    "Estimated food, local transport and the "
+                                    "activities below, per person."
+                                ),
+                            },
+                            "activities": {
+                                "type": "array",
+                                "description": "3 fun, real things to do there.",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "name": {
+                                            "type": "string",
+                                            "description": (
+                                                "Under 6 words, searchable, e.g. "
+                                                "'Snorkel Akumal Bay'."
+                                            ),
+                                        },
+                                        "estimated_cost_usd": {
+                                            "type": "integer",
+                                            "description": "Per person.",
+                                        },
+                                    },
+                                    "required": ["name", "estimated_cost_usd"],
+                                    "additionalProperties": False,
+                                },
+                            },
+                        },
+                        "required": [
+                            "name",
+                            "region",
+                            "description",
+                            "flights_usd",
+                            "hotel_usd",
+                            "food_and_activities_usd",
+                            "activities",
+                        ],
+                        "additionalProperties": False,
+                    },
+                },
+            },
+            "required": ["nights", "destinations"],
+            "additionalProperties": False,
+        },
+    },
+    {
         "name": "log_sender_expense",
         "description": (
             "Log a shared trip cost that the sender of the newest message paid. "
@@ -403,6 +506,10 @@ def run_tool(actions: TripActions, name: str, tool_input: dict[str, Any]) -> str
             )
         case "send_directions":
             return actions.send_directions(tool_input["option_number"] - 1)
+        case "send_destination_brochures":
+            return actions.send_destination_brochures(
+                _to_pitches(tool_input["destinations"]), tool_input["nights"]
+            )
         case "log_sender_expense":
             return actions.log_sender_expense(
                 _to_cents(tool_input["amount_usd"]), tool_input["description"]
@@ -440,6 +547,16 @@ def _to_itinerary(tool_input: dict[str, Any]) -> list[ItineraryDay]:
     return [
         ItineraryDay(day=_parse_date(day["date"]), plan=day["plan"])
         for day in tool_input["days"]
+    ]
+
+
+def _to_pitches(destinations: list[dict[str, Any]]) -> list[DestinationPitch]:
+    return [
+        DestinationPitch(
+            **{key: value for key, value in pitch.items() if key != "activities"},
+            activities=[ActivityPitch(**activity) for activity in pitch["activities"]],
+        )
+        for pitch in destinations
     ]
 
 

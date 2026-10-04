@@ -11,12 +11,19 @@ from datetime import date
 
 from scout import polls
 from scout.booking_links import format_booking_links
+from scout.brochures import (
+    DestinationPitch,
+    NoHotelFound,
+    build_brochures,
+    format_brochures,
+)
 from scout.calendar_link import format_calendar_message, google_calendar_link
+from scout.cards import brochure_thumbnail_url, destination_brochures
 from scout.group_summary import format_group_summary, summarize_group
 from scout.itinerary import format_itinerary
 from scout.money import format_usd
 from scout.nearby import directions_link, format_directions, format_nearby_places
-from scout.outgoing import Link, Outgoing, Say
+from scout.outgoing import Card, Link, Outgoing, Say
 from scout.outside_services import NO_OUTSIDE_SERVICES, OutsideServices
 from scout.places import Coordinates, GooglePlaces, PlacesError
 from scout.settle_up import (
@@ -293,6 +300,39 @@ class TripActions:
             [Say(format_directions(place)), Link(directions_link(place))]
         )
         return "Directions sent."
+
+    def send_destination_brochures(
+        self, pitches: list[DestinationPitch], nights: int
+    ) -> str:
+        """Posts a card the group can scroll: three destinations, each with
+        real photos, its top hotel, things to do and an all-in estimate."""
+        if len(pitches) != DESTINATION_OPTION_COUNT:
+            raise TripActionError(
+                f"expected {DESTINATION_OPTION_COUNT} destinations, got {len(pitches)}"
+            )
+        places = self._services.places
+        if places is None:
+            raise TripActionError(
+                "place search isn't set up, so tell the group brochures "
+                "aren't available yet"
+            )
+
+        try:
+            brochures = build_brochures(places, pitches)
+        except PlacesError as error:
+            raise TripActionError(f"place search isn't working: {error}") from error
+        except NoHotelFound as error:
+            raise TripActionError(f"{error}; pick another destination") from error
+
+        self.outbox.append(
+            Card(
+                layout=destination_brochures(brochures),
+                caption=f"{len(brochures)} spots to look around",
+                thumbnail_url=brochure_thumbnail_url(brochures),
+                fallback_text=format_brochures(brochures, nights),
+            )
+        )
+        return "Brochures posted."
 
     def _close(self, trip: Trip) -> str:
         result = polls.decide_winner(trip.open_poll)
