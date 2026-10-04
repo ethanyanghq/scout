@@ -1,10 +1,10 @@
 <p align="center">
-  <img src="assets/banner.svg" alt="scout: trips that make it out of the group chat" width="100%">
+  <img src="assets/banner.svg" alt="scout: Plans that (actually) make it out of the group chat" width="100%">
 </p>
 
 # scout
 
-**trips that make it out of the group chat.**
+**Plans that (actually) make it out of the group chat.**
 
 hi, i'm scout.
 
