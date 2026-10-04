@@ -16,6 +16,7 @@ def trip_with(members, *expenses):
         members=list(members),
         open_poll=None,
         itinerary=[],
+        itinerary_add_ons=[],
         expenses=[
             Expense(number, payer.phone, cents, description)
             for number, (payer, cents, description) in enumerate(expenses, start=1)

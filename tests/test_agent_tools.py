@@ -1,7 +1,9 @@
+from datetime import date
+
 import pytest
 
 from scout.agent_tools import run_tool
-from scout.trip import Chronotype, DestinationOption
+from scout.trip import Chronotype, DateWindow, DestinationOption
 from scout.trip_actions import TripActionError, TripActions
 
 SPACE = "group-chat-1"
@@ -85,3 +87,18 @@ def test_agent_chronotypes_must_be_one_of_the_three(maya_actions):
 
     with pytest.raises(TripActionError, match="'early riser', 'late riser'"):
         run_tool(maya_actions, "save_member_preferences", tool_input)
+
+
+def test_agent_start_times_must_be_clock_times(store):
+    store.create_trip(SPACE)
+    store.add_members(SPACE, [MAYA])
+    store.lock_in_destination(
+        SPACE, "San Juan", DateWindow(date(2027, 3, 14), date(2027, 3, 19))
+    )
+    tool_input = {
+        "days": [{"date": "2027-03-14", "plan": "Land", "starts_at": "evening"}],
+        "optional_add_ons": [],
+    }
+
+    with pytest.raises(TripActionError, match="HH:MM"):
+        run_tool(TripActions(store, SPACE, MAYA), "post_itinerary", tool_input)

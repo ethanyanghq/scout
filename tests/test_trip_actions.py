@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, time
 
 import pytest
 
@@ -11,6 +11,7 @@ from scout.places import Coordinates, PhotographedPlace, Place, PlacesError
 from scout.trip import (
     DateWindow,
     DestinationOption,
+    ItineraryAddOn,
     ItineraryDay,
     MediaKind,
     MessagePhoto,
@@ -82,8 +83,8 @@ def locked_in_actions(store):
     return TripActions(store, SPACE, MAYA)
 
 
-def plan_day(day_of_march, plan):
-    return ItineraryDay(date(2027, 3, day_of_march), plan)
+def plan_day(day_of_march, plan, starts_at=None):
+    return ItineraryDay(date(2027, 3, day_of_march), plan, starts_at)
 
 
 def test_saving_preferences_reports_what_is_still_missing(maya_actions):
@@ -179,7 +180,8 @@ def test_the_group_can_choose_a_destination_without_a_poll(maya_actions, store):
 
 def test_itinerary_is_posted_in_date_order(locked_in_actions):
     locked_in_actions.post_itinerary(
-        [plan_day(15, "Beach day in Condado"), plan_day(14, "Land and check in")]
+        [plan_day(15, "Beach day in Condado"), plan_day(14, "Land and check in")],
+        add_ons=[],
     )
 
     assert said(locked_in_actions.outbox) == [
@@ -189,7 +191,52 @@ def test_itinerary_is_posted_in_date_order(locked_in_actions):
 
 def test_itinerary_days_must_fall_within_the_trip(locked_in_actions):
     with pytest.raises(TripActionError, match="outside the trip dates"):
-        locked_in_actions.post_itinerary([plan_day(20, "One more beach day")])
+        locked_in_actions.post_itinerary(
+            [plan_day(20, "One more beach day")], add_ons=[]
+        )
+
+
+def test_itinerary_shows_when_each_day_starts_and_who_wants_each_add_on(
+    locked_in_actions,
+):
+    locked_in_actions.post_itinerary(
+        [
+            plan_day(14, "Land and check in"),
+            plan_day(15, "Night kayak on the bio bay", starts_at=time(21, 30)),
+        ],
+        add_ons=[ItineraryAddOn("Scuba at Escambrón", wanted_by="leo")],
+    )
+
+    assert said(locked_in_actions.outbox) == [
+        "the plan:\n"
+        "Sun 3/14 · Land and check in\n"
+        "Mon 3/15 · 9:30 PM · Night kayak on the bio bay\n"
+        "optional add-ons:\n"
+        "Scuba at Escambrón · Leo's pick"
+    ]
+
+
+def test_an_add_on_must_be_for_someone_in_the_chat(locked_in_actions):
+    with pytest.raises(TripActionError, match="no single member is called 'Sam'"):
+        locked_in_actions.post_itinerary(
+            [plan_day(14, "Land and check in")],
+            add_ons=[ItineraryAddOn("Scuba", wanted_by="Sam")],
+        )
+
+
+def test_a_new_plan_replaces_the_old_days_and_add_ons(locked_in_actions, store):
+    locked_in_actions.post_itinerary(
+        [plan_day(14, "Land"), plan_day(15, "Old Town walk")],
+        add_ons=[ItineraryAddOn("Scuba", wanted_by="Leo")],
+    )
+
+    locked_in_actions.post_itinerary(
+        [plan_day(14, "Land", starts_at=time(16, 0))], add_ons=[]
+    )
+
+    trip = store.get_trip(SPACE)
+    assert trip.itinerary == [plan_day(14, "Land", starts_at=time(16, 0))]
+    assert trip.itinerary_add_ons == []
 
 
 def test_booking_links_cover_each_home_city_and_a_stay(locked_in_actions):
