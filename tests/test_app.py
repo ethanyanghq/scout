@@ -58,7 +58,7 @@ def test_a_vote_with_a_message_id_comes_back_as_a_tapback_on_it(client):
                 "type": "react",
                 "message_id": "maya-vote",
                 "tapback": "like",
-                "fallback_text": "Got it, …0001 → San Juan, Puerto Rico (1 of 2 voted)",
+                "fallback_text": "got it, …0001 → San Juan, Puerto Rico (1 of 2 voted)",
             }
         ]
     }

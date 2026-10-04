@@ -56,4 +56,4 @@ def test_members_from_the_same_city_share_one_flight_link():
 
     flight_cities = [line.split(":")[0] for line in lines[1:-2]]
     assert flight_cities == ["Boston", "Chicago"]
-    assert lines[-2].startswith("🏠 Stays for 3: https://www.airbnb.com/s/")
+    assert lines[-2].startswith("stays for 3: https://www.airbnb.com/s/")

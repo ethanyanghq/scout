@@ -24,7 +24,7 @@ def format_nearby_places(
     places: list[Place], start: Coordinates | None, area: str
 ) -> str:
     """Lists places by number. `area` names where the group is, e.g. "Condado"."""
-    lines = [f"📍 Near {area}:"]
+    lines = [f"near {area}:"]
     for number, place in enumerate(places, start=1):
         details = [place.name]
         if place.price:
@@ -34,14 +34,14 @@ def format_nearby_places(
         lines.append(f"{number}. {' · '.join(details)}")
         if place.summary:
             lines.append(f"   {place.summary}")
-    lines.append("Reply with a number and I'll send directions.")
+    lines.append("reply with a number and i'll send directions.")
     return "\n".join(lines)
 
 
 def format_directions(place: Place) -> str:
     """The line before the directions link, which goes in a message of its own
     so iMessage shows it as a map card."""
-    return f"🧭 Directions to {place.name}:"
+    return f"directions to {place.name}:"
 
 
 def directions_link(place: Place) -> str:

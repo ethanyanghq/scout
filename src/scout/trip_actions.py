@@ -150,7 +150,7 @@ class TripActions:
         voter = trip.find_member(voter_phone)
         self.outbox.append(
             confirm(
-                f"Got it, {voter.label} → {poll.options[option_index].name} "
+                f"got it, {voter.label} → {poll.options[option_index].name} "
                 f"({len(poll.votes)} of {len(trip.members)} voted)"
             )
         )
@@ -176,7 +176,7 @@ class TripActions:
 
         dates = summarize_group(trip.members).shared_window
         self._store.lock_in_destination(self._space_id, destination, dates)
-        self.outbox.append(Say(f"🎉 Locked in: {destination}, the group's pick."))
+        self.outbox.append(Say(f"{destination} it is, the group's pick 🎉"))
         calendar = self._send_calendar(destination, dates)
         return f"Destination is now {destination}. {calendar}"
 
@@ -257,8 +257,8 @@ class TripActions:
         payer = trip.find_member(self._sender_phone)
         self.outbox.append(
             Say(
-                f"Got it: {description}, {format_usd(amount_cents)}, paid by "
-                f"{payer.label}. Split {len(trip.members)} ways."
+                f"got it: {description}, {format_usd(amount_cents)}, paid by "
+                f"{payer.label}. split {len(trip.members)} ways."
             )
         )
         return f"Logged as expense #{expense_id}."
@@ -277,8 +277,8 @@ class TripActions:
         when = f", {purchased_on:%b} {purchased_on.day}" if purchased_on else ""
         self.outbox.append(
             Say(
-                f"From the receipt: {merchant}{when}, {format_usd(total_cents)} total, "
-                f"paid by {payer.label}. Split it {len(trip.members)} ways?"
+                f"from the receipt: {merchant}{when}, {format_usd(total_cents)} total, "
+                f"paid by {payer.label}. split it {len(trip.members)} ways?"
             )
         )
         return f"Asked {payer.label} to confirm. Log it once they do."
@@ -312,7 +312,7 @@ class TripActions:
 
         self._store.remove_expense(self._space_id, expense_id)
         self.outbox.append(
-            Say(f"Removed: {expense.description}, {format_usd(expense.amount_cents)}.")
+            Say(f"removed: {expense.description}, {format_usd(expense.amount_cents)}.")
         )
         return "Expense removed."
 
@@ -336,7 +336,7 @@ class TripActions:
             ),
         )
         paid = (
-            f"Paid ✓ {payment.payer.label} → {payment.payee.label} "
+            f"paid ✓ {payment.payer.label} → {payment.payee.label} "
             f"{format_usd(payment.amount_cents)}"
         )
         self.outbox.append(Say(f"{paid}\n{format_payments_left(self._load_trip())}"))

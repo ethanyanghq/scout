@@ -178,7 +178,7 @@ curl -s http://127.0.0.1:8787/messages -H 'Content-Type: application/json' -d '{
   "sent_at": "2026-10-03T12:00:00Z",
   "participant_phones": ["+15550000001", "+15550000002", "+15550000003"]
 }'
-# {"replies": ["Hey all, I'm scout 👋 ..."]}
+# {"actions": [{"type": "say", "text": "hey all, i'm scout ...", ...}]}
 ```
 
 - `participant_phones` is everyone in the group, including people who haven't texted yet.

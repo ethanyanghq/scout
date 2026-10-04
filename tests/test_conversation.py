@@ -217,7 +217,7 @@ def test_a_plain_vote_gets_a_thumbs_up_instead_of_a_line_in_the_chat(store):
         React(
             "leo-vote",
             Tapback.LIKE,
-            fallback_text="Got it, …0002 → San Juan, Puerto Rico (1 of 3 voted)",
+            fallback_text="got it, …0002 → San Juan, Puerto Rico (1 of 3 voted)",
         )
     ]
 
@@ -229,7 +229,7 @@ def test_the_vote_that_closes_the_poll_gets_the_announcement_not_a_tapback(store
 
     replies = send_from_line(store, FakeAgent(), PRIYA, "3", message_id="priya-vote")
 
-    assert replies[0] == Say("🎉 Poll closed! Tulum, Mexico wins with 2 of 3 votes.")
+    assert replies[0] == Say("poll's closed: Tulum, Mexico wins with 2 of 3 votes 🎉")
 
 
 def test_last_vote_closes_the_poll_and_announces_the_winner(store):
@@ -243,7 +243,7 @@ def test_last_vote_closes_the_poll_and_announces_the_winner(store):
     trip = store.get_trip(SPACE)
     assert trip.stage == TripStage.DESTINATION_CHOSEN
     assert trip.destination == "Tulum, Mexico"
-    assert replies == ["🎉 Poll closed! Tulum, Mexico wins with 2 of 3 votes."]
+    assert replies == ["poll's closed: Tulum, Mexico wins with 2 of 3 votes 🎉"]
 
 
 def test_scout_apologizes_when_it_fails_on_a_message_addressed_to_it(store):
@@ -263,12 +263,12 @@ def test_scout_stays_quiet_when_it_fails_on_a_message_not_addressed_to_it(store)
 
 
 def test_replies_are_saved_so_the_agent_sees_them_next_time(store):
-    send(store, FakeAgent(replies=["Got it, Maya"]), MAYA, "@scout hey, I'm maya")
+    send(store, FakeAgent(replies=["got it, Maya"]), MAYA, "@scout hey, I'm maya")
 
     logged = [(m.sender_phone, m.text) for m in store.recent_messages(SPACE, 10)]
     assert logged == [
         (MAYA, "@scout hey, I'm maya"),
-        (None, "Got it, Maya"),
+        (None, "got it, Maya"),
     ]
 
 
@@ -325,7 +325,7 @@ def test_a_plain_pick_sends_directions_without_the_agent(store):
     replies = send_from_line(store, agent, LEO, "2", message_id="leo-pick")
 
     assert agent.messages_seen == []
-    assert replies[0] == Say("🧭 Directions to Taco Bar:")
+    assert replies[0] == Say("directions to Taco Bar:")
     assert isinstance(replies[1], Link)
 
 
@@ -352,7 +352,7 @@ def test_a_thumbs_up_on_a_poll_option_counts_as_a_vote(store):
     assert store.get_trip(SPACE).open_poll.votes == {LEO: 1}
     assert replies == [
         Say(
-            "Got it, …0002 → San Juan, Puerto Rico (1 of 3 voted)",
+            "got it, …0002 → San Juan, Puerto Rico (1 of 3 voted)",
             reply_to="san-juan-option",
         )
     ]

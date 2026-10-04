@@ -43,14 +43,14 @@ def summarize_group(members: list[Member]) -> GroupSummary:
 
 
 def format_group_summary(summary: GroupSummary, members: list[Member]) -> str:
-    lines = ["Here's where everyone landed:"]
+    lines = ["here's where everyone landed:"]
     if summary.shared_window:
         who = (
             "everyone" if all(map(_has_dates, members)) else "everyone who shared dates"
         )
-        lines.append(f"📅 {format_window(summary.shared_window)} works for {who}")
+        lines.append(f"dates: {format_window(summary.shared_window)} works for {who}")
     elif summary.dates_conflict:
-        lines.append("📅 No dates work for everyone yet:")
+        lines.append("dates: nothing works for everyone yet")
         lines.extend(
             f"   {member.label}: {_format_member_dates(member)}"
             for member in members
@@ -59,14 +59,14 @@ def format_group_summary(summary: GroupSummary, members: list[Member]) -> str:
     if summary.budget_range:
         lowest, highest = summary.budget_range
         budget = f"${lowest:,}" if lowest == highest else f"${lowest:,}–${highest:,}"
-        lines.append(f"💸 Budget: {budget} per person")
+        lines.append(f"budget: {budget} per person")
     if summary.home_cities:
-        lines.append(f"🏠 Coming from: {', '.join(summary.home_cities)}")
+        lines.append(f"coming from: {', '.join(summary.home_cities)}")
     if summary.must_haves:
-        lines.append(f"✨ Must-haves: {', '.join(summary.must_haves)}")
+        lines.append(f"must-haves: {', '.join(summary.must_haves)}")
     if summary.members_still_to_share:
         waiting_on = ", ".join(m.label for m in summary.members_still_to_share)
-        lines.append(f"⏳ Still waiting on: {waiting_on}")
+        lines.append(f"still waiting on: {waiting_on}")
     return "\n".join(lines)
 
 

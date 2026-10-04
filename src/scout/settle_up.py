@@ -20,13 +20,13 @@ def format_settle_up(trip: Trip) -> str:
     total_cents = sum(expense.amount_cents for expense in trip.expenses)
     share = _describe_share(total_cents, len(trip.members))
     payments = plan_payments(trip)
-    lead_in = f"💸 Shared costs: {format_usd(total_cents)}, so {share} each."
+    lead_in = f"shared costs: {format_usd(total_cents)}, so {share} each."
     if not payments:
-        return f"{lead_in} Everyone's already even."
-    lines = [f"{lead_in} Fewest payments to settle up:"]
+        return f"{lead_in} everyone's already even."
+    lines = [f"{lead_in} fewest payments to settle up:"]
     lines.extend(_format_payment(payment) for payment in payments)
     payee = payments[0].payee.label
-    lines.append(f'Once you\'ve paid, text "@scout I paid {payee}".')
+    lines.append(f'once you\'ve paid, text "@scout i paid {payee}".')
     return "\n".join(lines)
 
 
@@ -34,7 +34,7 @@ def format_payments_left(trip: Trip) -> str:
     """One line on what's still owed, for after someone pays."""
     payments = plan_payments(trip)
     if not payments:
-        return "Everyone's settled up 🎉"
+        return "everyone's settled up 🎉"
     count = "1 payment" if len(payments) == 1 else f"{len(payments)} payments"
     return f"{count} left: {', '.join(_format_payment(p) for p in payments)}"
 

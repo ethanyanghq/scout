@@ -82,12 +82,12 @@ def test_saves_preferences_and_confirms(store):
                 },
             ),
         ),
-        response("end_turn", text("Got it, Maya: ~$800. Dates and home city?")),
+        response("end_turn", text("got it, Maya: ~$800. Dates and home city?")),
     )
 
     replies = said(ScoutAgent(claude, store).respond(trip, message))
 
-    assert replies == ["Got it, Maya: ~$800. Dates and home city?"]
+    assert replies == ["got it, Maya: ~$800. Dates and home city?"]
     assert store.get_trip(SPACE).find_member(MAYA).budget_usd == 800
     tool_result = claude.requests[1]["messages"][-1]["content"][0]
     assert tool_result["tool_use_id"] == "call_1"
@@ -142,7 +142,7 @@ def test_posted_summaries_follow_the_lead_in_line(store):
     replies = said(ScoutAgent(claude, store).respond(trip, message))
 
     assert replies[0] == "Here you go!"
-    assert replies[1].startswith("Here's where everyone landed:")
+    assert replies[1].startswith("here's where everyone landed:")
 
 
 def test_a_refusal_sends_nothing(store):

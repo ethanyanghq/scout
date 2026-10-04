@@ -125,7 +125,7 @@ def test_records_a_vote_a_friend_reported_for_another_member(maya_actions, store
 
     assert store.get_trip(SPACE).open_poll.votes == {LEO: 1}
     assert said(maya_actions.outbox)[-1] == (
-        "Got it, …0002 → San Juan, Puerto Rico (1 of 2 voted)"
+        "got it, …0002 → San Juan, Puerto Rico (1 of 2 voted)"
     )
 
 
@@ -183,7 +183,7 @@ def test_itinerary_is_posted_in_date_order(locked_in_actions):
     )
 
     assert said(locked_in_actions.outbox) == [
-        "🗓️ The plan:\nSun 3/14 · Land and check in\nMon 3/15 · Beach day in Condado"
+        "the plan:\nSun 3/14 · Land and check in\nMon 3/15 · Beach day in Condado"
     ]
 
 
@@ -196,10 +196,10 @@ def test_booking_links_cover_each_home_city_and_a_stay(locked_in_actions):
     locked_in_actions.send_booking_links()
 
     lines = said(locked_in_actions.outbox)[0].split("\n")
-    assert lines[0] == "✈️ Flights for Mar 14–19:"
+    assert lines[0] == "flights for Mar 14–19:"
     assert lines[1].startswith("Boston: https://www.google.com/travel/flights?")
     assert lines[2].startswith("New York: https://www.google.com/travel/flights?")
-    assert lines[3].startswith("🏠 Stays for 2: https://www.airbnb.com/s/")
+    assert lines[3].startswith("stays for 2: https://www.airbnb.com/s/")
 
 
 def test_payers_can_remove_their_own_expense(maya_actions, store):
@@ -209,7 +209,7 @@ def test_payers_can_remove_their_own_expense(maya_actions, store):
     maya_actions.remove_expense(expense.id)
 
     assert store.get_trip(SPACE).expenses == []
-    assert said(maya_actions.outbox)[-1] == "Removed: Bio bay kayaks, $196."
+    assert said(maya_actions.outbox)[-1] == "removed: Bio bay kayaks, $196."
 
 
 def test_nobody_else_can_remove_someones_expense(maya_actions, store):
@@ -235,7 +235,7 @@ def test_a_payment_is_recorded_and_confirmed_in_the_chat(store):
     maya_actions.record_sender_payment("Leo")
 
     assert said(maya_actions.outbox) == [
-        "Paid ✓ Maya → Leo $50\nEveryone's settled up 🎉"
+        "paid ✓ Maya → Leo $50\neveryone's settled up 🎉"
     ]
     assert store.get_trip(SPACE).settlements == [Settlement(MAYA, LEO, 5_000)]
 
@@ -263,8 +263,8 @@ def test_a_receipt_is_read_back_for_its_payer_to_confirm(store):
     priya_actions = priya_texts_a_receipt(store)
 
     assert said(priya_actions.outbox) == [
-        "From the receipt: Casa Brisa, Mar 16, $164 total, paid by Priya. "
-        "Split it 3 ways?"
+        "from the receipt: Casa Brisa, Mar 16, $164 total, paid by Priya. "
+        "split it 3 ways?"
     ]
     assert store.get_trip(SPACE).expenses == []
     assert store.get_trip(SPACE).pending_receipt == PendingReceipt(
@@ -333,13 +333,13 @@ def test_nearby_places_are_posted_with_rough_walking_times(locked_in_actions, st
     maya_actions.suggest_nearby_places("cozy tacos with outdoor seating", "Condado")
 
     assert said(maya_actions.outbox) == [
-        "📍 Near Condado:\n"
+        "near Condado:\n"
         "1. Lote 23 · $$ · ~10 min walk\n"
         "   Food park.\n"
         "2. Taco Bar · $ · ~1 min walk\n"
         "3. Cocina · ~8 min walk\n"
         "   Patio.\n"
-        "Reply with a number and I'll send directions."
+        "reply with a number and i'll send directions."
     ]
 
 
@@ -365,7 +365,7 @@ def test_picking_a_place_sends_directions_to_it(maya_actions, store):
     maya_actions.send_directions(1)
 
     lead_in, link = maya_actions.outbox
-    assert lead_in == Say("🧭 Directions to Taco Bar:")
+    assert lead_in == Say("directions to Taco Bar:")
     assert link.url.startswith("https://www.google.com/maps/dir/")
     assert "destination_place_id=place-2" in link.url
 

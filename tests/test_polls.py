@@ -79,7 +79,7 @@ def test_an_option_message_says_which_option_it_is():
 @pytest.mark.parametrize(
     "text",
     [
-        "🗳️ Where should we go? Reply with a number, or 👍 your pick:",
+        "where should we go? reply with a number or 👍 your pick:",
         "2. Lote 23 (food park, 4 min walk)",
         "4. Cancún, Mexico (~$700/person est.): Cheap flights",
         "lol san juan",

@@ -18,9 +18,7 @@ EVENT_DETAILS = "Planned in your group chat with scout."
 def format_calendar_message(destination: str, dates: DateWindow) -> str:
     """The line before the link, which goes in a message of its own so iMessage
     shows it as a card."""
-    return (
-        f"📅 Locked in: {destination}, {format_window(dates)}. Add it to your calendar:"
-    )
+    return f"locked in: {destination}, {format_window(dates)}. add it to your calendar:"
 
 
 def google_calendar_link(destination: str, dates: DateWindow) -> str:
