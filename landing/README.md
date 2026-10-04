@@ -1,6 +1,6 @@
 # scout's landing page
 
-One page that says what scout does, shows the demo video, and takes the name and phone number of anyone who wants in. Built with React and Vite, hosted on Netlify.
+One page that says what scout does, shows the demo video, and takes the name and phone number of anyone who joins the waitlist. Built with React and Vite, hosted on Netlify.
 
 ```
 bun install
@@ -20,7 +20,7 @@ The demo is a YouTube video, but the page shows its own poster and play button, 
 
 The play button is placed to sit under the text in the current poster. If the new poster is laid out differently, move it with `top` and `left` on `.demo-video-play` in `src/DemoVideo.css`.
 
-## Who wants in
+## The waitlist
 
 The form sends each name and phone number to [Netlify Forms](https://docs.netlify.com/manage/forms/setup/), under the form named `join`: read them in the Netlify dashboard under Forms. Nothing texts these people automatically. The form only works on Netlify, so submitting it under `bun run dev` shows the "that didn't go through" message.
 

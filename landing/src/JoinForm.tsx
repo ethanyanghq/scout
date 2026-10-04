@@ -26,7 +26,7 @@ export function JoinForm() {
   if (status === "joined") {
     return (
       <p className="join-confirmation" role="status">
-        got it, {name.trim().toLowerCase()}. i’ll text you soon.
+        got it, {name.trim().toLowerCase()}. you’re on the waitlist.
       </p>
     );
   }
@@ -60,7 +60,7 @@ export function JoinForm() {
           onChange={(event) => setPhone(event.target.value)}
         />
         <button className="button" type="submit" disabled={status === "sending"}>
-          {status === "sending" ? "sending…" : "text me"}
+          {status === "sending" ? "sending…" : "join the waitlist"}
         </button>
       </div>
       {status === "failed" && (
