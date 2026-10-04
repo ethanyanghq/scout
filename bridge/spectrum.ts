@@ -36,11 +36,31 @@ type ScoutTapback = { kind: "tapback"; senderPhone: string; tapback: string; tar
 // a restart, get scout's plain-text fallback instead.
 const REMEMBERED_MESSAGES = 1000;
 
+// How long scout shows it's typing before a text, from the text. Real chats
+// use typingPauseFor, so a reply doesn't land the instant someone asks; tests
+// and the developer console skip the wait.
+export type TypingPause = (text: string) => number;
+
+// About as long as the text: a quick "Got it" lands fast and a summary takes a
+// few seconds, but no text keeps the group waiting long.
+const TYPING_MS_PER_CHARACTER = 25;
+const SHORTEST_TYPING_MS = 800;
+const LONGEST_TYPING_MS = 5000;
+
+export function typingPauseFor(text: string): number {
+  const pause = text.length * TYPING_MS_PER_CHARACTER;
+  return Math.min(LONGEST_TYPING_MS, Math.max(SHORTEST_TYPING_MS, pause));
+}
+
+export const noTypingPause: TypingPause = () => 0;
+
 export async function relaySpectrumMessages(
   app: SpectrumInstance,
   reportOutcome: (outcome: MessageOutcome) => void,
+  typingPause: TypingPause,
 ): Promise<void> {
   const recent = new RecentMessages();
+  const typing = new TypingIndicator(typingPause);
   // Messages are handled one at a time, on purpose: scout finishes replying to
   // one text before it reads the next, so its view of the trip is never stale.
   for await (const [space, message] of app.messages) {
@@ -77,7 +97,7 @@ export async function relaySpectrumMessages(
                 : null,
             });
       for (const action of actions) {
-        await perform(space, action, recent);
+        await perform(space, action, { recent, typing });
       }
       reportOutcome({
         ...outcome,
@@ -92,10 +112,18 @@ export async function relaySpectrumMessages(
   }
 }
 
-async function perform(space: Space, action: ScoutAction, recent: RecentMessages): Promise<void> {
+// What the relay keeps across messages to send scout's actions well.
+type SendingState = { recent: RecentMessages; typing: TypingIndicator };
+
+async function perform(
+  space: Space,
+  action: ScoutAction,
+  { recent, typing }: SendingState,
+): Promise<void> {
   switch (action.type) {
     case "say": {
       const thread = action.reply_to ? await findMessage(space, action.reply_to, recent) : undefined;
+      await typing.typeOut(space, action.text);
       await sendOrFallBack(space, thread ? reply(action.text, thread) : null, action.text, recent);
       return;
     }
@@ -106,6 +134,7 @@ async function perform(space: Space, action: ScoutAction, recent: RecentMessages
       return;
     }
     case "link":
+      await typing.typeOut(space, action.url);
       await sendOrFallBack(space, richlink(action.url), action.url, recent);
       return;
     case "card": {
@@ -113,6 +142,7 @@ async function perform(space: Space, action: ScoutAction, recent: RecentMessages
       // Photon's SDK; only the Linq platform knows how to put it on the wire.
       // Lines without an iMessage app part send the caption instead.
       const text = `${action.caption}\n${action.fallback_text}`;
+      await typing.typeOut(space, action.caption);
       await sendOrFallBack(space, custom(action), text, recent);
       return;
     }
@@ -129,6 +159,20 @@ async function sendOrFallBack(
 ): Promise<void> {
   const sent = content ? await space.send(content) : undefined;
   recent.remember(sent ?? (await space.send(fallbackText)));
+}
+
+// Shows the typing bubble for as long as a text would take to type. Sending
+// the text clears the bubble. Tapbacks skip it, as a person's would. Lines
+// that can't show the bubble skip it, and scout still pauses.
+class TypingIndicator {
+  constructor(private readonly pause: TypingPause) {}
+
+  async typeOut(space: Space, text: string): Promise<void> {
+    const milliseconds = this.pause(text);
+    if (milliseconds <= 0) return;
+    await space.startTyping();
+    await Bun.sleep(milliseconds);
+  }
 }
 
 class RecentMessages {

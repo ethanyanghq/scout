@@ -11,7 +11,7 @@ import {
   type ProviderMessageRecord,
 } from "spectrum-ts/authoring";
 import z from "zod";
-import { relaySpectrumMessages, threadedReplySchema } from "../spectrum";
+import { noTypingPause, relaySpectrumMessages, threadedReplySchema } from "../spectrum";
 import { tapbackEmoji, tapbackNamed, type Tapback } from "../tapbacks";
 import { cardProblems, type HermesCard } from "../hermes-card";
 import { previewLinkCard, type LinkCard } from "./link-card";
@@ -235,7 +235,8 @@ export async function connectDevChat(chat: DevChat): Promise<() => Promise<void>
   // Spectrum's start and stop notices would bury the chat in the terminal.
   setLogLevel("warn");
   const app = await Spectrum({ providers: [devchatPlatform(chat).config({})] });
-  const relay = relaySpectrumMessages(app, (outcome) => chat.recordOutcome(outcome));
+  // Scripts and agents drive the console, so scout replies without pausing.
+  const relay = relaySpectrumMessages(app, (outcome) => chat.recordOutcome(outcome), noTypingPause);
   return async () => {
     await app.stop();
     await relay;

@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:tes
 import { Spectrum } from "spectrum-ts";
 import { linqPlatform, readLinqEvent, type LinqEvent } from "./linq";
 import type { IncomingText } from "./scout";
-import { relaySpectrumMessages } from "./spectrum";
+import { noTypingPause, relaySpectrumMessages, type TypingPause } from "./spectrum";
 import type { MessageOutcome } from "./trace";
 
 const SCOUT = { handle: "+12055550100", is_me: true, status: "active" };
@@ -146,8 +146,10 @@ describe("reading a Linq event", () => {
 // stand in for both. Spectrum and the bridge's relay loop are real.
 describe("a Linq group chat through Spectrum", () => {
   let scoutReceived: IncomingText[] = [];
-  let linqReceived: { path: string; body: unknown }[] = [];
+  let linqReceived: { path: string; body?: unknown; method?: string }[] = [];
   let scoutActions: object[] = [];
+  // Linq answers 403 to typing in a group chat, so tests choose its answer.
+  let typingStatus = 204;
   const stubScout = Bun.serve({
     hostname: "127.0.0.1",
     port: 0,
@@ -171,6 +173,10 @@ describe("a Linq group chat through Spectrum", () => {
         });
       }
       if (request.method === "GET") return Response.json({ handles: [SCOUT, MAYA, LEO] });
+      if (path.endsWith("/typing")) {
+        linqReceived.push({ path, method: request.method });
+        return new Response(null, { status: typingStatus });
+      }
       linqReceived.push({ path, body: await request.json() });
       return Response.json({ chat_id: "group-chat-1", message: { id: "sent-1" } });
     },
@@ -189,11 +195,15 @@ describe("a Linq group chat through Spectrum", () => {
   beforeEach(() => {
     scoutReceived = [];
     linqReceived = [];
+    typingStatus = 204;
   });
 
   // Sends one Linq event through Spectrum and the relay, and waits until scout
   // has finished with it.
-  async function deliver(event: LinqEvent): Promise<MessageOutcome> {
+  async function deliver(
+    event: LinqEvent,
+    typingPause: TypingPause = noTypingPause,
+  ): Promise<MessageOutcome> {
     const webhookPort = findFreePort();
     const platform = linqPlatform({
       apiKey: "test-key",
@@ -202,7 +212,7 @@ describe("a Linq group chat through Spectrum", () => {
     });
     const app = await Spectrum({ providers: [platform.config({})] });
     const finished = new Promise<MessageOutcome>((resolve) => {
-      relaySpectrumMessages(app, resolve);
+      relaySpectrumMessages(app, resolve, typingPause);
     });
     await fetch(`http://127.0.0.1:${webhookPort}/linq-events`, {
       method: "POST",
@@ -245,6 +255,35 @@ describe("a Linq group chat through Spectrum", () => {
       tapback: "like",
       message_text: SAN_JUAN_OPTION,
     });
+  });
+
+  test("shows scout typing in the chat before its text arrives", async () => {
+    scoutActions = [{ type: "say", text: "hey Maya 👋" }];
+
+    await deliver(messageReceived({}), () => 1);
+
+    expect(linqReceived.map(({ path, method }) => method ?? path)).toEqual([
+      "POST",
+      "/chats/group-chat-1/messages",
+    ]);
+    expect(linqReceived[0]!.path).toBe("/chats/group-chat-1/typing");
+  });
+
+  test("still replies when Linq can't show typing in a group, and stops asking", async () => {
+    typingStatus = 403;
+    scoutActions = [
+      { type: "say", text: "Got it" },
+      { type: "say", text: "Waiting on Leo" },
+    ];
+
+    const outcome = await deliver(messageReceived({}), () => 1);
+
+    expect(outcome.kind).toBe("handled");
+    expect(linqReceived.map(({ path }) => path)).toEqual([
+      "/chats/group-chat-1/typing",
+      "/chats/group-chat-1/messages",
+      "/chats/group-chat-1/messages",
+    ]);
   });
 
   test("threads scout's reply under the message it answers", async () => {

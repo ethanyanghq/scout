@@ -45,6 +45,7 @@ iPhone in the group
 ```
 
 - **One message at a time.** The bridge waits for scout's actions before reading the next message, so two votes can't race.
+- **scout types before it texts.** Before each text, link or card, the relay shows the typing bubble and waits about as long as the text would take to type (0.8 to 5 seconds, `typingPauseFor` in `spectrum.ts`). Linq can't show the bubble in group chats, so there scout only pauses. The developer console and the tests skip the wait.
 - **Actions fall back to text.** If a line can't send a tapback, a threaded reply or a link card, or the bridge can't find the message it targets, the plain-text version goes instead.
 - **The bridge drops** private chats (in Linq mode), scout's own messages, messages with nothing to read (stickers, voice memos) and repeat deliveries.
 - **The bridge logs one line per message**: `handled` with the reply count and time, `skipped` with the reason, or `failed` with the error.

@@ -18,7 +18,7 @@ import { imessage } from "spectrum-ts/providers/imessage";
 import { localIMessage } from "@spectrum-ts/imessage-local";
 import { WEBHOOK_URL, linqPlatform } from "./linq";
 import { scoutUrl } from "./scout";
-import { relaySpectrumMessages } from "./spectrum";
+import { relaySpectrumMessages, typingPauseFor } from "./spectrum";
 import { logOutcome } from "./trace";
 
 const mode = process.env.IMESSAGE_MODE ?? "local";
@@ -28,7 +28,7 @@ if (mode === "linq") {
   console.log(`Linq's events come in at ${WEBHOOK_URL}. Relay them with`);
   console.log(`\`linq webhooks listen --forward-to ${WEBHOOK_URL}\`, which \`bun run dev\` starts for you.`);
 }
-await relaySpectrumMessages(app, logOutcome);
+await relaySpectrumMessages(app, logOutcome, typingPauseFor);
 
 async function connectToIMessage(mode: string) {
   if (mode === "local") {

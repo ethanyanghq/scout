@@ -16,7 +16,7 @@ import {
 } from "spectrum-ts/authoring";
 import z from "zod";
 import { cardPart, cardProblems, type HermesCard } from "./hermes-card";
-import { LINQ_API_URL, callLinq, type LinqApi, type LinqHandle } from "./linq-api";
+import { LINQ_API_URL, LinqApiError, callLinq, type LinqApi, type LinqHandle } from "./linq-api";
 import { threadedReplySchema } from "./spectrum";
 import { isTapback, tapbackEmoji, tapbackNamed } from "./tapbacks";
 import { isSkipped, logOutcome, type Skipped } from "./trace";
@@ -69,6 +69,7 @@ type ReceivedMessage = {
 
 export function linqPlatform(connection: LinqConnection) {
   const api = { apiKey: connection.apiKey, apiUrl: connection.apiUrl ?? LINQ_API_URL };
+  const chatsWithoutTyping = new Set<string>();
   return definePlatform(PLATFORM, {
     config: z.object({}),
     message: { schema: threadedReplySchema },
@@ -87,7 +88,10 @@ export function linqPlatform(connection: LinqConnection) {
       getMembers: async (_, space) => listMembers(api, space.id),
       getMessage: async (_, __, messageId) => fetchMessage(api, messageId),
     },
-    send: async ({ space, content }) => sendContent(api, space.id, content),
+    send: async ({ space, content }) =>
+      content.type === "typing"
+        ? setTyping(api, space.id, content.state, chatsWithoutTyping)
+        : sendContent(api, space.id, content),
   });
 }
 
@@ -276,6 +280,25 @@ async function sendCard(
     body: { message: { parts: [cardPart(card)] } },
   })) as { message: { id: string } };
   return { id: sent.message.id, content, space: { id: chatId }, timestamp: new Date() };
+}
+
+// Linq refuses typing indicators in group chats (403), which is where scout
+// lives. After the first refusal in a chat, scout stops asking there.
+async function setTyping(
+  api: LinqApi,
+  chatId: string,
+  state: "start" | "stop",
+  chatsWithoutTyping: Set<string>,
+): Promise<undefined> {
+  if (chatsWithoutTyping.has(chatId)) return undefined;
+  try {
+    await callLinq(api, `/chats/${chatId}/typing`, { method: state === "start" ? "POST" : "DELETE" });
+  } catch (error) {
+    if (!(error instanceof LinqApiError && error.status === 403)) throw error;
+    chatsWithoutTyping.add(chatId);
+    console.log(`Linq can't show scout typing in chat ${chatId}, so scout just pauses before replying.`);
+  }
+  return undefined;
 }
 
 async function sendTapback(
