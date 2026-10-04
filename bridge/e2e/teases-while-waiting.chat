@@ -1,0 +1,11 @@
+# Journey: once scout has joined, a member who finishes sharing gets a short
+# progress teaser: how many are in, where the group is leaning, and who's left.
+# Needs Claude.
+members maya leo priya
+
+leo: @scout you there?
+expect scout ~ "i'm scout"
+maya: i'm maya, free mar 13-20, ~$800, flying from boston, need a beach
+expect scout reacted like
+expect scout ~ "1 of 3 in"
+expect state members.1.budget_usd = 800

@@ -138,7 +138,10 @@ def test_scout_introduces_itself_then_sends_the_trip_interview_card(store):
     assert said(introduction) == ["Hey all, I'm scout 👋 Yep, I'm here!"]
     assert isinstance(card, Card)
     assert card.caption == "Plan your trip"
-    assert nudge == Say("just fill this out real quick so i could get a better idea")
+    assert nudge == Say(
+        "fill this out, takes like 30 sec. i'll come back with options once "
+        "everyone's in"
+    )
 
 
 def test_the_trip_interview_card_goes_out_only_with_the_introduction(store):
@@ -382,7 +385,11 @@ def test_replies_are_saved_so_the_agent_sees_them_next_time(store):
         (MAYA, "@scout hey, I'm maya"),
         (None, "got it, Maya"),
         (None, "[card] Plan your trip"),
-        (None, "just fill this out real quick so i could get a better idea"),
+        (
+            None,
+            "fill this out, takes like 30 sec. i'll come back with options once "
+            "everyone's in",
+        ),
     ]
 
 
@@ -557,17 +564,18 @@ def test_the_chat_log_shows_what_a_threaded_reply_answers(store):
     assert logged.text == f'(replying to "{SAN_JUAN_OPTION}") this one!'
 
 
-def test_trip_card_answers_get_a_short_got_it_instead_of_a_read_back(store):
+def test_the_first_trip_card_answer_gets_scouts_progress_teaser_and_no_canned_reply(
+    store,
+):
     scout_joins(store)
-    agent = FakeAgent(replies=[])
+    teaser = "1 of 3 in. leaning lakeside under ~$1,200… waiting on 2 more"
+    agent = FakeAgent(replies=[teaser])
 
     replies = send(
         store, agent, MAYA, "@scout my trip: Lakeside · $1,200 · from Boston"
     )
 
-    assert replies == [
-        "okay, got it. i'll look for places once everyone has filled theirs out"
-    ]
+    assert replies == [teaser]
     assert agent.messages_seen == ["@scout my trip: Lakeside · $1,200 · from Boston"]
 
 
@@ -578,7 +586,7 @@ class ThumbsUpAgent:
         return [React(message.message_id, Tapback.LIKE, fallback_text="saved")]
 
 
-def test_trip_card_answers_get_the_got_it_text_without_a_thumbs_up_too(store):
+def test_the_first_trip_card_answer_keeps_its_thumbs_up(store):
     scout_joins(store)
 
     replies = send_from_line(
@@ -589,9 +597,7 @@ def test_trip_card_answers_get_the_got_it_text_without_a_thumbs_up_too(store):
         message_id="maya-card-answer",
     )
 
-    assert replies == [
-        Say("okay, got it. i'll look for places once everyone has filled theirs out")
-    ]
+    assert replies == [React("maya-card-answer", Tapback.LIKE, fallback_text="saved")]
 
 
 def test_sending_the_trip_card_again_gets_no_reply(store):

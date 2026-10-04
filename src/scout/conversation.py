@@ -32,12 +32,6 @@ INTRODUCTION_SNAG_REPLY = (
     "hey all, i'm scout. hit a snag on my end so i can't help just yet, "
     "tag @scout in a minute to try again"
 )
-# Sent before the AI's reply to the first trip card answers in a chat, instead
-# of the AI reading them back. Later answers just get the 👍 from the save, so
-# the group isn't told the same thing once per person.
-TRIP_CARD_RECEIVED_REPLY = (
-    "okay, got it. i'll look for places once everyone has filled theirs out"
-)
 SNAG_REPLY = "ugh, hit a snag on my end. mind trying that again in a minute?"
 # Tapbacks that mean "this one" on a poll option. A 😂 on Miami isn't a vote.
 VOTING_TAPBACKS = {Tapback.LIKE, Tapback.LOVE}
@@ -191,13 +185,6 @@ def _ask_agent(
         took = time.monotonic() - started
         outcome = "replied" if replies else "chose not to reply"
         logger.info("The AI %s after %.1fs", outcome, took)
-        if is_trip_card_answer and _is_first_trip_card_answer(store, message):
-            # The canned reply already acknowledges the answers, so a 👍 on
-            # the same message would confirm them twice.
-            replies = [
-                Say(TRIP_CARD_RECEIVED_REPLY),
-                *(r for r in replies if not _is_reaction_to(r, message)),
-            ]
         return replies
     except Exception:
         logger.exception("Agent failed on message in %s", message.space_id)
@@ -220,21 +207,6 @@ def _answered_trip_card_before(store: TripStore, message: IncomingMessage) -> bo
         and logged.text.startswith(INTERVIEW_ANSWER_LEAD)
     ]
     return len(answers) > 1
-
-
-def _is_first_trip_card_answer(store: TripStore, message: IncomingMessage) -> bool:
-    """Whether no one else in the chat sent trip card answers before this
-    message, which is already in the log."""
-    answers = [
-        logged
-        for logged in store.chat_history(message.space_id)
-        if logged.text.startswith(INTERVIEW_ANSWER_LEAD)
-    ]
-    return len(answers) == 1
-
-
-def _is_reaction_to(outgoing: Outgoing, message: IncomingMessage) -> bool:
-    return isinstance(outgoing, React) and outgoing.message_id == message.message_id
 
 
 def _tapback_on(message: IncomingMessage) -> Callable[[str], Outgoing]:

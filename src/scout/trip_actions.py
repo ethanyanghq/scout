@@ -105,7 +105,9 @@ FINAL_DECISION_PROMPT = "once you're ready, let me know your final decision with
 INTERVIEW_THUMBNAIL_PLACE = "Grace Bay Beach, Turks and Caicos"
 # Sent after the flight card, since flights come first and the stay is next.
 HOTEL_OFFER = "want me to find a hotel too?"
-TRIP_CARD_NUDGE = "just fill this out real quick so i could get a better idea"
+TRIP_CARD_NUDGE = (
+    "fill this out, takes like 30 sec. i'll come back with options once everyone's in"
+)
 INTERVIEW_FALLBACK_TEXT = (
     "tell me about your trip: the kind of trip (resort, lakeside, city break or "
     "something else), when you're free, your budget per person, where you're "

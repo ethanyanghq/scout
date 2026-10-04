@@ -1,4 +1,5 @@
-# Journey: scout joins a chat, stays quiet through small talk, then introduces itself when tagged.
+# Journey: scout joins a chat, stays quiet through small talk, then introduces itself when tagged,
+# saying what the group will get before asking them to fill out the trip card.
 # Needs Claude.
 members maya leo priya
 
@@ -6,5 +7,7 @@ maya: omg i can't believe it's already october
 expect scout quiet
 leo: @scout you there?
 expect scout ~ "i'm scout"
+expect scout ~ "3 places that fit everyone's budget"
+expect scout ~ "fill this out"
 expect state stage = "collecting_preferences"
 expect state members.0.phone = "+15550000001"

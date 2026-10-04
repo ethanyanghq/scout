@@ -56,7 +56,8 @@ NO_REPLY = "NO_REPLY"
 UNTAGGED_MESSAGE_NOTE = (
     "It does not tag you. A quick check guessed you might have something to "
     "add, and that check is often wrong, so reply NO_REPLY unless the group "
-    "clearly needs you."
+    "clearly needs you. A progress teaser after saving someone's details "
+    "still goes out."
 )
 PARAGRAPH_BREAK = re.compile(r"\n\s*\n")
 SYSTEM_PROMPT = (Path(__file__).parent / "system_prompt.md").read_text()
