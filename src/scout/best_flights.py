@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime
 
-from scout.flights import Flight, GoogleFlights
+from scout.flights import Flight, GoogleFlights, OneWay
 from scout.group_summary import format_window
 from scout.trip import Trip
 
@@ -69,13 +69,13 @@ def format_best_flights(trip: Trip, home_city_flights: list[HomeCityFlight]) -> 
     return "\n".join(lines)
 
 
-def describe_stops(flight: Flight) -> str:
+def describe_stops(one_way: OneWay) -> str:
     """ "Nonstop", "1 stop · MIA" or "2 stops · MIA, ATL"."""
-    stop_count = len(flight.layover_airports)
-    if stop_count == 0:
+    airports = [layover.airport for layover in one_way.layovers]
+    if not airports:
         return "Nonstop"
-    plural = "" if stop_count == 1 else "s"
-    return f"{stop_count} stop{plural} · {', '.join(flight.layover_airports)}"
+    plural = "" if len(airports) == 1 else "s"
+    return f"{len(airports)} stop{plural} · {', '.join(airports)}"
 
 
 def format_duration(minutes: int) -> str:
@@ -87,6 +87,18 @@ def format_duration(minutes: int) -> str:
 def format_clock(moment: datetime) -> str:
     """ "6:15 AM"."""
     return f"{moment:%-I:%M %p}"
+
+
+def format_day(moment: datetime) -> str:
+    """ "Sun, Mar 14"."""
+    return f"{moment:%a, %b %-d}"
+
+
+def format_landing(one_way: OneWay) -> str:
+    """When it lands: "2:20 PM", or "6:05 AM +1" when that's the next day."""
+    days_later = (one_way.arrives_at.date() - one_way.departs_at.date()).days
+    clock = format_clock(one_way.arrives_at)
+    return f"{clock} +{days_later}" if days_later else clock
 
 
 def _find_home_city_flight(
@@ -108,17 +120,25 @@ def _find_home_city_flight(
 
 def _format_home_city_flight(home_city_flight: HomeCityFlight) -> list[str]:
     flight = home_city_flight.flight
-    route = f"{flight.departure_airport} → {flight.arrival_airport}"
-    details = " · ".join(
-        [
-            f"{' / '.join(flight.airlines)} {flight.flight_numbers[0]}",
-            describe_stops(flight),
-            format_duration(flight.duration_minutes),
-        ]
-    )
     return [
-        f"{home_city_flight.home_city} ({route}): {details}",
-        f"   ${flight.price_usd:,} round trip per person, "
+        f"{home_city_flight.home_city}: ${flight.price_usd:,} round trip per person, "
         f"for {', '.join(home_city_flight.travelers)}",
+        f"   out {_format_one_way(flight.outbound)}",
+        f"   back {_format_one_way(flight.homebound)}",
         f"   {flight.booking_url}",
     ]
+
+
+def _format_one_way(one_way: OneWay) -> str:
+    """ "Sun, Mar 14, BOS 6:15 AM → SJU 2:20 PM · JetBlue B6 101 · 1 stop · FLL
+    · 8h 5m"."""
+    return " · ".join(
+        [
+            f"{format_day(one_way.departs_at)}, "
+            f"{one_way.departure_airport} {format_clock(one_way.departs_at)} → "
+            f"{one_way.arrival_airport} {format_landing(one_way)}",
+            f"{' / '.join(one_way.airlines)} {one_way.flight_numbers[0]}",
+            describe_stops(one_way),
+            format_duration(one_way.duration_minutes),
+        ]
+    )

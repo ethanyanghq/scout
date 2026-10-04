@@ -5,8 +5,8 @@ import pytest
 
 from scout.best_flights import HomeAirport
 from scout.brochures import ActivityPitch, DestinationPitch
-from scout.cards import fits_in_one_message
-from scout.flights import Flight, FlightsError
+from scout.cards import FLIGHTS_THUMBNAIL_URL, fits_in_one_message
+from scout.flights import Flight, FlightsError, Layover, OneWay
 from scout.hotels import Hotel, HotelsError
 from scout.outgoing import Card, Link, React, Say, Tapback
 from scout.outside_services import OutsideServices
@@ -838,22 +838,33 @@ class FakeFlights:
 
 def flight_from(airport, price_usd, layovers=()):
     return Flight(
-        departure_airport=airport,
-        arrival_airport="SJU",
-        departs_at=datetime(2027, 3, 14, 6, 15),
-        arrives_at=datetime(2027, 3, 14, 14, 20),
-        flight_numbers=["B6 101"],
-        airlines=["JetBlue"],
-        layover_airports=list(layovers),
-        duration_minutes=485,
+        outbound=OneWay(
+            departure_airport=airport,
+            arrival_airport="SJU",
+            departs_at=datetime(2027, 3, 14, 6, 15),
+            arrives_at=datetime(2027, 3, 14, 14, 20),
+            flight_numbers=["B6 101", "B6 955"] if layovers else ["B6 101"],
+            airlines=["JetBlue"],
+            layovers=list(layovers),
+            duration_minutes=485,
+        ),
+        homebound=OneWay(
+            departure_airport="SJU",
+            arrival_airport=airport,
+            departs_at=datetime(2027, 3, 19, 22, 30),
+            arrives_at=datetime(2027, 3, 20, 2, 45),
+            flight_numbers=["B6 902"],
+            airlines=["JetBlue"],
+            layovers=[],
+            duration_minutes=255,
+        ),
         price_usd=price_usd,
         booking_url=f"https://www.google.com/travel/flights?from={airport}",
-        destination_photo_url="https://lh5.googleusercontent.com/san-juan",
     )
 
 
 ROUTES = {
-    "BOS": flight_from("BOS", 312, layovers=["FLL"]),
+    "BOS": flight_from("BOS", 312, layovers=[Layover("FLL", 85)]),
     "NYC": flight_from("NYC", 1240),
 }
 HOME_AIRPORTS = [HomeAirport("Boston", "BOS"), HomeAirport("new york", "NYC")]
@@ -863,7 +874,7 @@ def flights_actions(store, flights):
     return TripActions(store, SPACE, MAYA, OutsideServices(flights=flights))
 
 
-def test_flights_are_one_card_with_a_departure_board_per_home_city(
+def test_flights_are_one_card_with_both_ways_from_each_home_city(
     locked_in_actions, store
 ):
     actions = flights_actions(store, FakeFlights(ROUTES))
@@ -876,25 +887,53 @@ def test_flights_are_one_card_with_a_departure_board_per_home_city(
     assert isinstance(card, Card)
     assert card.layout["title"] == "Flights to San Juan, Puerto Rico"
     assert card.layout["subtitle"] == "Mar 14–19 · round trip"
-    boards = [
-        node["board"]
-        for node in card.layout["root"]["children"]
-        if node["type"] == "flightBoard"
-    ]
-    assert [(b["origin"], b["destination"]) for b in boards] == [
-        ("BOS", "SJU"),
-        ("NYC", "SJU"),
-    ]
-    headings = [
-        node["text"]
-        for node in card.layout["root"]["children"]
-        if node["type"] == "text"
-    ]
-    assert headings == ["RECOMMENDED FLIGHT", "RECOMMENDED FLIGHT"]
-    assert boards[0]["departTime"] == "6:15 AM"
-    assert boards[0]["status"] == "1 stop · FLL"
-    assert boards[1]["status"] == "Nonstop"
-    assert card.thumbnail_url == "https://lh5.googleusercontent.com/san-juan"
+    words = card_words(card.layout)
+    assert {"FROM BOSTON", "FROM NEW YORK"} <= words
+    assert {"Out · Sun, Mar 14", "Back · Fri, Mar 19"} <= words
+    assert {"Leave BOS · Boston", "Land SJU · San Juan, Puerto Rico"} <= words
+    assert {"Leave SJU · San Juan, Puerto Rico", "Land BOS · Boston"} <= words
+    assert {"6:15 AM", "2:20 PM", "10:30 PM", "2:45 AM +1"} <= words
+    assert {"$312 per person", "$1,240 per person"} <= words
+
+
+def test_the_flight_card_shows_where_each_layover_is_and_how_long(
+    locked_in_actions, store
+):
+    actions = flights_actions(store, FakeFlights(ROUTES))
+
+    actions.send_best_flights(HOME_AIRPORTS, "SJU")
+
+    _, card, _ = actions.outbox
+    words = card_words(card.layout)
+    assert {"1 stop · FLL", "Nonstop"} <= words
+    assert {"Change planes in FLL", "1h 25m wait"} <= words
+
+
+def test_the_flight_card_bubble_shows_a_plane_not_the_destination(
+    locked_in_actions, store
+):
+    actions = flights_actions(store, FakeFlights(ROUTES))
+
+    actions.send_best_flights(HOME_AIRPORTS, "SJU")
+
+    _, card, _ = actions.outbox
+    assert card.thumbnail_url == FLIGHTS_THUMBNAIL_URL
+
+
+def test_the_flights_text_has_the_way_out_and_the_way_back(locked_in_actions, store):
+    actions = flights_actions(store, FakeFlights(ROUTES))
+
+    actions.send_best_flights(HOME_AIRPORTS, "SJU")
+
+    _, card, _ = actions.outbox
+    assert (
+        "   out Sun, Mar 14, BOS 6:15 AM → SJU 2:20 PM · JetBlue B6 101 · "
+        "1 stop · FLL · 8h 5m" in card.fallback_text.splitlines()
+    )
+    assert (
+        "   back Fri, Mar 19, SJU 10:30 PM → BOS 2:45 AM +1 · JetBlue B6 902 · "
+        "Nonstop · 4h 15m" in card.fallback_text.splitlines()
+    )
 
 
 def test_without_flight_search_scout_sends_booking_links_instead(locked_in_actions):

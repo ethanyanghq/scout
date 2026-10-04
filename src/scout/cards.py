@@ -20,10 +20,13 @@ from scout.best_flights import (
     HomeCityFlight,
     describe_stops,
     format_clock,
+    format_day,
     format_duration,
+    format_landing,
 )
 from scout.best_hotel import describe_rates, describe_rating
 from scout.expense_report import describe_items, describe_split, member_totals
+from scout.flights import Layover, OneWay
 from scout.group_summary import format_window, summarize_group
 from scout.hotels import Hotel
 from scout.itinerary import events_by_day, format_date, format_start
@@ -96,8 +99,17 @@ TRIP_STYLES = [
     ("wellness", "Wellness and spa", "Massages, yoga, slow mornings", "leaf.fill"),
     ("shopping", "Shopping and markets", "Boutiques, crafts, souvenirs", "bag.fill"),
 ]
-# A nonstop is the good case, so it wears scout blue; amber flags a layover.
+# A flight's stops badge: green for a nonstop, amber flags a layover. Both are
+# Apple's dark-mode system colors, bright enough to read on near-black.
+NONSTOP_HEX = "#30D158"
 CONNECTING_HEX = "#FF9F0A"
+# The flight card's bubble: a plane's wing above the clouds, so it reads as
+# flights at a glance. Public domain, on Wikimedia Commons.
+FLIGHTS_THUMBNAIL_URL = (
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1d/"
+    "A_wing_tip_of_an_airplane_%2840118125441%29.jpg/"
+    "1280px-A_wing_tip_of_an_airplane_%2840118125441%29.jpg"
+)
 
 
 @dataclass(frozen=True)
@@ -510,8 +522,8 @@ def _add_ons(add_ons: list[ItineraryAddOn]) -> list[dict]:
 
 
 def best_flights(trip: Trip, home_city_flights: list[HomeCityFlight]) -> dict:
-    """A departure board for each home city's recommended flight, with its fare
-    and a button that opens it on Google Flights.
+    """Each home city's recommended round trip, the way out and the way back
+    with every stop, then its fare and a button that opens it on Google Flights.
 
     Expects a trip whose destination and dates are locked in.
     """
@@ -520,11 +532,10 @@ def best_flights(trip: Trip, home_city_flights: list[HomeCityFlight]) -> dict:
         "title": f"Flights to {trip.destination}",
         "subtitle": f"{format_window(trip.dates)} · round trip",
         "accentColorHex": SCOUT_BLUE_HEX,
-        # The board is drawn dark, so the card around it goes dark too.
         "background": {"kind": "atmosphere", "colorsHex": [NIGHT_GLOW_HEX]},
         "root": {
             "type": "vstack",
-            "spacing": 16,
+            "spacing": 12,
             "alignment": "leading",
             "children": [
                 node
@@ -536,50 +547,77 @@ def best_flights(trip: Trip, home_city_flights: list[HomeCityFlight]) -> dict:
     }
 
 
-def flights_thumbnail_url(home_city_flights: list[HomeCityFlight]) -> str | None:
-    """The photo iMessage shows on the unopened bubble: the destination city."""
-    return next(
-        (
-            f.flight.destination_photo_url
-            for f in home_city_flights
-            if f.flight.destination_photo_url
-        ),
-        None,
-    )
-
-
 def _flight_nodes(trip: Trip, home_city_flight: HomeCityFlight) -> list[dict]:
     flight = home_city_flight.flight
-    board = {
-        "type": "flightBoard",
-        "board": {
-            "origin": flight.departure_airport,
-            "destination": flight.arrival_airport,
-            "originCity": home_city_flight.home_city,
-            "destinationCity": trip.destination,
-            "flightCode": flight.flight_numbers[0],
-            "departTime": format_clock(flight.departs_at),
-            "arriveTime": format_clock(flight.arrives_at),
-            "status": describe_stops(flight),
-            "statusColorHex": (
-                CONNECTING_HEX if flight.layover_airports else SCOUT_BLUE_HEX
+    home_city = home_city_flight.home_city
+    fare = _card_of_rows(
+        [
+            _row("Round trip", f"${flight.price_usd:,} per person"),
+            _row("For", ", ".join(home_city_flight.travelers)),
+        ]
+    )
+    return [
+        _section_heading(f"From {home_city}"),
+        _one_way_card("Out", flight.outbound, home_city, trip.destination),
+        _one_way_card("Back", flight.homebound, trip.destination, home_city),
+        fare,
+    ]
+
+
+def _one_way_card(
+    direction: str, one_way: OneWay, from_city: str, to_city: str
+) -> dict:
+    """One direction as rows down the card: takeoff, each layover, landing."""
+    heading = {
+        "type": "hstack",
+        "spacing": 8,
+        "alignment": "center",
+        "children": [
+            _text(
+                f"{direction} · {format_day(one_way.departs_at)}",
+                role="headline",
             ),
-        },
+            {
+                "type": "statusBadge",
+                "label": describe_stops(one_way),
+                "colorHex": CONNECTING_HEX if one_way.layovers else NONSTOP_HEX,
+            },
+        ],
     }
-    fare = {
+    stops = [
+        _row(f"Change planes in {layover.airport}", _layover_wait(layover))
+        for layover in one_way.layovers
+    ]
+    airline = (
+        f"{' / '.join(one_way.airlines)} {' · '.join(one_way.flight_numbers)}"
+        f" · {format_duration(one_way.duration_minutes)} total"
+    )
+    return {
         "type": "card",
         "child": {
             "type": "vstack",
-            "spacing": 4,
+            "spacing": 10,
+            "alignment": "leading",
             "children": [
-                _row("Fare", f"${flight.price_usd:,} per person", "dollarsign.circle"),
-                _row("Airline", " / ".join(flight.airlines), "airplane"),
-                _row("Flying time", format_duration(flight.duration_minutes), "clock"),
-                _row("For", ", ".join(home_city_flight.travelers), "person.2.fill"),
+                heading,
+                {"type": "divider"},
+                _row(
+                    f"Leave {one_way.departure_airport} · {from_city}",
+                    format_clock(one_way.departs_at),
+                ),
+                *stops,
+                _row(
+                    f"Land {one_way.arrival_airport} · {to_city}",
+                    format_landing(one_way),
+                ),
+                _text(airline, role="footnote", color_hex=SOFT_GRAY_HEX),
             ],
         },
     }
-    return [_section_heading("Recommended flight"), board, fare]
+
+
+def _layover_wait(layover: Layover) -> str:
+    return f"{format_duration(layover.duration_minutes)} wait"
 
 
 def best_hotel(trip: Trip, hotel: Hotel) -> dict:
@@ -634,13 +672,11 @@ def best_hotel(trip: Trip, hotel: Hotel) -> dict:
     }
 
 
-def _row(key: str, value: str, sf_symbol: str) -> dict:
-    return {
-        "type": "keyValueRow",
-        "key": key,
-        "value": value,
-        "iconSystemName": sf_symbol,
-    }
+def _row(key: str, value: str, sf_symbol: str | None = None) -> dict:
+    row = {"type": "keyValueRow", "key": key, "value": value}
+    if sf_symbol:
+        row["iconSystemName"] = sf_symbol
+    return row
 
 
 def _booking_action(home_city_flight: HomeCityFlight) -> dict:

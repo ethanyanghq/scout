@@ -15,7 +15,8 @@ def store(tmp_path):
 
 class FakeSerpApi:
     """Stands in for SerpApi: answers every search with `reply`, a (status, JSON)
-    pair a test sets, and keeps each query it got."""
+    pair a test sets, or a function from the query to that pair, and keeps each
+    query it got."""
 
     def __init__(self):
         self.queries = []
@@ -42,8 +43,11 @@ class FakeSerpApi:
         class Handler(BaseHTTPRequestHandler):
             def do_GET(self):
                 query = urllib.parse.urlparse(self.path).query
-                fake.queries.append(dict(urllib.parse.parse_qsl(query)))
-                status, reply = fake.reply
+                params = dict(urllib.parse.parse_qsl(query))
+                fake.queries.append(params)
+                status, reply = (
+                    fake.reply(params) if callable(fake.reply) else fake.reply
+                )
                 encoded = json.dumps(reply).encode()
                 self.send_response(status)
                 self.send_header("Content-Length", str(len(encoded)))

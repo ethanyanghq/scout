@@ -41,13 +41,13 @@ from scout.calendar_feed import (
     format_plan_set_message,
 )
 from scout.cards import (
+    FLIGHTS_THUMBNAIL_URL,
     activity_deck,
     best_flights,
     best_hotel,
     destination_article,
     expense_report,
     fits_in_one_message,
-    flights_thumbnail_url,
     itinerary,
     trip_interview,
 )
@@ -385,7 +385,7 @@ class TripActions:
             Card(
                 layout=best_flights(trip, home_city_flights),
                 caption=f"Flights to {trip.destination}",
-                thumbnail_url=flights_thumbnail_url(home_city_flights),
+                thumbnail_url=FLIGHTS_THUMBNAIL_URL,
                 fallback_text=format_best_flights(trip, home_city_flights),
             )
         )

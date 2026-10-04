@@ -254,25 +254,36 @@ One flight: the best value Google Flights finds for the whole group from the
 shared origin on the shared dates, looked up live through SerpApi. If members
 still leave from different cities, the card holds one flight per home city.
 
-The card leads with HermesShare's `flightBoard`, a split-flap departure board
-(airport codes, flight number, departure and arrival times, nonstop or the
-layovers), then the fare per person, the airline, the flying time and who flies
-it. Its button opens the same search on Google Flights, where the group books.
+The card has a section per home city: the way out and the way back, each a
+row each for takeoff, every layover (where and how long) and landing, under a
+green "Nonstop" or amber "1 stop · IAD" badge, then the round-trip fare per
+person and who flies it. Its button opens the same search on Google Flights,
+where the group books. The bubble is a photo of a plane's wing, not the
+destination, so it reads as flights.
+
+HermesShare's `flightBoard` scene isn't used: it draws one direction only, has
+no place for layovers, shows a gate column scout can't fill, and tints the card
+with its status color. Google Flights lists only the ways out at first, so
+`flights.py` makes a second search with the picked way out's
+`departure_token` to get the way back and the round trip's price.
 
 ```
 ┌──────────────────────────────────────┐
+│ MAR 14–19 · ROUND TRIP               │
 │ Flights to San Juan, Puerto Rico     │
-│ Mar 14–19 · round trip               │
+│ FROM BOSTON                          │
 │ ┌──────────────────────────────────┐ │
-│ │ B6 101               1 stop · FLL│ │
-│ │ [B][O][S] ──────✈──── [S][J][U]  │ │
-│ │ Boston        San Juan, PR       │ │
-│ │ DEPARTS 6:15 AM  ARRIVES 2:20 PM │ │
+│ │ Out · Sun, Mar 14   (1 stop · FLL)│ │
+│ │ Leave BOS · Boston       6:15 AM │ │
+│ │ Change planes in FLL  1h 25m wait│ │
+│ │ Land SJU · San Juan      2:20 PM │ │
+│ │ JetBlue B6 101 · B6 955 · 8h 5m  │ │
 │ └──────────────────────────────────┘ │
-│ Fare            $312 per person      │
-│ Airline         JetBlue              │
-│ Flying time     8h 5m                │
-│ For             Maya, Leo            │
+│ ┌ Back · Fri, Mar 19   (Nonstop) ──┐ │
+│ │ …                                │ │
+│ └──────────────────────────────────┘ │
+│ Round trip          $312 per person  │
+│ For                 Maya, Leo        │
 │ [       Book from Boston        ]    │
 └──────────────────────────────────────┘
 ```
@@ -449,7 +460,7 @@ Reusing what exists wherever it already works.
 | Activities | — | built: `DeckActivity` and `ActivityDeck` (`src/scout/trip.py`) |
 | Bookings | `Expense`, `log_sender_expense` (`src/scout/trip_actions.py`) | new `Booking`, logged as an expense on confirm |
 | Hotels and activities | `GooglePlaces.search` (`src/scout/places.py`) | extend `FIELD_MASK` with `rating`, `userRatingCount`, `photos` |
-| Flight | `GoogleFlights` (`src/scout/flights.py`), through SerpApi | built: one flight per home city, live fare, `flightBoard` card |
+| Flight | `GoogleFlights` (`src/scout/flights.py`), through SerpApi | built: one round trip per home city, both ways with layovers, live fare |
 | Calendar | `build_calendar_feed` (`src/scout/calendar_feed.py`) | built: a subscribable feed with one event per itinerary day, linked when the first plan is posted |
 | Outgoing | `Say` / `React` / `Link` (`src/scout/outgoing.py`) | add `Card` |
 | Bridge | `perform()` (`bridge/spectrum.ts`), `sendParts()` (`bridge/linq.ts`) | add the `imessage_app` part |
