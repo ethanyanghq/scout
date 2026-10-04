@@ -149,6 +149,14 @@ describe("checking what scout did", () => {
     expect(result).toEqual({ passed: false, detail: "scout said: Got it / 2 of 3 voted" });
   });
 
+  test("a without check fails when any reply has the words, and passes when scout stays quiet", () => {
+    const expectation: Expectation = { kind: "expect-reply-without", words: "2.236" };
+
+    expect(checkExpectation(expectation, { replies: scout("√5 is about 2.236"), trip: null }).passed).toBe(false);
+    expect(checkExpectation(expectation, { replies: scout("dunno, anyway"), trip: null }).passed).toBe(true);
+    expect(checkExpectation(expectation, { replies: [], trip: null }).passed).toBe(true);
+  });
+
   test("a quiet check passes only when scout didn't reply", () => {
     const expectation: Expectation = { kind: "expect-quiet" };
 

@@ -120,6 +120,7 @@ expect state destination = "San Juan, Puerto Rico"
 | `maya reply "2. San Juan": text` | Maya replies in a thread under that message. |
 | `maya photo receipt.jpg` | Maya sends a photo. The path is relative to the script (Mac only). |
 | `expect scout ~ "words"` | A reply to the latest message contains the words, ignoring case. |
+| `expect scout !~ "words"` | No reply to the latest message contains the words, ignoring case. Staying quiet passes. |
 | `expect scout quiet` | scout didn't reply to the latest message. |
 | `expect scout reacted like` | scout added that tapback in reply to the latest message. |
 | `expect thread ~ "words"` | scout replied in a thread, with the words. |

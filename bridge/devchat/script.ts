@@ -32,6 +32,7 @@ export type Step = StepSource &
   );
 export type Expectation =
   | { kind: "expect-reply"; contains: string }
+  | { kind: "expect-reply-without"; words: string }
   | { kind: "expect-quiet" }
   | { kind: "expect-tapback"; tapback: Tapback }
   | { kind: "expect-thread"; contains: string }
@@ -63,6 +64,7 @@ const STEP_PATTERNS = {
   expectQuiet: /^expect\s+scout\s+quiet$/,
   expectTapback: /^expect\s+scout\s+reacted\s+(\S+)$/,
   expectReply: /^expect\s+scout\s+~\s+(".*")$/,
+  expectReplyWithout: /^expect\s+scout\s+!~\s+(".*")$/,
   expectState: /^expect\s+state\s+(\S+)\s+(=|~)\s+(.+)$/,
 };
 
@@ -154,6 +156,11 @@ export function checkExpectation(expectation: Expectation, context: CheckContext
       const wanted = expectation.contains.toLowerCase();
       return { passed: said.some((text) => text.toLowerCase().includes(wanted)), detail: whatScoutSaid };
     }
+    case "expect-reply-without": {
+      // Staying quiet passes too: scout said nothing with those words.
+      const unwanted = expectation.words.toLowerCase();
+      return { passed: !said.some((text) => text.toLowerCase().includes(unwanted)), detail: whatScoutSaid };
+    }
     case "expect-state": {
       const actual = valueAt(context.trip, expectation.path);
       const passed =
@@ -188,6 +195,8 @@ function readLine(script: Script, at: StepSource, scriptFolder: string): void {
     script.steps.push({ ...at, kind: "expect-thread", contains: readQuoted(match[1]!) });
   } else if ((match = source.match(STEP_PATTERNS.expectReply))) {
     script.steps.push({ ...at, kind: "expect-reply", contains: readQuoted(match[1]!) });
+  } else if ((match = source.match(STEP_PATTERNS.expectReplyWithout))) {
+    script.steps.push({ ...at, kind: "expect-reply-without", words: readQuoted(match[1]!) });
   } else if ((match = source.match(STEP_PATTERNS.expectState))) {
     const [, path, matcher, value] = match as [string, string, "=" | "~", string];
     const expected = matcher === "=" ? readJson(value) : readQuoted(value);
