@@ -25,8 +25,8 @@ export function findSetupProblems(setup: DevSetup): string[] {
   }
   if (!setup.serviceSettings) {
     problems.push("Create the service's settings: cp .env.example .env, then fill in ANTHROPIC_API_KEY.");
-  } else if (!setup.serviceSettings.ANTHROPIC_API_KEY) {
-    problems.push("Set ANTHROPIC_API_KEY in .env.");
+  } else if (!setup.serviceSettings.ANTHROPIC_API_KEY && !setup.serviceSettings.OPENAI_API_KEY) {
+    problems.push("Set ANTHROPIC_API_KEY (or OPENAI_API_KEY) in .env.");
   }
   problems.push(...findModeProblems(setup));
   for (const { port, usedBy } of setup.busyPorts) {

@@ -5,8 +5,9 @@
 //   cd bridge && bun run e2e                          every script
 //   cd bridge && bun run e2e votes-and-winner.chat    one script
 //
-// Needs uv, and ANTHROPIC_API_KEY in the repo's .env: most journeys go
-// through Claude, which takes about 10 seconds a message and costs tokens.
+// Needs uv, and ANTHROPIC_API_KEY (or OPENAI_API_KEY) in the repo's .env:
+// most journeys go through the AI, which takes about 10 seconds a message
+// and costs tokens.
 
 import { openSync } from "node:fs";
 import { mkdir, readdir, rm } from "node:fs/promises";
@@ -24,7 +25,7 @@ const DATABASE = join(RUN_FOLDER, "scout.db");
 const SERVICE_START_TIMEOUT_MS = 30_000;
 
 const scripts = await chooseScripts(process.argv.slice(2));
-await warnIfClaudeIsMissing();
+await warnIfAiIsMissing();
 await mkdir(RUN_FOLDER, { recursive: true });
 const port = findFreePort();
 const service = await startService(port);
@@ -52,10 +53,11 @@ async function chooseScripts(requested: string[]): Promise<string[]> {
   return files.filter((file) => file.endsWith(".chat")).sort();
 }
 
-async function warnIfClaudeIsMissing(): Promise<void> {
+async function warnIfAiIsMissing(): Promise<void> {
   const settings = await readEnvFile(join(REPO_ROOT, ".env"));
-  if (process.env.ANTHROPIC_API_KEY || settings?.ANTHROPIC_API_KEY) return;
-  console.warn("ANTHROPIC_API_KEY isn't set in .env, so scripts that need Claude will fail.");
+  const keyNames = ["ANTHROPIC_API_KEY", "OPENAI_API_KEY"];
+  if (keyNames.some((name) => process.env[name] || settings?.[name])) return;
+  console.warn("Neither ANTHROPIC_API_KEY nor OPENAI_API_KEY is set in .env, so scripts that need the AI will fail.");
 }
 
 function findFreePort(): number {
