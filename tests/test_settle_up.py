@@ -87,7 +87,7 @@ def test_settle_up_message_shows_the_total_share_and_payments():
         "Jordan → Leo $400\n"
         "Priya → Leo $236\n"
         "Maya → Leo $204\n"
-        'To pay, text "@scout pay Leo".'
+        'Once you\'ve paid, text "@scout I paid Leo".'
     )
 
 
@@ -106,7 +106,7 @@ def test_settle_up_message_says_when_everyone_is_even():
 
 
 def paid(trip, payer, payee, cents):
-    trip.settlements.append(Settlement(payer.phone, payee.phone, cents, True))
+    trip.settlements.append(Settlement(payer.phone, payee.phone, cents))
     return trip
 
 

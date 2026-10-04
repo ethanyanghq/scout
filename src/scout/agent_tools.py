@@ -343,11 +343,11 @@ TOOL_DEFINITIONS = [
         },
     },
     {
-        "name": "pay_from_sender",
+        "name": "record_sender_payment",
         "description": (
-            "Pay what the sender of the newest message owes one person in the "
-            "settle-up plan, through Capital One's Nessie sandbox bank. It pays "
-            "the planned amount and posts the confirmation and what's left."
+            "Record that the sender of the newest message has paid one person "
+            "what the settle-up plan says they owe. scout moves no money: this "
+            "only records the payment, then posts the confirmation and what's left."
         ),
         "strict": True,
         "input_schema": {
@@ -355,7 +355,7 @@ TOOL_DEFINITIONS = [
             "properties": {
                 "payee_name": {
                     "type": "string",
-                    "description": "Who they're paying, as named in the trip state.",
+                    "description": "Who they paid, as named in the trip state.",
                 },
             },
             "required": ["payee_name"],
@@ -419,8 +419,8 @@ def run_tool(actions: TripActions, name: str, tool_input: dict[str, Any]) -> str
             return actions.remove_expense(tool_input["expense_number"])
         case "post_settle_up":
             return actions.post_settle_up()
-        case "pay_from_sender":
-            return actions.pay_from_sender(tool_input["payee_name"])
+        case "record_sender_payment":
+            return actions.record_sender_payment(tool_input["payee_name"])
         case _:
             raise TripActionError(f"unknown tool {name}")
 

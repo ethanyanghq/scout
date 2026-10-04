@@ -6,7 +6,6 @@ chat messages it produces to `outbox`, and returns a short status for the
 agent to read.
 """
 
-import logging
 from collections.abc import Callable
 from datetime import date
 
@@ -17,7 +16,6 @@ from scout.group_summary import format_group_summary, summarize_group
 from scout.itinerary import format_itinerary
 from scout.money import format_usd
 from scout.nearby import directions_link, format_directions, format_nearby_places
-from scout.nessie import NessieError, SandboxPayment
 from scout.outgoing import Link, Outgoing, Say
 from scout.outside_services import NO_OUTSIDE_SERVICES, OutsideServices
 from scout.places import Coordinates, GooglePlaces, PlacesError
@@ -30,15 +28,12 @@ from scout.settle_up import (
 from scout.trip import (
     DestinationOption,
     ItineraryDay,
-    Member,
     PendingReceipt,
     PreferenceUpdate,
     Settlement,
     Trip,
 )
 from scout.trip_store import TripStore
-
-logger = logging.getLogger(__name__)
 
 DESTINATION_OPTION_COUNT = 3
 NEARBY_SUGGESTION_COUNT = 3
@@ -234,57 +229,24 @@ class TripActions:
         self.outbox.append(Say(format_settle_up(trip)))
         return "Settle-up posted."
 
-    def pay_from_sender(self, payee_label: str) -> str:
-        """Pays what the sender owes one person, over Nessie when it's up."""
+    def record_sender_payment(self, payee_label: str) -> str:
+        """Records that the sender paid what they owed one person."""
         trip = self._load_trip()
         payment = _find_sender_payment(trip, self._sender_phone, payee_label)
-        nessie_ids = self._send_through_nessie(payment)
         self._store.add_settlement(
             self._space_id,
             Settlement(
                 payer_phone=payment.payer.phone,
                 payee_phone=payment.payee.phone,
                 amount_cents=payment.amount_cents,
-                went_through_nessie=nessie_ids is not None,
             ),
-            nessie_ids,
         )
-
         paid = (
             f"Paid ✓ {payment.payer.label} → {payment.payee.label} "
             f"{format_usd(payment.amount_cents)}"
         )
-        if nessie_ids is None:
-            paid += " (simulated: no money moved in the Capital One sandbox)"
-        else:
-            paid += " through Capital One's Nessie sandbox (not real money)"
         self.outbox.append(Say(f"{paid}\n{format_payments_left(self._load_trip())}"))
-        return "Paid." if nessie_ids else "Recorded as a simulated payment."
-
-    def _send_through_nessie(self, payment: Payment) -> SandboxPayment | None:
-        """Moves the sandbox money. None if there's no bank or Nessie failed."""
-        if self._services.bank is None:
-            return None
-        try:
-            return self._services.bank.move_money(
-                self._nessie_account_id(payment.payer),
-                self._nessie_account_id(payment.payee),
-                payment.amount_cents,
-            )
-        except NessieError as error:
-            # The ledger is the source of truth, so the group can still settle
-            # up when Nessie is down. The chat message says it was simulated.
-            # If only the withdrawal went through, Nessie stays half-paid, but
-            # the ledger still counts the payment exactly once.
-            logger.warning("Nessie payment failed in %s: %s", self._space_id, error)
-            return None
-
-    def _nessie_account_id(self, member: Member) -> str:
-        if member.nessie_account_id is not None:
-            return member.nessie_account_id
-        account_id = self._services.bank.open_account()
-        self._store.save_nessie_account(self._space_id, member.phone, account_id)
-        return account_id
+        return "Payment recorded."
 
     def suggest_nearby_places(self, request: str, near: str | None) -> str:
         """Posts three real places that fit a vibe, near where the group is."""
