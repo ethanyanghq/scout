@@ -1,4 +1,8 @@
 <p align="center">
+  <img src="assets/logo.png" alt="scout logo" width="140">
+</p>
+
+<p align="center">
   <img src="assets/banner.svg" alt="scout: trips that make it out of the group chat" width="100%">
 </p>
 
@@ -13,8 +17,8 @@ you know the thread. someone says "we should go somewhere," everyone hearts it, 
 here's how it goes:
 
 1. **add me.** put my number in the group text. no app, no accounts, nobody signs up for anything.
-2. **tell me what you want.** everyone sends their dates, budget, home city, the kind of trip they're after, and whether they're an early riser or a night owl. i confirm each one so you can catch my mistakes, and i keep track of who hasn't answered yet.
-3. **i pitch three places.** once i know where your dates overlap, i send three brochures you can tap through: a photo, the best hotel there, what it comes with, and what the whole trip runs. pick one and hit send — that's your vote. or just tell me ("we want cancun") and i'll lock it in.
+2. **tell me what you want.** i send a quick trip card: pick the kind of trip, your dates on a calendar, your budget on a slider, where you're flying from, and what you're into. one tap sends it, and i keep track of who hasn't answered yet.
+3. **i pitch three places.** once everyone's in, i look up well-reviewed spots that fit the whole group and send three brochures: photos, the best hotel there, things to do, and what the whole trip runs per person. tell me your final decision ("final decision: cancun") and i'll lock it in.
 4. **you tell me what you'd actually do.** i send a deck of things to do at that hotel and that town, each with a picture and a price. swipe each one nah, meh or yeah, send once, and i'll tell you what the group agreed on.
 5. **i plan the days.** a day-by-day plan built from what you actually picked, paced for whether you're up at six or noon. then one room and one flight for everyone — you book, i put what it cost in the ledger.
 6. **i put it on your calendar.** once the itinerary is posted, one link to subscribe to with every day of the plan as an event, kept up to date if the plan changes, then a shared album link for the photos.
@@ -22,7 +26,19 @@ here's how it goes:
 
 i never book anything or touch real money. i find the links, you book. and i stay quiet unless you tag me or tell me something about the trip, because a scout that talks too much gets kicked out of the chat.
 
-**where i'm at:** joining, collecting preferences, and running the vote all work, in plain text (phase 1). the activity deck, the itinerary (a card paced to whether the group are early risers or night owls), booking links, the calendar link, and cost splitting are built too. the cards in steps 3 and 4 aren't: they're specified in [integration.md](integration.md) and not written yet, so today the vote is a numbered text poll. on-trip recommendations and a shared photo album are also still to come. the full plan lives in [scout-PRD.md](scout-PRD.md).
+**where i'm at:** the trip card, the brochures, the swipe deck, the itinerary, flights, the calendar link and cost splitting are all built. the cards are drawn right inside iMessage by [HermesShare](https://github.com/time-attack/HermesShare), an iMessage extension, so for now everyone needs our build of it on their phone; without it, every card falls back to plain text. on-trip recommendations and a shared photo album are still to come. the full plan lives in [scout-PRD.md](scout-PRD.md), and how the cards work lives in [integration.md](integration.md).
+
+## What it looks like
+
+<p align="center">
+  <img src="assets/trip-card.jpg" alt="The trip card: trip vibe, calendar and budget" width="30%">
+  &nbsp;
+  <img src="assets/brochure.jpg" alt="A destination brochure for Cancún" width="30%">
+  &nbsp;
+  <img src="assets/swipe-deck.jpg" alt="The activity deck: swipe nah, meh or yeah" width="30%">
+</p>
+
+<p align="center"><sub>the trip card everyone fills out · a destination brochure · the activity deck you swipe through</sub></p>
 
 ## How it fits together
 
