@@ -298,13 +298,13 @@ class TripStore:
         with self._transaction() as db:
             db.execute("INSERT OR IGNORE INTO people (phone) VALUES (?)", (phone,))
 
-    def has_name(self, phone: str) -> bool:
+    def find_name(self, phone: str) -> str | None:
+        """What the person told scout to call them, or None if they haven't."""
         with self._transaction() as db:
             row = db.execute(
-                "SELECT 1 FROM people WHERE phone = ? AND display_name IS NOT NULL",
-                (phone,),
+                "SELECT display_name FROM people WHERE phone = ?", (phone,)
             ).fetchone()
-        return row is not None
+        return row["display_name"] if row else None
 
     def save_name(self, phone: str, name: str) -> None:
         """Remembers the name and gives it to the person in groups that lack one."""

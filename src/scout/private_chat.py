@@ -17,6 +17,10 @@ ASK_NAME_REPLY = (
 )
 ASK_AGAIN_REPLY = "just your first name is fine, what should i call you?"
 NEXT_STEP = "add me to your group chat and i'll take it from there"
+GROUPS_ONLY_REPLY = (
+    "{name}, I only work within group chats. "
+    "Add me to one and I'll help you plan a trip!"
+)
 LONGEST_NAME_WORDS = 3
 
 # "i'm Maya", "my name is Maya", "call me Maya"
@@ -36,13 +40,15 @@ def is_private_chat(message: IncomingMessage) -> bool:
 def handle_private_message(
     message: IncomingMessage, store: TripStore
 ) -> list[Outgoing]:
-    """Asks a new person for their name, then saves what they answer."""
+    """Asks a new person for their name, saves what they answer, and after that
+    points them to a group chat."""
     phone = message.sender_phone
     if not store.has_asked_for_name(phone):
         store.note_name_asked(phone)
         return [Say(ASK_NAME_REPLY)]
-    if store.has_name(phone):
-        return []
+    known_name = store.find_name(phone)
+    if known_name is not None:
+        return [Say(GROUPS_ONLY_REPLY.format(name=known_name))]
 
     name = parse_name(message.text)
     if name is None:
