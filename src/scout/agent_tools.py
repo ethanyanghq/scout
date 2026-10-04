@@ -299,11 +299,11 @@ TOOL_DEFINITIONS = [
     {
         "name": "post_itinerary",
         "description": (
-            "Post a day-by-day plan for the chosen destination, one anchor "
-            "activity per day within the trip dates, plus optional add-ons for "
-            "what only one person wanted. The first plan also sends the group a "
-            "calendar link that stays up to date. Replaces any earlier plan, so "
-            "include every day and add-on when editing."
+            "Post a day-by-day plan for the chosen destination: a table of "
+            "the events on each day within the trip dates, plus optional "
+            "add-ons for what only one person wanted. The first plan also sends "
+            "the group a calendar link that stays up to date. Replaces any "
+            "earlier plan, so include every day and add-on when editing."
         ),
         # Not strict: with it, every strict tool together compiles to a grammar
         # too large for the API. post_itinerary checks every value it's given.
@@ -313,24 +313,29 @@ TOOL_DEFINITIONS = [
             "properties": {
                 "days": {
                     "type": "array",
+                    "description": "Every event of the trip, in order.",
                     "items": {
                         "type": "object",
                         "properties": {
                             "date": {
                                 "type": "string",
-                                "description": "The day, as YYYY-MM-DD.",
+                                "description": (
+                                    "The day, as YYYY-MM-DD. Give a day several "
+                                    "entries to list several events on it."
+                                ),
                             },
                             "plan": {
                                 "type": "string",
                                 "description": (
-                                    "The day's one big thing, under 10 words, "
-                                    "e.g. 'Night kayak on a bioluminescent bay'."
+                                    "One event, under 10 words, e.g. 'Night kayak on "
+                                    "a bioluminescent bay'."
                                 ),
                             },
                             "starts_at": _nullable(
                                 "string",
-                                "When the plan starts, as 24-hour HH:MM, paced "
-                                "to the group. Null on a loose or travel day.",
+                                "When the event starts, as 24-hour HH:MM, paced "
+                                "to the group. Null for something loose, like "
+                                "a free afternoon or a travel day.",
                             ),
                         },
                         "required": ["date", "plan", "starts_at"],

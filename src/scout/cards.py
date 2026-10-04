@@ -26,7 +26,7 @@ from scout.best_hotel import describe_rates, describe_rating
 from scout.expense_report import describe_items, describe_split, member_totals
 from scout.group_summary import format_window, summarize_group
 from scout.hotels import Hotel
-from scout.itinerary import format_day, format_start
+from scout.itinerary import events_by_day, format_date, format_start
 from scout.money import format_usd
 from scout.settle_up import plan_payments
 from scout.trip import (
@@ -453,8 +453,9 @@ def _swipe_card(position: int, activity: DeckActivity) -> dict:
 
 
 def itinerary(trip: Trip, destination_photo_url: str) -> dict:
-    """The trip's plan as a timeline, one stop per day with when it starts,
-    then the optional add-ons and who wanted each.
+    """The trip's plan as a table for each day, headed by the date and listing
+    that day's events with when each starts, then the optional add-ons and who
+    wanted each.
 
     Expects a trip whose destination, dates and itinerary are set.
     """
@@ -470,7 +471,7 @@ def itinerary(trip: Trip, destination_photo_url: str) -> dict:
         "background": {"kind": "atmosphere", "colorsHex": [NIGHT_GLOW_HEX]},
         "root": {
             "type": "vstack",
-            "spacing": 18,
+            "spacing": 14,
             "alignment": "leading",
             "children": [
                 {
@@ -479,13 +480,10 @@ def itinerary(trip: Trip, destination_photo_url: str) -> dict:
                     "heightPt": 200,
                     "cornerRadius": 18,
                 },
-                {
-                    "type": "card",
-                    "child": {
-                        "type": "timeline",
-                        "entries": [_timeline_entry(day) for day in trip.itinerary],
-                    },
-                },
+                *[
+                    _day_table(day, events)
+                    for day, events in events_by_day(trip.itinerary)
+                ],
                 *_add_ons(trip.itinerary_add_ons),
                 _text(
                     "Times are a suggestion. Nothing is booked.",
@@ -497,12 +495,25 @@ def itinerary(trip: Trip, destination_photo_url: str) -> dict:
     }
 
 
-def _timeline_entry(day: ItineraryDay) -> dict:
-    entry = {"time": format_day(day), "title": day.plan, "state": "future"}
-    start = format_start(day)
-    if start:
-        entry["subtitle"] = f"Starts {start}"
-    return entry
+def _day_table(day: date, events: list[ItineraryDay]) -> dict:
+    heading = _text(format_date(day), role="headline")
+    rows = [
+        {
+            "type": "keyValueRow",
+            "key": event.plan,
+            "value": format_start(event) or "Anytime",
+        }
+        for event in events
+    ]
+    return {
+        "type": "card",
+        "child": {
+            "type": "vstack",
+            "spacing": 6,
+            "alignment": "leading",
+            "children": [heading, {"type": "divider"}, *rows],
+        },
+    }
 
 
 def _add_ons(add_ons: list[ItineraryAddOn]) -> list[dict]:

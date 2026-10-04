@@ -80,12 +80,16 @@ CREATE TABLE IF NOT EXISTS votes (
     PRIMARY KEY (poll_id, phone)
 );
 
-CREATE TABLE IF NOT EXISTS itinerary_days (
-    space_id TEXT NOT NULL REFERENCES trips (space_id),
+-- Replaced by itinerary_events, which allows several events on one day.
+DROP TABLE IF EXISTS itinerary_days;
+
+CREATE TABLE IF NOT EXISTS itinerary_events (
+    space_id  TEXT NOT NULL REFERENCES trips (space_id),
+    position  INTEGER NOT NULL,
     day       TEXT NOT NULL,
     plan      TEXT NOT NULL,
     starts_at TEXT,
-    PRIMARY KEY (space_id, day)
+    PRIMARY KEY (space_id, position)
 );
 
 CREATE TABLE IF NOT EXISTS itinerary_add_ons (
@@ -190,7 +194,7 @@ CREATE TABLE IF NOT EXISTS media (
 TABLES_BY_SPACE = (
     "members",
     "polls",
-    "itinerary_days",
+    "itinerary_events",
     "itinerary_add_ons",
     "deck_activities",
     "activity_picks",
@@ -216,7 +220,6 @@ class LoggedMessage:
 # EXISTS leaves an existing table as it was, so these are added when one opens.
 ADDED_COLUMNS = [
     ("members", "chronotype", "TEXT"),
-    ("itinerary_days", "starts_at", "TEXT"),
     ("expenses", "shares", "TEXT"),
     ("expenses", "items", "TEXT"),
     ("expenses", "paid_on", "TEXT"),
@@ -408,19 +411,20 @@ class TripStore:
         self, space_id: str, days: list[ItineraryDay], add_ons: list[ItineraryAddOn]
     ) -> None:
         with self._transaction() as db:
-            db.execute("DELETE FROM itinerary_days WHERE space_id = ?", (space_id,))
+            db.execute("DELETE FROM itinerary_events WHERE space_id = ?", (space_id,))
             db.execute("DELETE FROM itinerary_add_ons WHERE space_id = ?", (space_id,))
             db.executemany(
-                "INSERT INTO itinerary_days (space_id, day, plan, starts_at) "
-                "VALUES (?, ?, ?, ?)",
+                "INSERT INTO itinerary_events "
+                "(space_id, position, day, plan, starts_at) VALUES (?, ?, ?, ?, ?)",
                 [
                     (
                         space_id,
+                        position,
                         day.day.isoformat(),
                         day.plan,
                         day.starts_at.isoformat() if day.starts_at else None,
                     )
-                    for day in days
+                    for position, day in enumerate(days)
                 ],
             )
             db.executemany(
@@ -693,8 +697,8 @@ def _load_open_poll(db: sqlite3.Connection, space_id: str) -> Poll | None:
 
 def _load_itinerary(db: sqlite3.Connection, space_id: str) -> list[ItineraryDay]:
     rows = db.execute(
-        "SELECT day, plan, starts_at FROM itinerary_days WHERE space_id = ? "
-        "ORDER BY day",
+        "SELECT day, plan, starts_at FROM itinerary_events WHERE space_id = ? "
+        "ORDER BY position",
         (space_id,),
     ).fetchall()
     return [

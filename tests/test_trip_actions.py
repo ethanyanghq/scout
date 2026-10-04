@@ -276,8 +276,10 @@ def test_itinerary_is_posted_in_date_order(locked_in_actions):
         add_ons=[],
     )
 
-    assert said(locked_in_actions.outbox) == [
-        "the plan:\nSun 3/14 · Land and check in\nMon 3/15 · Beach day in Condado"
+    assert said(locked_in_actions.outbox)[1:] == [
+        "the plan:\n\n"
+        "Sunday, March 14\nLand and check in\n\n"
+        "Monday, March 15\nBeach day in Condado"
     ]
 
 
@@ -299,13 +301,39 @@ def test_itinerary_shows_when_each_day_starts_and_who_wants_each_add_on(
         add_ons=[ItineraryAddOn("Scuba at Escambrón", wanted_by="leo")],
     )
 
-    assert said(locked_in_actions.outbox) == [
-        "the plan:\n"
-        "Sun 3/14 · Land and check in\n"
-        "Mon 3/15 · 9:30 PM · Night kayak on the bio bay\n"
+    assert said(locked_in_actions.outbox)[1:] == [
+        "the plan:\n\n"
+        "Sunday, March 14\nLand and check in\n\n"
+        "Monday, March 15\n9:30 PM · Night kayak on the bio bay\n\n"
         "optional add-ons:\n"
         "Scuba at Escambrón · Leo's pick"
     ]
+
+
+def test_a_day_can_list_several_events_in_the_order_they_happen(
+    locked_in_actions, store
+):
+    locked_in_actions.post_itinerary(
+        [
+            plan_day(14, "Dinner in Old San Juan", starts_at=time(19, 0)),
+            plan_day(14, "Beach morning", starts_at=time(10, 0)),
+            plan_day(15, "Bio bay kayak", starts_at=time(21, 0)),
+        ],
+        add_ons=[],
+    )
+
+    plan = [(event.day.day, event.plan) for event in store.get_trip(SPACE).itinerary]
+    assert plan == [
+        (14, "Beach morning"),
+        (14, "Dinner in Old San Juan"),
+        (15, "Bio bay kayak"),
+    ]
+    assert said(locked_in_actions.outbox)[1] == (
+        "the plan:\n\n"
+        "Sunday, March 14\n10:00 AM · Beach morning\n"
+        "7:00 PM · Dinner in Old San Juan\n\n"
+        "Monday, March 15\n9:00 PM · Bio bay kayak"
+    )
 
 
 def test_an_add_on_must_be_for_someone_in_the_chat(locked_in_actions):
@@ -589,25 +617,33 @@ def test_the_plan_is_a_timeline_card_with_the_text_for_phones_without_it(
         add_ons=[ItineraryAddOn("Scuba at Escambrón", wanted_by="Leo")],
     )
 
-    [card] = actions.outbox
+    _announcement, card = actions.outbox
     assert isinstance(card, Card)
     assert card.thumbnail_url == (
         "https://lh3.googleusercontent.com/San-Juan,-Puerto-Rico"
     )
     assert card.layout["subtitle"] == "Mar 14–19 · paced for night owls"
-    [timeline] = [
-        node["child"]
+    tables = [
+        node["child"]["children"]
         for node in card.layout["root"]["children"]
-        if node.get("child", {}).get("type") == "timeline"
+        if node.get("child", {}).get("children", [{}])[0].get("type") == "text"
+        and node["child"]["children"][1:2] == [{"type": "divider"}]
     ]
-    assert timeline["entries"] == [
-        {"time": "Sun 3/14", "title": "Land and check in", "state": "future"},
-        {
-            "time": "Mon 3/15",
-            "title": "Night kayak on the bio bay",
-            "state": "future",
-            "subtitle": "Starts 9:30 PM",
-        },
+    assert [(table[0]["text"], table[2:]) for table in tables] == [
+        (
+            "Sunday, March 14",
+            [{"type": "keyValueRow", "key": "Land and check in", "value": "Anytime"}],
+        ),
+        (
+            "Monday, March 15",
+            [
+                {
+                    "type": "keyValueRow",
+                    "key": "Night kayak on the bio bay",
+                    "value": "9:30 PM",
+                }
+            ],
+        ),
     ]
     assert "Scuba at Escambrón · Leo's pick" in card.fallback_text
 
@@ -623,17 +659,25 @@ def test_locking_in_the_destination_sends_no_calendar_link(store):
     assert not [item for item in actions.outbox if isinstance(item, Link)]
 
 
-def test_the_first_plan_sends_a_calendar_subscription_link(locked_in_actions, store):
+def test_the_first_plan_is_announced_then_posted_then_offered_as_a_calendar(
+    locked_in_actions, store
+):
     actions = TripActions(
-        store, SPACE, MAYA, OutsideServices(public_url="https://scout.example.com")
+        store,
+        SPACE,
+        MAYA,
+        OutsideServices(
+            places=FakeBrochurePhotos(), public_url="https://scout.example.com"
+        ),
     )
 
     actions.post_itinerary([plan_day(14, "Land and check in")], add_ons=[])
 
-    assert actions.outbox[-1] == Link(
-        f"webcal://scout.example.com/calendars/{SPACE}.ics"
-    )
-    assert "subscribe" in actions.outbox[-2].text
+    announcement, itinerary_card, calendar_offer, calendar_link = actions.outbox
+    assert announcement.text.endswith("is set")
+    assert isinstance(itinerary_card, Card)
+    assert calendar_offer.text == "to put this on your calendar, you can subscribe to:"
+    assert calendar_link == Link(f"webcal://scout.example.com/calendars/{SPACE}.ics")
 
 
 def test_a_revised_plan_does_not_send_the_calendar_link_again(locked_in_actions, store):
@@ -652,7 +696,9 @@ def test_the_plan_is_posted_as_text_when_place_search_is_down(locked_in_actions,
 
     status = actions.post_itinerary([plan_day(14, "Land and check in")], add_ons=[])
 
-    assert said(actions.outbox) == ["the plan:\nSun 3/14 · Land and check in"]
+    assert said(actions.outbox)[1:] == [
+        "the plan:\n\nSunday, March 14\nLand and check in"
+    ]
     assert "place search isn't working" in status
 
 

@@ -215,7 +215,7 @@ scout reads as nah. `imageUrl` is optional.
 
 ### Stage 5 — Itinerary
 
-Built from the aggregate, not from must-haves. One anchor activity per day,
+Built from the aggregate, not from must-haves. Several events a day,
 first and last days kept light for travel, paced by the group's chronotype.
 Activities the group scores highest (a yeah is 2, a meh 1) are scheduled;
 activities only one person said yeah to are offered as optional add-ons rather
@@ -225,8 +225,9 @@ Posted as a read-only **itinerary card**, with the text version in the thread
 underneath so it is still readable on a phone without HermesShare installed.
 
 Built: `post_itinerary` (`src/scout/trip_actions.py`), `itinerary.py` for the
-text version, and `cards.itinerary` for the layout, a `timeline` with each day's
-start time under a photo of the destination. The text version is the card's
+text version, and `cards.itinerary` for the layout, a table for each day (headed "Monday,
+October 5") listing that day's events and when each starts, under a photo of
+the destination. The text version is the card's
 `fallback_text`, as with the flight card, rather than a second message. The
 card needs `GOOGLE_PLACES_API_KEY` for its photo; without it the plan goes out
 as text. The agent builds the plan from the activity deck's picks, or from

@@ -11,8 +11,8 @@ from urllib.parse import quote
 from scout.group_summary import format_window
 from scout.trip import ItineraryDay, Trip
 
-# The plan gives each day's start but not its end, so a timed day blocks out
-# time for one anchor activity.
+# The plan gives each event's start but not its end, so a timed event blocks
+# out time for a typical activity.
 ANCHOR_ACTIVITY_DURATION = timedelta(hours=2)
 # How often calendar apps are asked to check for a revised plan.
 REFRESH_INTERVAL = "PT1H"
@@ -20,13 +20,15 @@ REFRESH_INTERVAL = "PT1H"
 MAX_LINE_BYTES = 75
 
 
-def format_calendar_message(trip: Trip) -> str:
-    """The line before the link, which goes in a message of its own so iMessage
-    shows it as a card."""
-    return (
-        f"the plan for {trip.destination}, {format_window(trip.dates)}, is set. "
-        "subscribe to put every day on your calendar:"
-    )
+def format_plan_set_message(trip: Trip) -> str:
+    """The line that comes before the itinerary."""
+    return f"the plan for {trip.destination}, {format_window(trip.dates)}, is set"
+
+
+def format_calendar_message() -> str:
+    """The line before the link, which goes in a message of its own so the link
+    stays tappable."""
+    return "to put this on your calendar, you can subscribe to:"
 
 
 def calendar_subscription_url(public_url: str, space_id: str) -> str:
@@ -39,7 +41,7 @@ def calendar_subscription_url(public_url: str, space_id: str) -> str:
 
 
 def build_calendar_feed(trip: Trip, generated_at: datetime) -> str:
-    """The trip's itinerary as an iCalendar file, one event per planned day."""
+    """The trip's itinerary as an iCalendar file, one event per planned event."""
     stamp = f"{generated_at:%Y%m%dT%H%M%SZ}"
     lines = [
         "BEGIN:VCALENDAR",
@@ -49,20 +51,21 @@ def build_calendar_feed(trip: Trip, generated_at: datetime) -> str:
         f"REFRESH-INTERVAL;VALUE=DURATION:{REFRESH_INTERVAL}",
         f"X-PUBLISHED-TTL:{REFRESH_INTERVAL}",
     ]
-    for number, day in enumerate(trip.itinerary, start=1):
-        lines.extend(_event(trip, day, number, stamp))
+    for position, event in enumerate(trip.itinerary):
+        lines.extend(_event(trip, event, position, stamp))
     lines.append("END:VCALENDAR")
     return "".join(f"{_fold(line)}\r\n" for line in lines)
 
 
-def _event(trip: Trip, day: ItineraryDay, day_number: int, stamp: str) -> list[str]:
+def _event(trip: Trip, day: ItineraryDay, position: int, stamp: str) -> list[str]:
+    day_number = (day.day - trip.dates.start).days + 1
     details = (
         f"Day {day_number} of the trip to {trip.destination}. "
         "Planned in your group chat with scout."
     )
     return [
         "BEGIN:VEVENT",
-        f"UID:{day.day:%Y%m%d}-{trip.space_id}@scout",
+        f"UID:{day.day:%Y%m%d}-{position}-{trip.space_id}@scout",
         f"DTSTAMP:{stamp}",
         *_event_times(day),
         f"SUMMARY:{_escape(day.plan)}",

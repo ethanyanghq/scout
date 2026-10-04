@@ -66,3 +66,15 @@ def test_subscription_url_uses_the_webcal_scheme_so_phones_offer_to_subscribe():
     url = calendar_subscription_url("https://scout.example.com/", "chat 1")
 
     assert url == "webcal://scout.example.com/calendars/chat%201.ics"
+
+
+def test_two_events_on_one_day_are_separate_calendar_events():
+    lines = feed_lines(
+        [
+            ItineraryDay(date(2027, 3, 15), "Beach morning", time(10, 0)),
+            ItineraryDay(date(2027, 3, 15), "Night kayak", time(21, 30)),
+        ],
+    )
+
+    unique_ids = {line for line in lines if line.startswith("UID:")}
+    assert len(unique_ids) == 2

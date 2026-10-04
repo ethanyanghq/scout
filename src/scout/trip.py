@@ -206,11 +206,14 @@ class Poll:
 
 @dataclass(frozen=True)
 class ItineraryDay:
+    """One event on a day of the trip. A day with several events has several
+    of these, in the order they happen."""
+
     day: date
-    # The one big thing planned for the day, e.g. "Night kayak on a bio bay".
+    # What happens, e.g. "Night kayak on a bio bay".
     plan: str
-    # When it starts, paced to the group. None on a loose day, like one spent
-    # traveling.
+    # When it starts, paced to the group. None for something loose, like a free
+    # afternoon or a travel day.
     starts_at: time | None = None
 
 

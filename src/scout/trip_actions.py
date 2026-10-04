@@ -9,7 +9,7 @@ agent to read.
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, replace
-from datetime import date
+from datetime import date, time
 
 from scout import polls
 from scout.activity_deck import (
@@ -36,7 +36,11 @@ from scout.brochures import (
     build_brochures,
     format_brochure,
 )
-from scout.calendar_feed import calendar_subscription_url, format_calendar_message
+from scout.calendar_feed import (
+    calendar_subscription_url,
+    format_calendar_message,
+    format_plan_set_message,
+)
 from scout.cards import (
     activity_deck,
     best_flights,
@@ -303,10 +307,7 @@ class TripActions:
         trip = self._load_locked_in_trip()
         if not days:
             raise TripActionError("an itinerary needs at least one day")
-        planned_days = [day.day for day in days]
-        if len(set(planned_days)) != len(planned_days):
-            raise TripActionError("each date can appear only once")
-        for day in planned_days:
+        for day in {event.day for event in days}:
             if not trip.dates.start <= day <= trip.dates.end:
                 raise TripActionError(
                     f"{day} is outside the trip dates, "
@@ -320,10 +321,15 @@ class TripActions:
             for add_on in add_ons
         ]
 
-        in_order = sorted(days, key=lambda day: day.day)
+        in_order = sorted(
+            days, key=lambda event: (event.day, event.starts_at or time.min)
+        )
         self._store.replace_itinerary(self._space_id, in_order, add_ons)
+        is_first_plan = not trip.itinerary
+        if is_first_plan:
+            self.outbox.append(Say(format_plan_set_message(trip)))
         status = self._send_itinerary(self._load_trip())
-        if trip.itinerary:
+        if not is_first_plan:
             # The link is already in the chat, and its feed shows the new plan.
             return f"{status} The calendar feed now shows the new plan."
         return f"{status} {self._send_calendar(self._load_trip())}"
@@ -791,7 +797,7 @@ class TripActions:
             return "No calendar link: SCOUT_PUBLIC_URL isn't set."
         self.outbox.extend(
             [
-                Say(format_calendar_message(trip)),
+                Say(format_calendar_message()),
                 Link(calendar_subscription_url(public_url, trip.space_id)),
             ]
         )
