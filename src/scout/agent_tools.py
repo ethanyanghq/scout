@@ -20,10 +20,10 @@ TOOL_DEFINITIONS = [
     {
         "name": "save_member_preferences",
         "description": (
-            "Save trip preferences one member shared about themselves in the "
-            "chat, tagged or not. Pass null for anything they didn't mention; "
-            "it keeps whatever was saved before. Only save what this member "
-            "said in their own messages, never what someone said for them."
+            "Save one member's trip preferences from anywhere in the chat, "
+            "tagged or not: what they shared, or what a friend said for them. "
+            "Pass null for anything nobody mentioned; it keeps whatever was "
+            "saved before."
         ),
         "strict": True,
         "input_schema": {
@@ -129,21 +129,29 @@ TOOL_DEFINITIONS = [
         },
     },
     {
-        "name": "record_sender_vote",
+        "name": "record_member_vote",
         "description": (
-            "Record the sender's vote in the open poll. Closes the poll and "
-            "announces the winner automatically once everyone has voted."
+            "Record one member's vote in the open poll: the sender's, or one a "
+            "friend reported for them. Closes the poll and announces the winner "
+            "automatically once everyone has voted."
         ),
         "strict": True,
         "input_schema": {
             "type": "object",
             "properties": {
+                "member": {
+                    "type": "string",
+                    "description": (
+                        "Whose vote this is, exactly as the chat labels them, "
+                        "like 'Maya' or '…0002'."
+                    ),
+                },
                 "option_number": {
                     "type": "integer",
                     "description": "The option's number as shown in the poll (1-3).",
                 },
             },
-            "required": ["option_number"],
+            "required": ["member", "option_number"],
             "additionalProperties": False,
         },
     },
@@ -525,8 +533,10 @@ def run_tool(actions: TripActions, name: str, tool_input: dict[str, Any]) -> str
         case "start_destination_poll":
             options = [DestinationOption(**option) for option in tool_input["options"]]
             return actions.start_destination_poll(options)
-        case "record_sender_vote":
-            return actions.record_sender_vote(tool_input["option_number"] - 1)
+        case "record_member_vote":
+            return actions.record_member_vote(
+                tool_input["member"], tool_input["option_number"] - 1
+            )
         case "close_poll":
             return actions.close_poll()
         case "post_itinerary":

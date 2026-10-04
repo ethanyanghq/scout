@@ -1,0 +1,9 @@
+# Journey: a member tells scout how a friend voted, and scout counts it
+# without making the friend vote from their own phone.
+# Needs Claude.
+members maya leo priya
+from poll-open
+
+maya: @scout leo and i are both in for tulum
+expect state open_poll.votes.+15550000001 = 0
+expect state open_poll.votes.+15550000002 = 0

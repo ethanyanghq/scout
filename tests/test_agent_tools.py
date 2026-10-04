@@ -35,7 +35,9 @@ def maya_actions(store):
 def test_agent_votes_use_the_numbers_shown_in_the_poll(maya_actions, store):
     maya_actions.start_destination_poll(OPTIONS)
 
-    run_tool(maya_actions, "record_sender_vote", {"option_number": 3})
+    run_tool(
+        maya_actions, "record_member_vote", {"member": "…0001", "option_number": 3}
+    )
 
     assert store.get_trip(SPACE).open_poll.votes == {MAYA: 2}
 

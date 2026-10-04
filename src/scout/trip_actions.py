@@ -35,6 +35,7 @@ from scout.settle_up import (
 from scout.trip import (
     DestinationOption,
     ItineraryDay,
+    Member,
     PendingReceipt,
     PreferenceUpdate,
     Settlement,
@@ -67,20 +68,14 @@ class TripActions:
     def save_member_preferences(
         self, member_label: str, update: PreferenceUpdate
     ) -> str:
-        """Saves what one member shared about themselves anywhere in the chat,
-        so scout can catch up on details people shared without tagging it."""
+        """Saves one member's details from anywhere in the chat: what they
+        shared, or what a friend shared for them."""
         from_date, to_date = update.available_from, update.available_to
         if from_date and to_date and from_date > to_date:
             raise TripActionError(f"available_from {from_date} is after {to_date}")
         if update.budget_usd is not None and update.budget_usd <= 0:
             raise TripActionError("budget_usd must be a positive whole number")
-        trip = self._load_trip()
-        member = trip.find_member_by_label(member_label)
-        if member is None:
-            labels = ", ".join(m.label for m in trip.members)
-            raise TripActionError(
-                f"no single member is called {member_label!r}; members are: {labels}"
-            )
+        member = self._find_member(member_label)
 
         self._store.save_preferences(self._space_id, member.phone, update)
         trip = self._load_trip()
@@ -116,8 +111,19 @@ class TripActions:
     def record_sender_vote(
         self, option_index: int, confirm: Callable[[str], Outgoing] = Say
     ) -> str:
-        """Counts the vote. Unless it closes the poll, `confirm` turns the
-        confirmation text into what scout sends: by default, that text."""
+        """Counts the sender's vote. Unless it closes the poll, `confirm` turns
+        the confirmation text into what scout sends: by default, that text."""
+        return self._record_vote(self._sender_phone, option_index, confirm)
+
+    def record_member_vote(self, member_label: str, option_index: int) -> str:
+        """Counts a vote for any member, including one a friend reported for
+        them ("ethan said he's in too")."""
+        member = self._find_member(member_label)
+        return self._record_vote(member.phone, option_index, Say)
+
+    def _record_vote(
+        self, voter_phone: str, option_index: int, confirm: Callable[[str], Outgoing]
+    ) -> str:
         trip = self._load_trip()
         poll = trip.open_poll
         if poll is None:
@@ -125,12 +131,12 @@ class TripActions:
         if not 0 <= option_index < len(poll.options):
             raise TripActionError(f"option {option_index + 1} doesn't exist")
 
-        self._store.record_vote(poll.id, self._sender_phone, option_index)
-        poll.votes[self._sender_phone] = option_index
+        self._store.record_vote(poll.id, voter_phone, option_index)
+        poll.votes[voter_phone] = option_index
         if len(poll.votes) == len(trip.members):
             return self._close(trip)
 
-        voter = trip.find_member(self._sender_phone)
+        voter = trip.find_member(voter_phone)
         self.outbox.append(
             confirm(
                 f"Got it, {voter.label} → {poll.options[option_index].name} "
@@ -379,6 +385,16 @@ class TripActions:
                 "when the poll closed"
             )
         return trip
+
+    def _find_member(self, member_label: str) -> Member:
+        trip = self._load_trip()
+        member = trip.find_member_by_label(member_label)
+        if member is None:
+            labels = ", ".join(m.label for m in trip.members)
+            raise TripActionError(
+                f"no single member is called {member_label!r}; members are: {labels}"
+            )
+        return member
 
     def _load_trip(self) -> Trip:
         trip = self._store.get_trip(self._space_id)

@@ -119,6 +119,17 @@ def test_rejects_preferences_for_someone_not_in_the_chat(maya_actions):
         maya_actions.save_member_preferences("Sam", PreferenceUpdate(budget_usd=500))
 
 
+def test_records_a_vote_a_friend_reported_for_another_member(maya_actions, store):
+    maya_actions.start_destination_poll(OPTIONS)
+
+    maya_actions.record_member_vote("…0002", 1)
+
+    assert store.get_trip(SPACE).open_poll.votes == {LEO: 1}
+    assert said(maya_actions.outbox)[-1] == (
+        "Got it, …0002 → San Juan, Puerto Rico (1 of 2 voted)"
+    )
+
+
 def test_starting_a_poll_posts_it_to_the_chat(maya_actions):
     maya_actions.start_destination_poll(OPTIONS)
 
