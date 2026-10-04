@@ -56,13 +56,19 @@ export function typingPauseFor(text: string): number {
 
 export const noTypingPause: TypingPause = () => 0;
 
+// scout shows the bubble while it works out a reply, but only once the wait
+// outlasts the quick "stay quiet" checks (about 2 seconds), so most messages
+// scout ignores never flash it.
+const SHOW_TYPING_AFTER_MS = 3000;
+
 export async function relaySpectrumMessages(
   app: SpectrumInstance,
   report: RelayReport,
   typingPause: TypingPause,
+  showTypingAfterMs = SHOW_TYPING_AFTER_MS,
 ): Promise<void> {
   const recent = new RecentMessages();
-  const typing = new TypingIndicator(typingPause);
+  const typing = new TypingIndicator(typingPause, showTypingAfterMs);
   // Messages are handled one at a time, on purpose: scout finishes replying to
   // one text before it reads the next, so its view of the trip is never stale.
   for await (const [space, message] of app.messages) {
@@ -82,29 +88,33 @@ export async function relaySpectrumMessages(
       if (readable.kind === "tapback") {
         const tappedText = await findText(space, readable.targetId, recent);
         report.arrived({ ...arrival, said: describeTapback(readable.tapback, tappedText) });
-        actions = await tellScoutAboutTapback({
-          space_id: space.id,
-          sender_phone: readable.senderPhone,
-          tapback: readable.tapback,
-          message_id: readable.targetId,
-          message_text: tappedText,
-          sent_at: message.timestamp.toISOString(),
-        });
+        actions = await typing.showWhileThinking(space, () =>
+          tellScoutAboutTapback({
+            space_id: space.id,
+            sender_phone: readable.senderPhone,
+            tapback: readable.tapback,
+            message_id: readable.targetId,
+            message_text: tappedText,
+            sent_at: message.timestamp.toISOString(),
+          }),
+        );
       } else {
         const repliedToText = readable.replyToId
           ? await findText(space, readable.replyToId, recent)
           : null;
         report.arrived({ ...arrival, said: describeMessage(readable, repliedToText) });
-        actions = await askScout({
-          space_id: space.id,
-          sender_phone: readable.senderPhone,
-          text: readable.text,
-          sent_at: message.timestamp.toISOString(),
-          participant_phones: await listParticipants(space, message),
-          attachment: readable.attachment ? await asIncoming(readable.attachment) : null,
-          message_id: message.id,
-          reply_to_text: repliedToText,
-        });
+        actions = await typing.showWhileThinking(space, async () =>
+          askScout({
+            space_id: space.id,
+            sender_phone: readable.senderPhone,
+            text: readable.text,
+            sent_at: message.timestamp.toISOString(),
+            participant_phones: await listParticipants(space, message),
+            attachment: readable.attachment ? await asIncoming(readable.attachment) : null,
+            message_id: message.id,
+            reply_to_text: repliedToText,
+          }),
+        );
       }
       for (const action of actions) {
         await perform(space, action, { recent, typing });
@@ -196,7 +206,28 @@ async function sendOrFallBack(
 class TypingIndicator {
   private idleSince = performance.now();
 
-  constructor(private readonly pause: TypingPause) {}
+  constructor(
+    private readonly pause: TypingPause,
+    private readonly showTypingAfterMs: number,
+  ) {}
+
+  // Shows the bubble if scout is still working after a moment, and clears it
+  // when the answer is in, so a reply that only sends a tapback leaves none.
+  // The console and tests skip it, like the pauses.
+  async showWhileThinking<T>(space: Space, think: () => Promise<T>): Promise<T> {
+    if (this.pause === noTypingPause) return think();
+    let isShowing = false;
+    const timer = setTimeout(() => {
+      isShowing = true;
+      space.startTyping().catch((error) => console.error("Couldn't show scout typing:", error));
+    }, this.showTypingAfterMs);
+    try {
+      return await think();
+    } finally {
+      clearTimeout(timer);
+      if (isShowing) await space.stopTyping();
+    }
+  }
 
   // Call when a member's message arrives: scout's thinking starts counting.
   startWaiting(): void {

@@ -179,6 +179,7 @@ describe("a Linq group chat through Spectrum", () => {
   async function deliver(
     event: LinqEvent,
     typingPause: TypingPause = noTypingPause,
+    showTypingAfterMs?: number,
   ): Promise<MessageOutcome> {
     const webhookPort = findFreePort();
     const platform = linqPlatform({
@@ -189,7 +190,7 @@ describe("a Linq group chat through Spectrum", () => {
     const app = await Spectrum({ providers: [platform.config({})] });
     const finished = new Promise<MessageOutcome>((resolve) => {
       // The relay stops itself when another bridge answered, which a test reads from the outcome.
-      relaySpectrumMessages(app, { arrived: () => {}, finished: resolve }, typingPause).catch(() => {});
+      relaySpectrumMessages(app, { arrived: () => {}, finished: resolve }, typingPause, showTypingAfterMs).catch(() => {});
     });
     await fetch(`http://127.0.0.1:${webhookPort}/linq-events`, {
       method: "POST",
@@ -248,6 +249,27 @@ describe("a Linq group chat through Spectrum", () => {
     await deliver(messageReceived({}), () => 100);
 
     expect(linqReceived.map(({ path }) => path)).toEqual(["/chats/group-chat-1/messages"]);
+  });
+
+  test("shows scout typing while it works out a slow answer, and clears it before a tapback", async () => {
+    scoutActions = [{ type: "react", message_id: "message-1", tapback: "like", fallback_text: "Got it" }];
+    scoutThinkingMs = 150;
+
+    await deliver(messageReceived({}), () => 1, 50);
+
+    expect(linqReceived.map(({ path, method }) => method ?? path)).toEqual([
+      "POST",
+      "DELETE",
+      "/messages/message-1/reactions",
+    ]);
+  });
+
+  test("shows no typing for an answer that comes quickly", async () => {
+    scoutActions = [{ type: "react", message_id: "message-1", tapback: "like", fallback_text: "Got it" }];
+
+    await deliver(messageReceived({}), () => 1, 1000);
+
+    expect(linqReceived.map(({ path }) => path)).toEqual(["/messages/message-1/reactions"]);
   });
 
   test("sends scout's link to Linq as a link part, so iMessage shows a card", async () => {
