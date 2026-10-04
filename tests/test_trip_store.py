@@ -102,3 +102,22 @@ def test_a_database_from_before_chronotypes_and_start_times_still_opens(tmp_path
     trip = store.get_trip("chat-1")
     assert trip.members[0].chronotype is None
     assert trip.itinerary[0].starts_at == time(9, 0)
+
+
+def test_scout_never_counts_a_missing_name_as_something_to_ask_for(store):
+    store.create_trip(SPACE)
+    store.add_members(SPACE, [MAYA])
+    store.save_preferences(
+        SPACE,
+        MAYA,
+        PreferenceUpdate(
+            available_from=date(2027, 3, 13),
+            available_to=date(2027, 3, 20),
+            budget_usd=1200,
+            home_city="Boston",
+        ),
+    )
+
+    [maya] = store.get_trip(SPACE).members
+    assert maya.display_name is None
+    assert maya.missing_preferences == []

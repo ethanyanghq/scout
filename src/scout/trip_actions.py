@@ -79,12 +79,14 @@ logger = logging.getLogger(__name__)
 
 DESTINATION_OPTION_COUNT = 3
 NEARBY_SUGGESTION_COUNT = 3
+# Sent after the third brochure, so the group knows how to pick one.
+FINAL_DECISION_PROMPT = "once you're ready, let me know your final decision with @scout"
 # The trip interview card has no destination yet, so its bubble shows a beach.
 INTERVIEW_THUMBNAIL_PLACE = "Grace Bay Beach, Turks and Caicos"
 INTERVIEW_FALLBACK_TEXT = (
-    "tell me about your trip: when you're free, your budget per person, where "
-    "you're flying from, and your vibe (early riser, beach and chill, food and "
-    "culture, or late nights)."
+    "tell me about your trip: the kind of trip (resort, lakeside, city break or "
+    "something else), when you're free, your budget per person, where you're "
+    "flying from, and what you're into."
 )
 
 
@@ -591,6 +593,7 @@ class TripActions:
             )
             for brochure in brochures
         )
+        self.outbox.append(Say(FINAL_DECISION_PROMPT))
         return "Brochures posted."
 
     def _close(self, trip: Trip) -> str:

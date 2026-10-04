@@ -23,11 +23,37 @@ def test_the_budget_is_a_slider_from_0_to_3000_labeled_every_500():
     assert (slider["tickStep"], slider["value"]) == (500, 1000)
 
 
-def test_the_interview_asks_for_the_kind_of_trip():
+def test_the_interview_starts_with_four_kinds_of_trip_and_other_takes_text():
     card = trip_interview(date(2026, 10, 3))
 
-    vibes = [option["label"] for option in _input(card, "vibe")["options"]]
-    assert {"Early riser", "Late nights"} <= set(vibes)
+    first_question = card["root"]["children"][2]
+    assert first_question["fieldId"] == "kind"
+    assert first_question["pickerStyle"] == "grid"
+    *kinds, other = first_question["options"]
+    assert [kind["label"] for kind in kinds] == [
+        "All-inclusive resort",
+        "Lakeside",
+        "City break",
+    ]
+    assert other["label"] == "Other"
+    assert other["textEntryPlaceholder"]
+
+
+def test_the_interview_asks_where_each_person_flies_from():
+    card = trip_interview(date(2026, 10, 3))
+
+    home = _input(card, "home")
+    assert home["type"] == "textInput"
+    assert home["summaryPrefix"] == "from "
+
+
+def test_people_can_tick_several_things_they_are_into():
+    card = trip_interview(date(2026, 10, 3))
+
+    styles = _input(card, "style")
+    assert styles["type"] == "multiPicker"
+    labels = {option["label"] for option in styles["options"]}
+    assert {"Clubs and nightlife", "Early riser", "Food and culture"} <= labels
 
 
 def test_sending_answers_fills_in_a_text_that_tags_scout():

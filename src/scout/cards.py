@@ -44,12 +44,31 @@ BUDGET_SLIDER_MAX_USD = 3_000
 BUDGET_SLIDER_STEP_USD = 100
 BUDGET_SLIDER_LABEL_EVERY_USD = 500
 BUDGET_SLIDER_START_USD = 1_000
-# (id, label, sublabel, SF Symbol)
-TRIP_VIBES = [
+# The kind of trip, a 2x2 grid; "Other" opens a text field. (id, label,
+# sublabel, SF Symbol)
+TRIP_KINDS = [
+    ("resort", "All-inclusive resort", "Pools, beach, all included", "sparkles"),
+    ("lakeside", "Lakeside", "Cabins, kayaks, campfires", "water.waves"),
+    ("city", "City break", "Food, nightlife, sights", "building.2.fill"),
+]
+OTHER_TRIP_KIND = ("other", "Other", "Tell me", "pencil")
+OTHER_TRIP_KIND_PLACEHOLDER = "Describe your trip"
+# What each person is into; they can tick any number. (id, label, sublabel,
+# SF Symbol)
+TRIP_STYLES = [
+    (
+        "nightlife",
+        "Clubs and nightlife",
+        "Late nights, bars, parties",
+        "moon.stars.fill",
+    ),
     ("early-riser", "Early riser", "Sunrise hikes, morning dives", "sunrise.fill"),
-    ("beach", "Beach and chill", "Pool, sand, a good book", "beach.umbrella.fill"),
+    ("outdoors", "Hiking and outdoors", "Trails, views, waterfalls", "figure.hiking"),
     ("food", "Food and culture", "Markets, tours, long dinners", "fork.knife"),
-    ("late-nights", "Late nights", "Bars, clubs, parties", "moon.stars.fill"),
+    ("beach", "Beach and chill", "Pool, sand, a good book", "beach.umbrella.fill"),
+    ("adventure", "Adventure sports", "Diving, surfing, ziplines", "figure.surfing"),
+    ("wellness", "Wellness and spa", "Massages, yoga, slow mornings", "leaf.fill"),
+    ("shopping", "Shopping and markets", "Boutiques, crafts, souvenirs", "bag.fill"),
 ]
 # A departure-board blue, matching HermesShare's own flight cards.
 FLIGHT_ACCENT_HEX = "#0A84FF"
@@ -205,8 +224,8 @@ def _text(words: str, role: str, color_hex: str | None = None) -> dict:
 
 
 def trip_interview(today: date) -> dict:
-    """A quick interview each member taps through: their dates on a calendar,
-    a budget slider, and the kind of trip they want. Send puts their answers in
+    """A quick interview each member taps through: the kind of trip, their
+    dates, budget, home city and what they're into. Send puts their answers in
     the chat as text."""
     lead = urllib.parse.quote(INTERVIEW_ANSWER_LEAD)
     return {
@@ -227,6 +246,8 @@ def trip_interview(today: date) -> dict:
                     role="body",
                     color_hex=SOFT_GRAY_HEX,
                 ),
+                _section_heading("Trip vibe"),
+                _picker("kind", "grid", _trip_kind_options()),
                 _section_heading("When"),
                 {
                     "type": "dateRangePicker",
@@ -244,8 +265,19 @@ def trip_interview(today: date) -> dict:
                     "tickStep": BUDGET_SLIDER_LABEL_EVERY_USD,
                     "valuePrefix": "$",
                 },
-                _section_heading("Your vibe"),
-                _picker("vibe", "list", [_option(*o) for o in TRIP_VIBES]),
+                _section_heading("Flying from"),
+                {
+                    "type": "textInput",
+                    "fieldId": "home",
+                    "placeholder": "City or airport, e.g. Boston",
+                    "summaryPrefix": "from ",
+                },
+                _section_heading("What are you into?"),
+                {
+                    "type": "multiPicker",
+                    "fieldId": "style",
+                    "options": [_option(*style) for style in TRIP_STYLES],
+                },
             ],
         },
         "actions": [
@@ -258,6 +290,12 @@ def trip_interview(today: date) -> dict:
             }
         ],
     }
+
+
+def _trip_kind_options() -> list[dict]:
+    other = _option(*OTHER_TRIP_KIND)
+    other["textEntryPlaceholder"] = OTHER_TRIP_KIND_PLACEHOLDER
+    return [*(_option(*kind) for kind in TRIP_KINDS), other]
 
 
 def _picker(field_id: str, style: str, options: list[dict]) -> dict:

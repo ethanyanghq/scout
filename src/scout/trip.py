@@ -178,9 +178,8 @@ class Member:
 
     @property
     def missing_preferences(self) -> list[str]:
+        # Not a name: scout calls people by what the chat shows, and never asks.
         missing = []
-        if self.display_name is None:
-            missing.append("name")
         if self.available_from is None or self.available_to is None:
             missing.append("dates")
         if self.budget_usd is None:

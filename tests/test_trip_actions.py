@@ -467,7 +467,7 @@ def test_each_destination_gets_its_own_card_named_for_the_place(
 ):
     maya_actions_with_photos.send_destination_brochures(TROPICAL_PITCHES, nights=5)
 
-    cards = maya_actions_with_photos.outbox
+    *cards, _closing_line = maya_actions_with_photos.outbox
     assert all(isinstance(card, Card) for card in cards)
     assert [card.caption for card in cards] == ["Tulum", "Punta Cana", "San Juan"]
     assert cards[0].thumbnail_url == "https://lh3.googleusercontent.com/Tulum,-Mexico"
@@ -736,3 +736,13 @@ def test_another_chats_photos_stay_out_of_view(store, tmp_path, maya_actions):
 
     with pytest.raises(TripActionError, match="no photo a1b2c3d4"):
         maya_actions.view_photo("a1b2c3d4")
+
+
+def test_after_the_brochures_scout_asks_for_the_groups_final_decision(
+    maya_actions_with_photos,
+):
+    maya_actions_with_photos.send_destination_brochures(TROPICAL_PITCHES, nights=5)
+
+    assert maya_actions_with_photos.outbox[-1] == Say(
+        "once you're ready, let me know your final decision with @scout"
+    )
