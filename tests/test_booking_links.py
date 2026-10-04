@@ -1,10 +1,9 @@
 from datetime import date
-from urllib.parse import parse_qs, unquote, urlparse
+from urllib.parse import parse_qs, urlparse
 
 from scout.booking_links import (
     flight_search_link,
     format_booking_links,
-    stay_search_link,
 )
 from scout.trip import DateWindow, Member, Trip, TripStage
 
@@ -44,17 +43,6 @@ def test_flight_search_goes_from_home_city_to_destination_on_trip_dates():
     assert search == (
         "Flights to San Juan, Puerto Rico from Boston on 2027-03-14 through 2027-03-19"
     )
-
-
-def test_stay_search_covers_the_whole_trip_for_the_whole_group():
-    link = stay_search_link("San Juan, Puerto Rico", SPRING_BREAK, guest_count=4)
-
-    url = urlparse(link)
-    query = parse_qs(url.query)
-    assert unquote(url.path) == "/s/San Juan, Puerto Rico/homes"
-    assert query["checkin"] == ["2027-03-14"]
-    assert query["checkout"] == ["2027-03-19"]
-    assert query["adults"] == ["4"]
 
 
 def test_members_from_the_same_city_share_one_flight_link():

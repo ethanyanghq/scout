@@ -86,7 +86,7 @@ Nothing here can start until the first two items are done: the pipe is unproven 
 - [ ] The console previews a card: the layout tree as text, and warnings for a payload over 16,384 chars, a missing or non-HTTPS thumbnail, and a `fieldId` with no submit action to carry it.
 - [ ] The brochure card, with the existing poll engine counting the submits.
 - [ ] The activity deck, and the aggregate it produces.
-- [x] The flight booking card: the best round trip from each home city, live from Google Flights through SerpApi, on a `flightBoard` (`send_best_flights`), with the script `posts-best-flights.chat`. Tested only against stand-ins for SerpApi and Linq so far.
+- [x] The flight booking card: the best round trip from each home city, live from Google Flights through SerpApi, on a `flightBoard` (`send_best_flights`). Tested only against stand-ins for SerpApi and Linq so far.
 - [ ] The itinerary and hotel booking cards, the calendar at the end, and the album link.
 
 ## Still open

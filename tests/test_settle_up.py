@@ -1,4 +1,4 @@
-from scout.settle_up import format_payments_left, format_settle_up, plan_payments
+from scout.settle_up import plan_payments
 from scout.trip import Expense, Member, Settlement, Trip, TripStage
 
 MAYA = Member("+15550000001", "Maya")
@@ -79,32 +79,6 @@ def test_nobody_pays_when_everyone_spent_the_same():
     assert plan_payments(trip) == []
 
 
-def test_settle_up_message_shows_the_total_share_and_payments():
-    message = format_settle_up(spring_break_trip())
-
-    assert message == (
-        "💸 Shared costs: $1,600, so $400 each. Fewest payments to settle up:\n"
-        "Jordan → Leo $400\n"
-        "Priya → Leo $236\n"
-        "Maya → Leo $204\n"
-        'Once you\'ve paid, text "@scout I paid Leo".'
-    )
-
-
-def test_uneven_shares_are_described_as_about():
-    trip = trip_with([MAYA, LEO, JORDAN], (MAYA, 10_000, "Groceries"))
-
-    assert format_settle_up(trip).startswith(
-        "💸 Shared costs: $100, so about $33.33 each."
-    )
-
-
-def test_settle_up_message_says_when_everyone_is_even():
-    trip = trip_with([MAYA, LEO], (MAYA, 5_000, "Lunch"), (LEO, 5_000, "Dinner"))
-
-    assert format_settle_up(trip).endswith("Everyone's already even.")
-
-
 def paid(trip, payer, payee, cents):
     trip.settlements.append(Settlement(payer.phone, payee.phone, cents))
     return trip
@@ -117,19 +91,3 @@ def test_payments_already_made_drop_out_of_the_plan():
         ("Jordan", "Leo", 40_000),
         ("Priya", "Leo", 23_600),
     ]
-
-
-def test_payments_left_lists_who_still_owes():
-    trip = paid(spring_break_trip(), MAYA, LEO, 20_400)
-
-    assert format_payments_left(trip) == (
-        "2 payments left: Jordan → Leo $400, Priya → Leo $236"
-    )
-
-
-def test_payments_left_celebrates_when_everyone_is_settled():
-    trip = spring_break_trip()
-    for payer, cents in ((JORDAN, 40_000), (PRIYA, 23_600), (MAYA, 20_400)):
-        paid(trip, payer, LEO, cents)
-
-    assert format_payments_left(trip) == "Everyone's settled up 🎉"

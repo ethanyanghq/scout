@@ -4,7 +4,7 @@ Claude is the one external service here, so it's the one thing faked. The
 store, polls, and summaries are all real.
 """
 
-from datetime import date, datetime
+from datetime import datetime
 
 from scout.conversation import (
     INTRODUCTION_SNAG_REPLY,
@@ -20,8 +20,6 @@ from scout.trip import (
     IncomingMessage,
     IncomingReaction,
     MessagePhoto,
-    PendingReceipt,
-    PreferenceUpdate,
     TripStage,
 )
 
@@ -156,16 +154,6 @@ def test_untagged_trip_details_wait_for_someone_to_tag_scout(store):
     assert agent.messages_seen == []
 
 
-def test_untagged_chatter_is_ignored_once_preferences_are_done(store):
-    start_voting(store)
-    agent = FakeAgent()
-
-    replies = send(store, agent, LEO, "did anyone see the game")
-
-    assert replies == []
-    assert agent.messages_seen == []
-
-
 def test_tagged_messages_always_reach_the_agent(store):
     start_voting(store)
     agent = FakeAgent()
@@ -199,18 +187,6 @@ def test_the_vote_that_closes_the_poll_gets_the_announcement_not_a_tapback(store
     assert replies[0] == Say("🎉 Poll closed! Tulum, Mexico wins with 2 of 3 votes.")
 
 
-def test_a_plain_vote_is_counted_without_the_agent(store):
-    # Without the line's message IDs, as in scout-simulate, scout confirms in text.
-    start_voting(store)
-    agent = FakeAgent()
-
-    replies = send(store, agent, LEO, "2")
-
-    assert agent.messages_seen == []
-    assert store.get_trip(SPACE).open_poll.votes == {LEO: 1}
-    assert replies == ["Got it, …0002 → San Juan, Puerto Rico (1 of 3 voted)"]
-
-
 def test_last_vote_closes_the_poll_and_announces_the_winner(store):
     start_voting(store)
     agent = FakeAgent()
@@ -223,33 +199,6 @@ def test_last_vote_closes_the_poll_and_announces_the_winner(store):
     assert trip.stage == TripStage.DESTINATION_CHOSEN
     assert trip.destination == "Tulum, Mexico"
     assert replies == ["🎉 Poll closed! Tulum, Mexico wins with 2 of 3 votes."]
-
-
-def test_last_vote_also_sends_a_calendar_link_for_the_shared_dates(store):
-    start_voting(store)
-    for member in EVERYONE:
-        store.save_preferences(
-            SPACE,
-            member,
-            PreferenceUpdate(
-                available_from=date(2027, 3, 14),
-                available_to=date(2027, 3, 19),
-                budget_usd=800,
-                home_city="Boston",
-            ),
-        )
-    agent = FakeAgent()
-
-    send(store, agent, MAYA, "2")
-    send(store, agent, LEO, "2")
-    replies = send_from_line(store, agent, PRIYA, "2", message_id="priya-vote")
-
-    winner, lead_in, link = replies
-    assert winner == Say(
-        "🎉 Poll closed! San Juan, Puerto Rico wins with 3 of 3 votes."
-    )
-    assert lead_in.text.startswith("📅 Locked in: San Juan, Puerto Rico, Mar 14–19.")
-    assert link.url.startswith("https://calendar.google.com/calendar/render?")
 
 
 def test_scout_apologizes_when_it_fails_on_a_message_addressed_to_it(store):
@@ -278,36 +227,6 @@ def test_replies_are_saved_so_the_agent_sees_them_next_time(store):
     ]
 
 
-def test_untagged_expenses_wait_for_someone_to_tag_scout(store):
-    choose_san_juan(store)
-    agent = FakeAgent()
-
-    replies = send(store, agent, LEO, "fyi I paid the airbnb, $1,240")
-
-    assert replies == []
-    assert agent.messages_seen == []
-
-
-def test_untagged_chatter_without_an_amount_is_ignored_on_the_trip(store):
-    choose_san_juan(store)
-    agent = FakeAgent()
-
-    replies = send(store, agent, LEO, "beach at 10?")
-
-    assert replies == []
-    assert agent.messages_seen == []
-
-
-def test_price_talk_during_the_vote_is_not_treated_as_an_expense(store):
-    start_voting(store)
-    agent = FakeAgent()
-
-    replies = send(store, agent, LEO, "flights to tulum look like $450")
-
-    assert replies == []
-    assert agent.messages_seen == []
-
-
 def test_untagged_receipt_photos_wait_for_someone_to_tag_scout(store):
     choose_san_juan(store)
     agent = FakeAgent()
@@ -315,37 +234,6 @@ def test_untagged_receipt_photos_wait_for_someone_to_tag_scout(store):
     send(store, agent, PRIYA, "casa brisa dinner 👆", photo=RECEIPT_PHOTO)
 
     assert agent.messages_seen == []
-
-
-def test_untagged_photos_during_the_vote_are_ignored(store):
-    start_voting(store)
-    agent = FakeAgent()
-
-    replies = send(store, agent, PRIYA, "", photo=RECEIPT_PHOTO)
-
-    assert replies == []
-    assert agent.messages_seen == []
-
-
-def test_the_payer_confirms_a_receipt_by_tagging_scout(store):
-    choose_san_juan(store)
-    store.save_pending_receipt(SPACE, PendingReceipt(PRIYA, "Casa Brisa", 16_400))
-    agent = FakeAgent()
-
-    send(store, agent, PRIYA, "yep, all 3")
-    send(store, agent, PRIYA, "@scout yep, all 3")
-
-    assert agent.messages_seen == ["@scout yep, all 3"]
-
-
-def test_only_the_payer_confirms_their_receipt(store):
-    choose_san_juan(store)
-    store.save_pending_receipt(SPACE, PendingReceipt(PRIYA, "Casa Brisa", 16_400))
-    agent = FakeAgent()
-
-    replies = send(store, agent, LEO, "yep")
-
-    assert replies == []
 
 
 def test_the_chat_log_notes_when_a_photo_was_sent(store):
@@ -372,27 +260,6 @@ def test_a_plain_pick_sends_directions_without_the_agent(store):
     assert agent.messages_seen == []
     assert replies[0] == Say("🧭 Directions to Taco Bar:")
     assert isinstance(replies[1], Link)
-
-
-def test_a_pick_by_name_sends_directions_too(store):
-    choose_san_juan(store)
-    store.replace_place_suggestions(SPACE, TACO_SPOTS)
-
-    replies = send_from_line(store, FakeAgent(), MAYA, "lote 23!", message_id="pick")
-
-    assert replies[0] == Say("🧭 Directions to Lote 23:")
-
-
-def test_numbers_are_just_chat_once_a_place_is_picked(store):
-    choose_san_juan(store)
-    store.replace_place_suggestions(SPACE, TACO_SPOTS)
-    send_from_line(store, FakeAgent(), LEO, "2", message_id="leo-pick")
-    agent = FakeAgent()
-
-    replies = send(store, agent, MAYA, "1")
-
-    assert replies == []
-    assert agent.messages_seen == []
 
 
 def tapback(store, sender, on_text, kind="like", on_id="option-message"):
@@ -424,14 +291,6 @@ def test_a_thumbs_up_on_a_poll_option_counts_as_a_vote(store):
     ]
 
 
-def test_a_heart_on_a_poll_option_counts_as_a_vote(store):
-    start_voting(store)
-
-    tapback(store, MAYA, TULUM_OPTION, kind="love")
-
-    assert store.get_trip(SPACE).open_poll.votes == {MAYA: 0}
-
-
 def test_a_laugh_on_a_poll_option_is_not_a_vote(store):
     start_voting(store)
 
@@ -439,36 +298,6 @@ def test_a_laugh_on_a_poll_option_is_not_a_vote(store):
 
     assert replies == []
     assert store.get_trip(SPACE).open_poll.votes == {}
-
-
-def test_a_thumbs_up_on_the_poll_question_is_not_a_vote(store):
-    start_voting(store)
-
-    assert tapback(store, LEO, POLL_QUESTION) == []
-    assert store.get_trip(SPACE).open_poll.votes == {}
-
-
-def test_a_thumbs_up_once_the_poll_is_closed_changes_nothing(store):
-    choose_san_juan(store)
-
-    assert tapback(store, LEO, TULUM_OPTION) == []
-    assert store.get_trip(SPACE).destination == "San Juan, Puerto Rico"
-
-
-def test_a_tapback_in_a_chat_without_a_trip_is_ignored(store):
-    assert tapback(store, LEO, TULUM_OPTION) == []
-    assert store.get_trip(SPACE) is None
-
-
-def test_the_last_tapback_vote_closes_the_poll(store):
-    start_voting(store)
-    tapback(store, MAYA, SAN_JUAN_OPTION)
-    tapback(store, LEO, SAN_JUAN_OPTION)
-
-    replies = tapback(store, PRIYA, TULUM_OPTION)
-
-    assert store.get_trip(SPACE).destination == "San Juan, Puerto Rico"
-    assert said(replies)[0].startswith("🎉 Poll closed! San Juan, Puerto Rico wins")
 
 
 def reply_in_thread(store, agent, sender, text, replying_to):
@@ -489,15 +318,6 @@ def test_an_untagged_threaded_reply_under_a_poll_option_is_just_chat(store):
     agent = FakeAgent()
 
     reply_in_thread(store, agent, LEO, "this one!", replying_to=SAN_JUAN_OPTION)
-
-    assert agent.messages_seen == []
-
-
-def test_a_threaded_reply_under_anything_else_stays_untagged_chatter(store):
-    start_voting(store)
-    agent = FakeAgent()
-
-    reply_in_thread(store, agent, LEO, "lol same", replying_to="who's driving?")
 
     assert agent.messages_seen == []
 

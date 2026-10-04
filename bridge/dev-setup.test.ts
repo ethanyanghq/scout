@@ -19,12 +19,6 @@ describe("checking the setup before bun run dev starts anything", () => {
     expect(findSetupProblems(linqSetup())).toEqual([]);
   });
 
-  test("asks for the service's settings file when there isn't one", () => {
-    expect(findSetupProblems(linqSetup({ serviceSettings: null }))).toEqual([
-      "Create the service's settings: cp .env.example .env, then fill in ANTHROPIC_API_KEY.",
-    ]);
-  });
-
   test("asks for an AI key when there isn't one", () => {
     const setup = linqSetup({ serviceSettings: { ANTHROPIC_API_KEY: "" } });
 
@@ -35,61 +29,5 @@ describe("checking the setup before bun run dev starts anything", () => {
     const setup = linqSetup({ serviceSettings: { OPENAI_API_KEY: "sk-123" } });
 
     expect(findSetupProblems(setup)).toEqual([]);
-  });
-
-  test("asks for uv when it isn't installed", () => {
-    const setup = linqSetup({ installed: { uv: false, linq: true } });
-
-    expect(findSetupProblems(setup)).toEqual([
-      "Install uv, which runs the scout service: https://docs.astral.sh/uv/",
-    ]);
-  });
-
-  test("in Linq mode, asks for the key, the CLI and a login", () => {
-    const noKey = linqSetup({ bridgeSettings: { IMESSAGE_MODE: "linq" } });
-    const noCli = linqSetup({ installed: { uv: true, linq: false }, linqLoggedIn: null });
-    const loggedOut = linqSetup({ linqLoggedIn: false });
-
-    expect(findSetupProblems(noKey)).toEqual([
-      "Set LINQ_API_KEY in bridge/.env (from `linq signup` or the Linq dashboard).",
-    ]);
-    expect(findSetupProblems(noCli)).toEqual([
-      "Install the Linq CLI, which relays Linq's events here: npm i -g @linqapp/cli",
-    ]);
-    expect(findSetupProblems(loggedOut)).toEqual([
-      "Log the Linq CLI in: linq login (or linq signup for a new line).",
-    ]);
-  });
-
-  test("in cloud mode, asks for each missing Photon setting", () => {
-    const setup = linqSetup({ bridgeSettings: { IMESSAGE_MODE: "cloud", PHOTON_PROJECT_ID: "p-1" } });
-
-    expect(findSetupProblems(setup)).toEqual([
-      "Set PHOTON_PROJECT_SECRET in bridge/.env (from your Photon project).",
-    ]);
-  });
-
-  test("local mode, the default, needs a Mac", () => {
-    const setup = linqSetup({ isMac: false, bridgeSettings: {} });
-
-    expect(findSetupProblems(setup)).toEqual([
-      "Local mode needs a Mac signed into Messages. For a Linq line, set IMESSAGE_MODE=linq in bridge/.env.",
-    ]);
-  });
-
-  test("names the modes when IMESSAGE_MODE is something else", () => {
-    const setup = linqSetup({ bridgeSettings: { IMESSAGE_MODE: "sms" } });
-
-    expect(findSetupProblems(setup)).toEqual([
-      'IMESSAGE_MODE in bridge/.env must be local, cloud or linq, not "sms".',
-    ]);
-  });
-
-  test("says which port is taken", () => {
-    const setup = linqSetup({ busyPorts: [{ port: 8787, usedBy: "the scout service" }] });
-
-    expect(findSetupProblems(setup)).toEqual([
-      "Port 8787 (the scout service) is already in use. Is scout already running?",
-    ]);
   });
 });

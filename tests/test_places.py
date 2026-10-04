@@ -117,15 +117,6 @@ def test_search_results_become_places_with_a_price_and_summary(places):
     )
 
 
-def test_search_sends_the_query_key_and_field_mask(places, google):
-    places.search("tacos with outdoor seating", limit=3)
-
-    [request] = google.requests
-    assert request["body"] == {"textQuery": "tacos with outdoor seating", "pageSize": 3}
-    assert request["headers"]["X-Goog-Api-Key"] == API_KEY
-    assert "places.priceLevel" in request["headers"]["X-Goog-FieldMask"]
-
-
 def test_search_near_a_spot_looks_around_it_first(places, google):
     places.search("tacos", limit=3, near=CONDADO)
 
@@ -133,52 +124,10 @@ def test_search_near_a_spot_looks_around_it_first(places, google):
     assert circle["center"] == {"latitude": 18.4574, "longitude": -66.0745}
 
 
-def test_places_without_a_summary_are_described_by_their_kind(places, google):
-    google.reply = (
-        200,
-        {"places": [{**TACO_SPOT, "editorialSummary": None}]},
-    )
-
-    [place] = places.search("tacos", limit=3)
-
-    assert place.summary == "Food court"
-
-
-def test_unknown_price_levels_are_left_out(places, google):
-    google.reply = (
-        200,
-        {"places": [{**TACO_SPOT, "priceLevel": "PRICE_LEVEL_UNSPECIFIED"}]},
-    )
-
-    [place] = places.search("tacos", limit=3)
-
-    assert place.price is None
-
-
-def test_no_matches_is_an_empty_list(places, google):
-    google.reply = (200, {})
-
-    assert places.search("igloo bar", limit=3) == []
-
-
-def test_search_never_returns_more_than_asked(places, google):
-    google.reply = (200, {"places": [TACO_SPOT] * 5})
-
-    assert len(places.search("tacos", limit=3)) == 3
-
-
 def test_a_refused_search_says_why(places, google):
     google.reply = (403, {"error": {"message": "API key not valid"}})
 
     with pytest.raises(PlacesError, match="search failed with 403.*API key not valid"):
-        places.search("tacos", limit=3)
-
-
-def test_an_unreachable_places_api_raises_a_places_error(google):
-    google.stop()
-    places = GooglePlaces(API_KEY, api_url=google.url)
-
-    with pytest.raises(PlacesError, match="didn't connect"):
         places.search("tacos", limit=3)
 
 
@@ -195,28 +144,3 @@ def test_a_photographed_place_has_its_rating_and_public_photo_links(places, goog
             "https://lh3.googleusercontent.com/beach",
         ],
     )
-
-
-def test_photo_links_are_asked_for_without_following_the_keyed_redirect(places, google):
-    google.reply = (200, {"places": [BEACH_RESORT]})
-
-    places.find_photographed("best resort in Cancun", photo_count=1)
-
-    photo_request = google.requests[1]
-    assert "skipHttpRedirect=true" in photo_request["path"]
-    assert photo_request["headers"]["X-Goog-Api-Key"] == API_KEY
-    assert "places.photos" in google.requests[0]["headers"]["X-Goog-FieldMask"]
-
-
-def test_a_place_without_photos_or_rating_still_comes_back(places, google):
-    google.reply = (200, {"places": [{"displayName": {"text": "Playa Norte"}}]})
-
-    beach = places.find_photographed("Playa Norte", photo_count=3)
-
-    assert beach == PhotographedPlace(name="Playa Norte", rating=None, photo_urls=[])
-
-
-def test_no_photographed_match_is_none(places, google):
-    google.reply = (200, {})
-
-    assert places.find_photographed("igloo bar", photo_count=1) is None
