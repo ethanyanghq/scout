@@ -547,8 +547,33 @@ def test_trip_card_answers_get_a_short_got_it_instead_of_a_read_back(store):
         store, agent, MAYA, "@scout my trip: Lakeside · $1,200 · from Boston"
     )
 
-    assert replies == ["okay, got it. let me find a location that fits your interests"]
+    assert replies == [
+        "okay, got it. i'll look for places once everyone has filled theirs out"
+    ]
     assert agent.messages_seen == ["@scout my trip: Lakeside · $1,200 · from Boston"]
+
+
+class ThumbsUpAgent:
+    """Reacts with a 👍 to the message it answers, as a preference save does."""
+
+    def respond(self, trip, message):
+        return [React(message.message_id, Tapback.LIKE, fallback_text="saved")]
+
+
+def test_trip_card_answers_get_the_got_it_text_without_a_thumbs_up_too(store):
+    scout_joins(store)
+
+    replies = send_from_line(
+        store,
+        ThumbsUpAgent(),
+        MAYA,
+        "@scout my trip: Lakeside · $1,200 · from Boston",
+        message_id="maya-card-answer",
+    )
+
+    assert replies == [
+        Say("okay, got it. i'll look for places once everyone has filled theirs out")
+    ]
 
 
 def test_sending_the_trip_card_again_gets_no_reply(store):
@@ -562,11 +587,16 @@ def test_sending_the_trip_card_again_gets_no_reply(store):
     assert len(agent.messages_seen) == 1
 
 
-def test_each_member_can_send_the_trip_card_once(store):
+def test_a_later_trip_card_answer_gets_only_the_thumbs_up(store):
     scout_joins(store)
-    agent = FakeAgent(replies=[])
-    send(store, agent, MAYA, "@scout my trip: Lakeside · $1,200 · from Boston")
+    send(store, FakeAgent(replies=[]), MAYA, "@scout my trip: Lakeside · $1,200")
 
-    leos = send(store, agent, LEO, "@scout my trip: City break · $900 · from NYC")
+    leos = send_from_line(
+        store,
+        ThumbsUpAgent(),
+        LEO,
+        "@scout my trip: City break · $900 · from NYC",
+        message_id="leo-card-answer",
+    )
 
-    assert leos == ["okay, got it. let me find a location that fits your interests"]
+    assert leos == [React("leo-card-answer", Tapback.LIKE, fallback_text="saved")]
