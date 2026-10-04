@@ -35,23 +35,15 @@ NIGHT_GLOW_HEX = "#1B2422"
 # The trip interview's Send button fills in a text that tags scout, so the
 # answers arrive as an ordinary message: Linq can't carry a card reply back.
 INTERVIEW_ANSWER_LEAD = "@scout my trip:"
-UPCOMING_MONTH_COUNT = 6
 # Linq's limit on a card's data: URL, mirrored from bridge/hermes-card.ts.
 MAX_CARD_URL_CHARS = 16_384
 CARD_URL_PREFIX = "data:application/json;base64,"
-# (id, label, sublabel)
-TRIP_LENGTHS = [
-    ("weekend", "A weekend", "2–3 nights"),
-    ("long-weekend", "Long weekend", "4 nights"),
-    ("week", "About a week", "6–7 nights"),
-    ("longer", "10+ days", "The big one"),
-]
-BUDGETS_PER_PERSON = [
-    ("under-500", "Under $500", "All in"),
-    ("500-800", "$500–$800", "All in"),
-    ("800-1200", "$800–$1,200", "All in"),
-    ("1200-plus", "$1,200+", "All in"),
-]
+# The budget slider, per person in US dollars: $0 to $3,000 in $100 steps,
+# labeled every $500 and starting at $1,000.
+BUDGET_SLIDER_MAX_USD = 3_000
+BUDGET_SLIDER_STEP_USD = 100
+BUDGET_SLIDER_LABEL_EVERY_USD = 500
+BUDGET_SLIDER_START_USD = 1_000
 # (id, label, sublabel, SF Symbol)
 TRIP_VIBES = [
     ("early-riser", "Early riser", "Sunrise hikes, morning dives", "sunrise.fill"),
@@ -213,8 +205,9 @@ def _text(words: str, role: str, color_hex: str | None = None) -> dict:
 
 
 def trip_interview(today: date) -> dict:
-    """A quick interview each member taps through: when, how long, budget and
-    the kind of trip they want. Send puts their picks in the chat as text."""
+    """A quick interview each member taps through: their dates on a calendar,
+    a budget slider, and the kind of trip they want. Send puts their answers in
+    the chat as text."""
     lead = urllib.parse.quote(INTERVIEW_ANSWER_LEAD)
     return {
         "version": 1,
@@ -235,11 +228,22 @@ def trip_interview(today: date) -> dict:
                     color_hex=SOFT_GRAY_HEX,
                 ),
                 _section_heading("When"),
-                _picker("month", "grid", _upcoming_months(today)),
-                _section_heading("How long"),
-                _picker("length", "grid", [_option(*o) for o in TRIP_LENGTHS]),
+                {
+                    "type": "dateRangePicker",
+                    "fieldId": "dates",
+                    "earliestDate": today.isoformat(),
+                },
                 _section_heading("Budget per person"),
-                _picker("budget", "grid", [_option(*o) for o in BUDGETS_PER_PERSON]),
+                {
+                    "type": "slider",
+                    "fieldId": "budget",
+                    "minValue": 0,
+                    "maxValue": BUDGET_SLIDER_MAX_USD,
+                    "step": BUDGET_SLIDER_STEP_USD,
+                    "value": BUDGET_SLIDER_START_USD,
+                    "tickStep": BUDGET_SLIDER_LABEL_EVERY_USD,
+                    "valuePrefix": "$",
+                },
                 _section_heading("Your vibe"),
                 _picker("vibe", "list", [_option(*o) for o in TRIP_VIBES]),
             ],
@@ -254,17 +258,6 @@ def trip_interview(today: date) -> dict:
             }
         ],
     }
-
-
-def _upcoming_months(today: date) -> list[dict]:
-    """The next few months, starting with next month."""
-    months = []
-    year, month = today.year, today.month
-    for _ in range(UPCOMING_MONTH_COUNT):
-        year, month = (year + 1, 1) if month == 12 else (year, month + 1)
-        first_day = date(year, month, 1)
-        months.append(_option(f"{first_day:%Y-%m}", f"{first_day:%B}", str(year)))
-    return months
 
 
 def _picker(field_id: str, style: str, options: list[dict]) -> dict:
