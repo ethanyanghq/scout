@@ -143,8 +143,9 @@ async function perform(
   switch (action.type) {
     case "say": {
       const thread = action.reply_to ? await findMessage(space, action.reply_to, recent) : undefined;
-      await typing.typeOut(space, action.text);
-      await sendOrFallBack(space, thread ? reply(action.text, thread) : null, action.text, recent);
+      await typing.typeOut(space, action.text, () =>
+        sendOrFallBack(space, thread ? reply(action.text, thread) : null, action.text, recent),
+      );
       return;
     }
     case "react": {
@@ -154,16 +155,16 @@ async function perform(
       return;
     }
     case "link":
-      await typing.typeOut(space, action.url);
-      await sendOrFallBack(space, richlink(action.url), action.url, recent);
+      await typing.typeOut(space, action.url, () =>
+        sendOrFallBack(space, richlink(action.url), action.url, recent),
+      );
       return;
     case "card": {
       // Spectrum carries the card as custom content, so it still goes through
       // Photon's SDK; only the Linq platform knows how to put it on the wire.
       // Lines without an iMessage app part send the caption instead.
       const text = `${action.caption}\n${action.fallback_text}`;
-      await typing.typeOut(space, action.caption);
-      await sendOrFallBack(space, custom(action), text, recent);
+      await typing.typeOut(space, action.caption, () => sendOrFallBack(space, custom(action), text, recent));
       return;
     }
   }
@@ -181,17 +182,24 @@ async function sendOrFallBack(
   recent.remember(sent ?? (await space.send(fallbackText)));
 }
 
-// Shows the typing bubble for as long as a text would take to type. Sending
-// the text clears the bubble. Tapbacks skip it, as a person's would. Lines
-// that can't show the bubble skip it, and scout still pauses.
+// Shows the typing bubble for as long as a text would take to type, then
+// sends it. Tapbacks skip the bubble, as a person's would. Lines that can't
+// show the bubble skip it, and scout still pauses.
 class TypingIndicator {
   constructor(private readonly pause: TypingPause) {}
 
-  async typeOut(space: Space, text: string): Promise<void> {
+  async typeOut(space: Space, text: string, send: () => Promise<void>): Promise<void> {
     const milliseconds = this.pause(text);
-    if (milliseconds <= 0) return;
+    if (milliseconds <= 0) return send();
     await space.startTyping();
     await Bun.sleep(milliseconds);
+    // A plain text clears the bubble when it lands, but a card or link may
+    // not, and a failed send never does, so scout stops it explicitly.
+    try {
+      await send();
+    } finally {
+      await space.stopTyping();
+    }
   }
 }
 

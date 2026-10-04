@@ -113,6 +113,7 @@ describe("a Linq group chat through Spectrum", () => {
   let scoutActions: object[] = [];
   // Linq answers 403 to typing in a group chat, so tests choose its answer.
   let typingStatus = 204;
+  let sendStatus = 200;
   const stubScout = Bun.serve({
     hostname: "127.0.0.1",
     port: 0,
@@ -141,6 +142,7 @@ describe("a Linq group chat through Spectrum", () => {
         return new Response(null, { status: typingStatus });
       }
       linqReceived.push({ path, body: await request.json() });
+      if (sendStatus !== 200) return new Response(null, { status: sendStatus });
       return Response.json({ chat_id: "group-chat-1", message: { id: "sent-1" } });
     },
   });
@@ -159,6 +161,7 @@ describe("a Linq group chat through Spectrum", () => {
     scoutReceived = [];
     linqReceived = [];
     typingStatus = 204;
+    sendStatus = 200;
   });
 
   // Sends one Linq event through Spectrum and the relay, and waits until scout
@@ -238,6 +241,28 @@ describe("a Linq group chat through Spectrum", () => {
     });
     const encoded = (part!.url as string).replace("data:application/json;base64,", "");
     expect(JSON.parse(Buffer.from(encoded, "base64").toString())).toEqual(layout);
+  });
+
+  test("stops scout's typing bubble once a card is sent, since a card doesn't clear it", async () => {
+    scoutActions = [{ type: "card", ...BROCHURE_CARD }];
+
+    await deliver(messageReceived({}), () => 1);
+
+    expect(linqReceived.map(({ path, method }) => method ?? path)).toEqual([
+      "POST",
+      "/chats/group-chat-1/messages",
+      "DELETE",
+    ]);
+  });
+
+  test("stops scout's typing bubble when Linq fails to send the reply", async () => {
+    scoutActions = [{ type: "say", text: "hey Maya 👋" }];
+    sendStatus = 500;
+
+    const outcome = await deliver(messageReceived({}), () => 1);
+
+    expect(outcome.kind).toBe("failed");
+    expect(linqReceived.at(-1)).toEqual({ path: "/chats/group-chat-1/typing", method: "DELETE" });
   });
 
   test("sends scout's tapback to Linq on the member's message", async () => {
