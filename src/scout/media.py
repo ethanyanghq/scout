@@ -72,7 +72,7 @@ class MediaLibrary:
         """Saves the file as sent plus a readable copy, and puts it into words."""
         kind = _kind_of(attachment.media_type)
         media_id = uuid.uuid4().hex[:MEDIA_ID_LENGTH]
-        chat_folder = self._folder / _folder_name(space_id)
+        chat_folder = self._chat_folder(space_id)
         chat_folder.mkdir(parents=True, exist_ok=True)
         original = chat_folder / f"{media_id}{_extension(attachment.media_type)}"
         original.write_bytes(attachment.data)
@@ -89,6 +89,17 @@ class MediaLibrary:
                 kind, lambda words: words.transcribe_voice_note(readable)
             )
         return SharedMedia(media_id, kind, original, readable, transcript)
+
+    def delete_chat(self, space_id: str) -> None:
+        """Deletes every file the chat sent, as resetting its trip should."""
+        chat_folder = self._chat_folder(space_id)
+        if chat_folder.exists():
+            shutil.rmtree(chat_folder)
+
+    def _chat_folder(self, space_id: str) -> Path:
+        # Chat IDs come from the messaging provider, so keep only path-safe
+        # letters.
+        return self._folder / re.sub(r"[^\w-]", "_", space_id)
 
     def _put_into_words(self, kind: MediaKind, transcribe) -> str | None:
         if self._transcriber is None:
@@ -114,11 +125,6 @@ def _kind_of(media_type: str) -> MediaKind:
     if media_type.startswith("audio/"):
         return MediaKind.VOICE_NOTE
     raise MediaConversionError(f"scout keeps photos and voice notes, not {media_type}")
-
-
-def _folder_name(space_id: str) -> str:
-    # Chat IDs come from the messaging provider, so keep only path-safe letters.
-    return re.sub(r"[^\w-]", "_", space_id)
 
 
 def _extension(media_type: str) -> str:

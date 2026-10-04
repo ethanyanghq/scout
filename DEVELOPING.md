@@ -81,7 +81,7 @@ bun run devchat photo leo receipt.jpg                   # Mac only
 bun run devchat voice maya memo.caf                     # a voice note, Mac only
 bun run devchat transcript
 bun run devchat state                                   # the trip, as JSON
-bun run devchat reset                                   # clears this chat's trip and transcript
+bun run devchat reset                                   # clears this chat's trip, transcript and media files
 ```
 
 - Each command waits until scout has finished, then prints the message and scout's replies with their IDs (`[m3] scout: ...`). A tapback shows as `👍 on m3`, and a threaded message as `scout ↪ m3: ...`. If scout didn't reply, it prints `(scout stayed quiet)` or why the bridge skipped the message.
@@ -183,7 +183,7 @@ curl -s http://127.0.0.1:8787/messages -H 'Content-Type: application/json' -d '{
 
 - `participant_phones` is everyone in the group, including people who haven't texted yet.
 - To send a photo or voice note, add `"attachment": {"media_type": "image/heic", "base64_data": "..."}` with the file as it was sent (`image/...` or `audio/...`, like `audio/x-caf`). `text` can be empty.
-- `GET /dev/trips/<space_id>` shows the trip, and `DELETE /dev/trips/<space_id>` resets it.
+- `GET /dev/trips/<space_id>` shows the trip, and `DELETE /dev/trips/<space_id>` resets it, deleting its photos and voice notes from disk too.
 - To start over, use a new `space_id`, or stop the service and delete `/tmp/scout-test.db`.
 
 ## Run scout in a real group

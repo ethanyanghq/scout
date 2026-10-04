@@ -7,6 +7,7 @@ Like /messages, these are only reachable from this machine (see app.py).
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel, Field
 
+from scout.media import MediaLibrary
 from scout.trip import Trip
 from scout.trip_seeds import SeedMember, SeedStage, seed_trip
 from scout.trip_store import TripStore
@@ -25,7 +26,7 @@ class SeedRequest(BaseModel):
     members: list[SeededMember] = Field(min_length=1)
 
 
-def create_dev_router(store: TripStore) -> APIRouter:
+def create_dev_router(store: TripStore, media: MediaLibrary) -> APIRouter:
     router = APIRouter(prefix="/dev/trips")
 
     @router.post("/{space_id}/seed", status_code=201)
@@ -57,6 +58,7 @@ def create_dev_router(store: TripStore) -> APIRouter:
     @router.delete("/{space_id}", status_code=204)
     def reset(space_id: str) -> Response:
         store.delete_trip(space_id)
+        media.delete_chat(space_id)
         return Response(status_code=204)
 
     return router

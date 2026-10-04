@@ -4,7 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from scout.app import create_app
-from scout.media import MediaLibrary
+from scout.media import Attachment, MediaLibrary
 
 MAYA = {"phone": "+15550000001", "name": "Maya"}
 LEO = {"phone": "+15550000002", "name": "Leo"}
@@ -56,6 +56,17 @@ def test_seeding_never_overwrites_an_existing_trip(client):
 
     assert response.status_code == 409
     assert client.get("/dev/trips/chat-1").json()["stage"] == "voting"
+
+
+def test_reset_deletes_the_photos_and_voice_notes_the_chat_sent(store, tmp_path):
+    media = MediaLibrary(tmp_path / "media", None)
+    client = TestClient(create_app(store, UnusedAgent(), media))
+    seed(client, "poll-open")
+    voice_note = media.keep("chat-1", Attachment("audio/mpeg", b"mp3 bytes"))
+
+    client.delete("/dev/trips/chat-1")
+
+    assert not voice_note.original_path.exists()
 
 
 def test_reset_forgets_the_chats_trip(client):

@@ -103,7 +103,7 @@ def create_app(store: TripStore, agent: Agent, media: MediaLibrary) -> FastAPI:
         reaction = IncomingReaction(**incoming.model_dump())
         return _as_actions(handle_reaction(reaction, store))
 
-    app.include_router(create_dev_router(store))
+    app.include_router(create_dev_router(store, media))
     return app
 
 
