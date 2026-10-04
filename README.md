@@ -44,6 +44,8 @@ My number is a [Linq](https://linqapp.com) line, a real iMessage number you can 
 | `polls.py` | Reading "2" or "tulum" as a vote, and picking the winner. |
 | `itinerary.py` | How the day-by-day plan reads in the chat. |
 | `booking_links.py` | Google Flights links from each home city and an Airbnb link for the group. |
+| `flights.py` | Live Google Flights search through SerpApi. |
+| `best_flights.py` | The best flight from each home city, and how it reads in the chat. |
 | `calendar_link.py` | The "Add to Google Calendar" link sent once the trip is locked in. |
 | `money.py` | How amounts of money read in the chat. |
 | `settle_up.py` | Who owes whom: each person's share and the fewest payments to settle up. |

@@ -209,13 +209,41 @@ expense she paid, split evenly — the same path as any other shared cost
 
 ### Stage 7 — Flight
 
-One flight: the best value scout can find for the whole group from the shared
-origin on the shared dates. Another **booking card**, the same confirm-into-the-
-ledger step.
+One flight: the best value Google Flights finds for the whole group from the
+shared origin on the shared dates, looked up live through SerpApi. If members
+still leave from different cities, the card holds one flight per home city.
 
-The price is an estimate. scout has no flight data source and will not pretend
-otherwise — the card says "estimate" and the real number comes from whoever
-books. When they confirm, they enter what they actually paid.
+The card leads with HermesShare's `flightBoard`, a split-flap departure board
+(airport codes, flight number, departure and arrival times, nonstop or the
+layovers), then the fare per person, the airline, the flying time and who flies
+it. Its button opens the same search on Google Flights, where the group books.
+
+```
+┌──────────────────────────────────────┐
+│ Flights to San Juan, Puerto Rico     │
+│ Mar 14–19 · round trip               │
+│ ┌──────────────────────────────────┐ │
+│ │ B6 101               1 stop · FLL│ │
+│ │ [B][O][S] ──────✈──── [S][J][U]  │ │
+│ │ Boston        San Juan, PR       │ │
+│ │ DEPARTS 6:15 AM  ARRIVES 2:20 PM │ │
+│ └──────────────────────────────────┘ │
+│ Fare            $312 per person      │
+│ Airline         JetBlue              │
+│ Flying time     8h 5m                │
+│ For             Maya, Leo            │
+│ [       Book from Boston        ]    │
+└──────────────────────────────────────┘
+```
+
+The fare is live, not an estimate, but it can change before anyone books, and
+the card says so. Taps don't reach scout yet, so the booker texts what they
+actually paid and it goes into the ledger like any other shared cost.
+
+Built: `send_best_flights` (`src/scout/trip_actions.py`), `flights.py` for the
+SerpApi search, `best_flights.py` for the text version, and `cards.best_flights`
+for the layout. It needs `SERPAPI_API_KEY`; without it scout sends flight search
+links instead.
 
 ### Stage 8 — Wrap
 
@@ -373,7 +401,7 @@ Reusing what exists wherever it already works.
 | Activities | — | new `Activity` and `ActivityVote` |
 | Bookings | `Expense`, `log_sender_expense` (`src/scout/trip_actions.py`) | new `Booking`, logged as an expense on confirm |
 | Hotels and activities | `GooglePlaces.search` (`src/scout/places.py`) | extend `FIELD_MASK` with `rating`, `userRatingCount`, `photos` |
-| Flight | `flight_search_link` (`src/scout/booking_links.py`) | one flight, estimated price, labeled |
+| Flight | `GoogleFlights` (`src/scout/flights.py`), through SerpApi | built: one flight per home city, live fare, `flightBoard` card |
 | Calendar | `google_calendar_link` (`src/scout/calendar_link.py`) | moves to stage 8; one event per itinerary day |
 | Outgoing | `Say` / `React` / `Link` (`src/scout/outgoing.py`) | add `Card` |
 | Bridge | `perform()` (`bridge/spectrum.ts`), `sendParts()` (`bridge/linq.ts`) | add the `imessage_app` part |
@@ -390,9 +418,10 @@ scout never invents a place.
 the fields requested."* Adding `rating`, `userRatingCount` and `photos` raises
 the per-search cost — worth knowing before turning it on with a budget alert set.
 
-Flight prices and whole-trip totals are **Claude estimates, labeled as
-estimates**, because there is no flight data source and adding one a week before
-the demo is a new key, a new module and a new way to fail.
+Flights come from **Google Flights through SerpApi**, live, one search per home
+city. Whole-trip totals on the brochures are still **Claude estimates, labeled
+as estimates**, because they're shown before a destination or dates exist to
+search.
 
 ---
 
