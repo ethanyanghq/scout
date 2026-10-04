@@ -46,6 +46,9 @@ My number is a [Linq](https://linqapp.com) line, a real iMessage number you can 
 | `booking_links.py` | Google Flights links from each home city and an Airbnb link for the group. |
 | `flights.py` | Live Google Flights search through SerpApi. |
 | `best_flights.py` | The best flight from each home city, and how it reads in the chat. |
+| `hotels.py` | Live Google Hotels search through SerpApi. |
+| `best_hotel.py` | The hotel scout recommends for the trip, and how it reads in the chat. |
+| `serpapi.py` | The request that the flight and hotel searches share. |
 | `calendar_link.py` | The "Add to Google Calendar" link sent once the trip is locked in. |
 | `money.py` | How amounts of money read in the chat. |
 | `settle_up.py` | Who owes whom: each person's share and the fewest payments to settle up. |

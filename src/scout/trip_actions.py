@@ -27,6 +27,7 @@ from scout.best_flights import (
     find_best_flights,
     format_best_flights,
 )
+from scout.best_hotel import NoHotelAvailable, find_best_hotel, format_best_hotel
 from scout.booking_links import format_booking_links
 from scout.brochures import (
     DestinationPitch,
@@ -38,6 +39,7 @@ from scout.calendar_link import format_calendar_message, google_calendar_link
 from scout.cards import (
     activity_deck,
     best_flights,
+    best_hotel,
     destination_article,
     expense_report,
     fits_in_one_message,
@@ -55,6 +57,7 @@ from scout.expense_report import (
 from scout.expense_split import split_by_items, split_evenly
 from scout.flights import FlightsError
 from scout.group_summary import format_group_summary, format_window, summarize_group
+from scout.hotels import HotelsError
 from scout.itinerary import format_itinerary
 from scout.media import load_photo
 from scout.money import format_usd
@@ -370,6 +373,33 @@ class TripActions:
             )
         )
         return "Flights posted."
+
+    def send_best_hotel(self) -> str:
+        """Posts a card with the best hotel, live from Google Hotels, for the
+        chosen destination and dates."""
+        trip = self._load_locked_in_trip()
+        hotels = self._services.hotels
+        if hotels is None:
+            raise TripActionError(
+                "hotel search isn't set up, so send booking links instead"
+            )
+
+        try:
+            hotel = find_best_hotel(hotels, trip)
+        except HotelsError as error:
+            raise TripActionError(f"hotel search isn't working: {error}") from error
+        except NoHotelAvailable as error:
+            raise TripActionError(f"{error}; send booking links instead") from error
+
+        self.outbox.append(
+            Card(
+                layout=best_hotel(trip, hotel),
+                caption=f"Where to stay in {trip.destination}",
+                thumbnail_url=hotel.photo_url,
+                fallback_text=format_best_hotel(trip, hotel),
+            )
+        )
+        return "Hotel posted."
 
     def log_sender_expense(self, draft: ExpenseDraft) -> str:
         """Logs a cost the sender paid, split among the members who shared it.

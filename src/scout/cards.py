@@ -22,8 +22,10 @@ from scout.best_flights import (
     format_clock,
     format_duration,
 )
+from scout.best_hotel import describe_rates, describe_rating
 from scout.expense_report import describe_items, describe_split, member_totals
 from scout.group_summary import format_window, summarize_group
+from scout.hotels import Hotel
 from scout.itinerary import format_day, format_start
 from scout.money import format_usd
 from scout.settle_up import plan_payments
@@ -587,6 +589,58 @@ def _flight_nodes(trip: Trip, home_city_flight: HomeCityFlight) -> list[dict]:
         },
     }
     return [_section_heading("Recommended flight"), board, fare]
+
+
+def best_hotel(trip: Trip, hotel: Hotel) -> dict:
+    """The recommended hotel, with its photo, rate and rating, and a button that
+    opens the search on Google Hotels.
+
+    Expects a trip whose destination and dates are locked in.
+    """
+    rating = describe_rating(hotel)
+    rows = [
+        _row("Rate", describe_rates(hotel), "dollarsign.circle"),
+        *([_row("Guests say", rating, "star.fill")] if rating else []),
+    ]
+    photo = (
+        [
+            {
+                "type": "gallery",
+                "urls": [hotel.photo_url],
+                "heightPt": 200,
+                "cornerRadius": 18,
+            }
+        ]
+        if hotel.photo_url
+        else []
+    )
+    return {
+        "version": 1,
+        "title": f"Where to stay in {trip.destination}",
+        "subtitle": f"{format_window(trip.dates)} · {hotel.nights} nights",
+        "accentColorHex": SCOUT_BLUE_HEX,
+        "background": {"kind": "atmosphere", "colorsHex": [NIGHT_GLOW_HEX]},
+        "root": {
+            "type": "vstack",
+            "spacing": 16,
+            "alignment": "leading",
+            "children": [
+                *photo,
+                _section_heading("Recommended hotel"),
+                _text(hotel.name, role="headline"),
+                _card_of_rows(rows),
+            ],
+        },
+        "actions": [
+            {
+                "id": "book-hotel",
+                "label": "Book this hotel",
+                "systemImage": "bed.double.fill",
+                # An https link opens Google Hotels rather than posting a reply.
+                "deepLinkURL": hotel.booking_url,
+            }
+        ],
+    }
 
 
 def _row(key: str, value: str, sf_symbol: str) -> dict:

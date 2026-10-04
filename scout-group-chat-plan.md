@@ -87,6 +87,7 @@ Nothing here can start until the first two items are done: the pipe is unproven 
 - [ ] The brochure card, with the existing poll engine counting the submits.
 - [x] The activity deck, and the aggregate it produces (`send_activity_deck`). Picks come back as an `@scout my picks: …` text the card's Send button fills in, counted in code. Tested only against stand-ins for Google Places and Linq so far.
 - [x] The flight booking card: the best round trip from each home city, live from Google Flights through SerpApi, on a `flightBoard` (`send_best_flights`). Tested only against stand-ins for SerpApi and Linq so far.
+- [x] The hotel card: Google Hotels' top pick for the trip dates with its live rate and rating, offered right after flights (`send_best_hotel`). Tested only against stand-ins for SerpApi and Linq so far.
 - [x] The itinerary card: a timeline of each day's anchor and when it starts, paced to the group's chronotype, with what only one person wants offered as an add-on (`post_itinerary`). Built from the deck's picks, or from what the group says in the chat when there's no deck. Tested only against stand-ins for Google Places and Linq so far.
 - [ ] The hotel booking card, the calendar at the end, and the album link.
 

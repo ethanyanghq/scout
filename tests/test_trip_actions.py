@@ -7,6 +7,7 @@ from scout.best_flights import HomeAirport
 from scout.brochures import ActivityPitch, DestinationPitch
 from scout.cards import fits_in_one_message
 from scout.flights import Flight, FlightsError
+from scout.hotels import Hotel, HotelsError
 from scout.outgoing import Card, React, Say, Tapback
 from scout.outside_services import OutsideServices
 from scout.places import Coordinates, PhotographedPlace, Place, PlacesError
@@ -806,6 +807,94 @@ def test_flights_are_one_card_with_a_departure_board_per_home_city(
 def test_without_flight_search_scout_sends_booking_links_instead(locked_in_actions):
     with pytest.raises(TripActionError, match="send booking links instead"):
         locked_in_actions.send_best_flights(HOME_AIRPORTS, "SJU")
+
+
+class FakeHotels:
+    """Stands in for Google Hotels: finds `hotel` wherever's asked, or nothing."""
+
+    def __init__(self, hotel, is_down=False):
+        self.hotel = hotel
+        self.is_down = is_down
+
+    def find_best_hotel(self, destination, dates):
+        if self.is_down:
+            raise HotelsError("search didn't connect: timed out")
+        return self.hotel
+
+
+CONDADO_VISTA = Hotel(
+    name="Condado Vista",
+    guest_rating=4.5,
+    review_count=1203,
+    nights=5,
+    nightly_rate_usd=189,
+    stay_total_usd=945,
+    photo_url="https://lh5.googleusercontent.com/hotel-front",
+    booking_url="https://www.google.com/travel/hotels/San%20Juan",
+)
+
+
+def card_words(layout):
+    """Every string anywhere in a card, so a test can ask what it says."""
+    if isinstance(layout, str):
+        return {layout}
+    children = layout.values() if isinstance(layout, dict) else layout
+    if not isinstance(layout, dict | list):
+        return set()
+    return set().union(*(card_words(child) for child in children), set())
+
+
+def hotels_actions(store, hotels):
+    return TripActions(store, SPACE, MAYA, OutsideServices(hotels=hotels))
+
+
+def test_the_hotel_is_one_card_with_its_photo_rate_and_rating(locked_in_actions, store):
+    actions = hotels_actions(store, FakeHotels(CONDADO_VISTA))
+
+    actions.send_best_hotel()
+
+    [card] = actions.outbox
+    assert isinstance(card, Card)
+    assert card.layout["title"] == "Where to stay in San Juan, Puerto Rico"
+    assert card.layout["subtitle"] == "Mar 14–19 · 5 nights"
+    words = card_words(card.layout)
+    assert {"Condado Vista", "4.5 ★ · 1,203 reviews"} <= words
+    assert "$189 a night · $945 for 5 nights, for one room of two" in words
+    assert [a["deepLinkURL"] for a in card.layout["actions"]] == [
+        CONDADO_VISTA.booking_url
+    ]
+    assert card.thumbnail_url == CONDADO_VISTA.photo_url
+    assert "Condado Vista · 4.5 ★" in card.fallback_text
+
+
+def test_an_unrated_hotel_card_leaves_out_the_rating(locked_in_actions, store):
+    unrated = replace(CONDADO_VISTA, guest_rating=None, review_count=None)
+    actions = hotels_actions(store, FakeHotels(unrated))
+
+    actions.send_best_hotel()
+
+    [card] = actions.outbox
+    assert "Guests say" not in card_words(card.layout)
+    assert "★" not in card.fallback_text
+
+
+def test_without_hotel_search_scout_sends_booking_links_instead(locked_in_actions):
+    with pytest.raises(TripActionError, match="send booking links instead"):
+        locked_in_actions.send_best_hotel()
+
+
+def test_a_hotel_search_that_fails_is_reported(locked_in_actions, store):
+    actions = hotels_actions(store, FakeHotels(None, is_down=True))
+
+    with pytest.raises(TripActionError, match="hotel search isn't working"):
+        actions.send_best_hotel()
+
+
+def test_no_hotel_with_a_rate_points_to_booking_links(locked_in_actions, store):
+    actions = hotels_actions(store, FakeHotels(None))
+
+    with pytest.raises(TripActionError, match="no hotels with a rate.*booking links"):
+        actions.send_best_hotel()
 
 
 def keep_media(store, tmp_path, kind, media_id="a1b2c3d4", space_id=SPACE):

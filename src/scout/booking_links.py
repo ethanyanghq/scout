@@ -10,6 +10,7 @@ from scout.group_summary import format_window, summarize_group
 from scout.trip import DateWindow, Trip
 
 GOOGLE_FLIGHTS_URL = "https://www.google.com/travel/flights"
+GOOGLE_HOTELS_URL = "https://www.google.com/travel/hotels"
 AIRBNB_SEARCH_URL = "https://www.airbnb.com/s"
 
 
@@ -37,6 +38,16 @@ def flight_search_link(home_city: str, destination: str, dates: DateWindow) -> s
         f"on {dates.start.isoformat()} through {dates.end.isoformat()}"
     )
     return f"{GOOGLE_FLIGHTS_URL}?{urlencode({'q': search}, quote_via=quote)}"
+
+
+def hotel_search_link(destination: str, dates: DateWindow) -> str:
+    # Like the flight link, a plain-English search saves building Google's own
+    # encoding of the place and dates.
+    search = (
+        f"Hotels in {destination} "
+        f"from {dates.start.isoformat()} through {dates.end.isoformat()}"
+    )
+    return f"{GOOGLE_HOTELS_URL}?{urlencode({'q': search}, quote_via=quote)}"
 
 
 def stay_search_link(destination: str, dates: DateWindow, guest_count: int) -> str:

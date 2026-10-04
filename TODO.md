@@ -10,7 +10,7 @@ Work top to bottom. Check items off in the commit or PR that finishes them.
 - [ ] Set up the demo Mac: Bun, uv and the Linq CLI installed, and kept awake (`caffeinate -dims`).
 - [ ] Get an Anthropic API key.
 - [ ] Create a Google Cloud key with Places API (New) enabled and billing on, and add a budget alert.
-- [ ] Get a SerpApi key for live Google Flights fares (`SERPAPI_API_KEY`). The free plan's monthly searches cover rehearsals if nobody leaves it in a loop: each flight card uses one search per home city.
+- [ ] Get a SerpApi key for live Google Flights fares (`SERPAPI_API_KEY`). The free plan's monthly searches cover rehearsals if nobody leaves it in a loop: each flight card uses one search per home city and each hotel card one more.
 - [ ] Put the keys in `.env` and `bridge/.env` (copy the `.env.example` templates).
 - [ ] Pick the demo line: one teammate's Linq line, with its `LINQ_API_KEY` in `bridge/.env` on the demo Mac and the `linq` CLI logged into the same line.
 - [ ] Line up the demo phones: at least 3 besides scout (Maya, Leo, Jordan, Priya), one per member, charged and on iMessage. Put their numbers in `bridge/demo/roster.json` (copy `roster.example.json`, never commit it).

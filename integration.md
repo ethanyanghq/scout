@@ -285,6 +285,13 @@ SerpApi search, `best_flights.py` for the text version, and `cards.best_flights`
 for the layout. It needs `SERPAPI_API_KEY`; without it scout sends flight search
 links instead.
 
+Right after the flights, scout offers a hotel. `send_best_hotel` posts one card
+in the same style: a photo, the hotel's name, its nightly rate and the stay total
+for one room of two, its guest rating, and a button that opens the search on
+Google Hotels. The hotel is Google Hotels' top-ranked pick that has a room on the
+trip dates (`hotels.py`, `best_hotel.py`, `cards.best_hotel`), so it may not be the
+cheapest. Without `SERPAPI_API_KEY`, scout sends stay search links instead.
+
 ### Stage 8 — Wrap
 
 Two messages, in order:

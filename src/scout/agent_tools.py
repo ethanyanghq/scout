@@ -431,6 +431,20 @@ TOOL_DEFINITIONS = [
         },
     },
     {
+        "name": "send_best_hotel",
+        "description": (
+            "Post a card with the best hotel at the chosen destination for the "
+            "trip dates, with its live Google Hotels rate and a link to book it."
+        ),
+        "strict": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": False,
+        },
+    },
+    {
         "name": "suggest_nearby_places",
         "description": (
             "Post three real nearby places that fit what the group asked for, "
@@ -864,6 +878,8 @@ def run_tool(
                 [HomeAirport(**home) for home in tool_input["home_airports"]],
                 tool_input["arrival_airport_code"],
             )
+        case "send_best_hotel":
+            return actions.send_best_hotel()
         case "suggest_nearby_places":
             return actions.suggest_nearby_places(
                 tool_input["request"], tool_input["near"]
