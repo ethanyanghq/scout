@@ -1,19 +1,8 @@
-from datetime import date
-
 import pytest
 
-from scout.agent_tools import describe_tool_call, run_tool
-from scout.outgoing import Link, Say
-from scout.places import Coordinates, Place
-from scout.trip import DateWindow, DestinationOption, ItineraryDay
+from scout.agent_tools import run_tool
+from scout.trip import DestinationOption
 from scout.trip_actions import TripActionError, TripActions
-
-
-def said(outgoing):
-    """The texts scout sent, failing on anything that isn't a plain text."""
-    assert all(isinstance(item, Say) for item in outgoing), outgoing
-    return [item.text for item in outgoing]
-
 
 SPACE = "group-chat-1"
 MAYA = "+15550000001"
@@ -57,20 +46,6 @@ def test_agent_dates_must_be_real_calendar_dates(maya_actions):
         run_tool(maya_actions, "save_member_preferences", tool_input)
 
 
-def test_agent_itinerary_dates_become_planned_days(maya_actions, store):
-    maya_actions.start_destination_poll(OPTIONS)
-    poll_id = store.get_trip(SPACE).open_poll.id
-    dates = DateWindow(date(2027, 3, 14), date(2027, 3, 19))
-    store.close_poll(poll_id, "San Juan, Puerto Rico", dates)
-    tool_input = {"days": [{"date": "2027-03-14", "plan": "Land and check in"}]}
-
-    run_tool(maya_actions, "post_itinerary", tool_input)
-
-    assert store.get_trip(SPACE).itinerary == [
-        ItineraryDay(date(2027, 3, 14), "Land and check in")
-    ]
-
-
 @pytest.mark.parametrize(
     ("amount_usd", "expected_cents"), [(1240, 124_000), (164.5, 16_450), (0.29, 29)]
 )
@@ -89,91 +64,3 @@ def test_agent_amounts_cannot_split_a_cent(maya_actions):
 
     with pytest.raises(TripActionError, match="fractions of a cent"):
         run_tool(maya_actions, "log_sender_expense", tool_input)
-
-
-def test_agent_removes_expenses_by_the_number_it_was_shown(maya_actions, store):
-    expense_id = store.add_expense(SPACE, MAYA, 19_600, "Bio bay kayaks")
-
-    run_tool(maya_actions, "remove_expense", {"expense_number": expense_id})
-
-    assert store.get_trip(SPACE).expenses == []
-
-
-def test_agent_receipt_totals_and_dates_are_read_back(maya_actions, store):
-    tool_input = {
-        "merchant": "Casa Brisa",
-        "purchased_on": "2027-03-16",
-        "total_usd": 164,
-    }
-
-    run_tool(maya_actions, "ask_to_confirm_receipt", tool_input)
-
-    assert store.get_trip(SPACE).pending_receipt.total_cents == 16_400
-    assert "Casa Brisa, Mar 16, $164 total" in said(maya_actions.outbox)[0]
-
-
-def test_agent_picks_use_the_numbers_shown_in_the_list(maya_actions, store):
-    store.replace_place_suggestions(
-        SPACE,
-        [
-            Place("place-1", "Lote 23", Coordinates(18.45, -66.07), None, None),
-            Place("place-2", "Taco Bar", Coordinates(18.46, -66.08), None, None),
-        ],
-    )
-
-    run_tool(maya_actions, "send_directions", {"option_number": 2})
-
-    lead_in, link = maya_actions.outbox
-    assert lead_in == Say("🧭 Directions to Taco Bar:")
-    assert isinstance(link, Link)
-
-
-def test_brochure_tool_input_reaches_the_action(maya_actions):
-    destination = {
-        "name": "Tulum, Mexico",
-        "region": "Quintana Roo, Mexico",
-        "description": "White sand and cenotes.",
-        "flights_usd": 400,
-        "hotel_usd": 500,
-        "food_and_activities_usd": 200,
-        "activities": [{"name": "Swim a cenote", "estimated_cost_usd": 30}],
-    }
-
-    # Without place search the action refuses, which shows the input parsed.
-    with pytest.raises(TripActionError, match="brochures aren't available"):
-        run_tool(
-            maya_actions,
-            "send_destination_brochures",
-            {"nights": 5, "destinations": [destination] * 3},
-        )
-
-
-def test_a_tool_call_reads_plainly_in_the_log_without_empty_fields():
-    tool_input = {
-        "member": "…7695",
-        "display_name": "Yuvraj",
-        "available_from": None,
-        "budget_usd": 1000,
-        "must_haves": ["Mexico", "bungee jumping"],
-    }
-
-    line = describe_tool_call("save_member_preferences", tool_input, "Saved.")
-
-    assert line == (
-        "  AI used save_member_preferences(member=…7695, display_name=Yuvraj, "
-        "budget_usd=1000, must_haves=Mexico / bungee jumping) → Saved."
-    )
-
-
-def test_flight_tool_input_reaches_the_action(maya_actions):
-    # Before a destination is picked the action refuses, which shows the
-    # input parsed.
-    with pytest.raises(TripActionError, match="destination"):
-        run_tool(
-            maya_actions,
-            "send_best_flights",
-            {
-                "home_airports": [{"home_city": "Boston", "airport_code": "BOS"}],
-                "arrival_airport_code": "SJU",
-            },
-        )

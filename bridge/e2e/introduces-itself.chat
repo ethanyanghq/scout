@@ -5,6 +5,6 @@ members maya leo priya
 maya: hey everyone, someone added a scout bot?
 expect scout quiet
 leo: @scout you there?
-expect scout ~ "scout 👋"
+expect scout ~ "i'm scout"
 expect state stage = "collecting_preferences"
 expect state members.0.phone = "+15550000001"

@@ -22,10 +22,10 @@ from scout.trip_store import TripStore
 logger = logging.getLogger(__name__)
 
 INTRODUCTION_SNAG_REPLY = (
-    "Hey all, I'm scout 👋 I hit a snag on my end, so I can't help just yet. "
-    "Tag @scout in a minute to try again."
+    "hey all, i'm scout. hit a snag on my end so i can't help just yet, "
+    "tag @scout in a minute to try again"
 )
-SNAG_REPLY = "Sorry, I hit a snag on my end. Mind trying that again in a minute?"
+SNAG_REPLY = "ugh, hit a snag on my end. mind trying that again in a minute?"
 # Tapbacks that mean "this one" on a poll option. A 😂 on Miami isn't a vote.
 VOTING_TAPBACKS = {Tapback.LIKE, Tapback.LOVE}
 
@@ -44,6 +44,8 @@ def handle_message(
     store.add_members(
         message.space_id, [message.sender_phone, *message.participant_phones]
     )
+    if message.media is not None:
+        store.save_media(message.space_id, message.media)
     store.log_message(
         message.space_id, message.sender_phone, _chat_log_text(message), message.sent_at
     )
@@ -141,10 +143,9 @@ def _log_sent(store: TripStore, space_id: str, sent: list[Outgoing]) -> None:
 
 def _chat_log_text(message: IncomingMessage) -> str:
     """How a member's message reads in the chat log the agent sees."""
-    text = message.text
-    # The photo itself isn't kept, but later turns should know one was sent.
-    if message.photo is not None:
-        text = f"[photo] {text}".strip()
+    # A photo or voice note reads as its words, so later turns can follow
+    # along without seeing or hearing it again.
+    text = message.readable_text
     # A threaded reply makes sense only next to what it answers.
     if message.reply_to_text is not None:
         text = f'(replying to "{message.reply_to_text}") {text}'

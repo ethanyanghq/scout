@@ -76,7 +76,7 @@ def format_poll(options: list[DestinationOption]) -> list[str]:
     """The poll as separate messages: a question, then one per option, so
     members can vote with a tapback on the option they want."""
     return [
-        "🗳️ Where should we go? Reply with a number, or 👍 your pick:",
+        "where should we go? reply with a number or 👍 your pick:",
         *(
             f"{number}. {option.name} (~${option.estimated_cost_per_person_usd:,}"
             f"/person est.): {option.reason}"
@@ -102,16 +102,16 @@ def format_result(result: PollResult, voter_count: int) -> str:
     winner = result.winner
     if not result.tied_with:
         return (
-            f"🎉 Poll closed! {winner.name} wins with {result.winning_votes} "
-            f"of {voter_count} votes."
+            f"poll's closed: {winner.name} wins with {result.winning_votes} "
+            f"of {voter_count} votes 🎉"
         )
     tied_names = " and ".join(option.name for option in [*result.tied_with, winner])
     cheaper_than = ", ".join(
         f"~${option.estimated_cost_per_person_usd:,}" for option in result.tied_with
     )
     return (
-        f"🗳️ It's a tie between {tied_names} ({result.winning_votes} votes each). "
-        f"I'd go with {winner.name}: it's the cheapest at "
+        f"it's a tie between {tied_names} ({result.winning_votes} votes each). "
+        f"i'd go with {winner.name}: it's the cheapest at "
         f"~${winner.estimated_cost_per_person_usd:,}/person vs {cheaper_than}."
     )
 

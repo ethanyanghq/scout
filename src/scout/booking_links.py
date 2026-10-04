@@ -15,17 +15,17 @@ AIRBNB_SEARCH_URL = "https://www.airbnb.com/s"
 
 def format_booking_links(trip: Trip) -> str:
     """Expects a trip whose destination and dates are locked in."""
-    lines = [f"✈️ Flights for {format_window(trip.dates)}:"]
+    lines = [f"flights for {format_window(trip.dates)}:"]
     lines.extend(
         f"{city}: {flight_search_link(city, trip.destination, trip.dates)}"
         for city in summarize_group(trip.members).home_cities
     )
     guest_count = len(trip.members)
     lines.append(
-        f"🏠 Stays for {guest_count}: "
+        f"stays for {guest_count}: "
         f"{stay_search_link(trip.destination, trip.dates, guest_count)}"
     )
-    lines.append("You book these yourselves. Live prices there beat my estimates.")
+    lines.append("you book these yourselves. live prices there beat my estimates.")
     return "\n".join(lines)
 
 

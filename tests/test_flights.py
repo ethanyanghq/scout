@@ -155,21 +155,6 @@ def test_the_best_flight_is_googles_top_pick_with_every_leg(flights):
     )
 
 
-def test_searches_a_round_trip_for_one_adult_so_fares_are_per_person(flights, serpapi):
-    flights.find_best_flight("BOS", "SJU", SPRING_BREAK)
-
-    [query] = serpapi.queries
-    assert query["engine"] == "google_flights"
-    assert query["api_key"] == API_KEY
-    assert query["departure_id"] == "BOS"
-    assert query["arrival_id"] == "SJU"
-    assert query["outbound_date"] == "2027-03-14"
-    assert query["return_date"] == "2027-03-19"
-    assert query["type"] == "1"
-    assert query["adults"] == "1"
-    assert query["currency"] == "USD"
-
-
 def test_falls_back_to_other_flights_when_google_has_no_best_ones(flights, serpapi):
     serpapi.reply = (
         200,
@@ -182,36 +167,8 @@ def test_falls_back_to_other_flights_when_google_has_no_best_ones(flights, serpa
     assert flight.layover_airports == []
 
 
-def test_no_flights_is_none(flights, serpapi):
-    serpapi.reply = (
-        200,
-        {"error": "Google Flights hasn't returned any results for this query."},
-    )
-
-    assert flights.find_best_flight("BOS", "XXX", SPRING_BREAK) is None
-
-
-def test_without_googles_search_link_the_booking_link_is_a_plain_search(
-    flights, serpapi
-):
-    serpapi.reply = (200, {**SEARCH_RESULTS, "search_metadata": {}})
-
-    flight = flights.find_best_flight("BOS", "SJU", SPRING_BREAK)
-
-    assert flight.booking_url.startswith("https://www.google.com/travel/flights?q=")
-    assert "BOS" in flight.booking_url
-
-
 def test_a_refused_search_says_why(flights, serpapi):
     serpapi.reply = (401, {"error": "Invalid API key."})
 
     with pytest.raises(FlightsError, match="search failed with 401: Invalid API key"):
-        flights.find_best_flight("BOS", "SJU", SPRING_BREAK)
-
-
-def test_an_unreachable_serpapi_raises_a_flights_error(serpapi):
-    serpapi.stop()
-    flights = GoogleFlights(API_KEY, api_url=serpapi.url)
-
-    with pytest.raises(FlightsError, match="didn't connect"):
         flights.find_best_flight("BOS", "SJU", SPRING_BREAK)

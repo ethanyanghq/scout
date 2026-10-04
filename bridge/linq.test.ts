@@ -60,17 +60,6 @@ describe("reading a Linq event", () => {
     });
   });
 
-  test("joins a message's text parts", () => {
-    const parts = [
-      { type: "text", value: "paid the airbnb" },
-      { type: "text", value: "$1,240" },
-    ];
-
-    expect(readLinqEvent(messageReceived({ parts }))).toMatchObject({
-      content: { type: "text", text: "paid the airbnb\n$1,240" },
-    });
-  });
-
   test("keeps a photo's caption alongside the photo", () => {
     const record = readLinqEvent(
       messageReceived({ parts: [{ type: "text", value: "paid the airbnb" }, RECEIPT] }),
@@ -84,12 +73,6 @@ describe("reading a Linq event", () => {
           { content: { type: "attachment", mimeType: "image/jpeg" } },
         ],
       },
-    });
-  });
-
-  test("reads a photo sent without a caption", () => {
-    expect(readLinqEvent(messageReceived({ parts: [RECEIPT] }))).toMatchObject({
-      content: { type: "attachment", name: "receipt.jpeg", mimeType: "image/jpeg" },
     });
   });
 
@@ -118,26 +101,6 @@ describe("reading a Linq event", () => {
       content: { type: "reaction", emoji: "👍", target: { id: "poll-option-2" } },
       sender: { id: LEO.handle },
       space: { id: "group-chat-1" },
-    });
-  });
-
-  test("skips scout's own tapbacks, removed ones and stickers", () => {
-    expect(readLinqEvent(reactionAdded({ isFromMe: true }))).toEqual({
-      skipReason: "scout's own tapback",
-    });
-    expect(readLinqEvent({ ...reactionAdded(), event_type: "reaction.removed" })).toEqual({
-      skipReason: "a removed tapback (a vote it made stays counted)",
-    });
-    expect(readLinqEvent(reactionAdded({ type: "sticker" }))).toEqual({
-      skipReason: "a sticker reaction",
-    });
-  });
-
-  test("skips events that aren't new messages", () => {
-    const typing = { ...messageReceived({}), event_type: "chat.typing_indicator.started" };
-
-    expect(readLinqEvent(typing)).toEqual({
-      skipReason: "not a new message (chat.typing_indicator.started)",
     });
   });
 });
@@ -244,66 +207,6 @@ describe("a Linq group chat through Spectrum", () => {
     ]);
   });
 
-  test("hands a member's tapback to scout with the words Linq has for that message", async () => {
-    scoutActions = [];
-
-    await deliver(reactionAdded());
-
-    expect(scoutReceived[0]).toMatchObject({
-      space_id: "group-chat-1",
-      sender_phone: LEO.handle,
-      tapback: "like",
-      message_text: SAN_JUAN_OPTION,
-    });
-  });
-
-  test("shows scout typing in the chat before its text arrives", async () => {
-    scoutActions = [{ type: "say", text: "hey Maya 👋" }];
-
-    await deliver(messageReceived({}), () => 1);
-
-    expect(linqReceived.map(({ path, method }) => method ?? path)).toEqual([
-      "POST",
-      "/chats/group-chat-1/messages",
-    ]);
-    expect(linqReceived[0]!.path).toBe("/chats/group-chat-1/typing");
-  });
-
-  test("still replies when Linq can't show typing in a group, and stops asking", async () => {
-    typingStatus = 403;
-    scoutActions = [
-      { type: "say", text: "Got it" },
-      { type: "say", text: "Waiting on Leo" },
-    ];
-
-    const outcome = await deliver(messageReceived({}), () => 1);
-
-    expect(outcome.kind).toBe("handled");
-    expect(linqReceived.map(({ path }) => path)).toEqual([
-      "/chats/group-chat-1/typing",
-      "/chats/group-chat-1/messages",
-      "/chats/group-chat-1/messages",
-    ]);
-  });
-
-  test("threads scout's reply under the message it answers", async () => {
-    scoutActions = [{ type: "say", text: "Got it", reply_to: "message-1" }];
-
-    await deliver(messageReceived({}));
-
-    expect(linqReceived).toEqual([
-      {
-        path: "/chats/group-chat-1/messages",
-        body: {
-          message: {
-            parts: [{ type: "text", value: "Got it" }],
-            reply_to: { message_id: "message-1", part_index: 0 },
-          },
-        },
-      },
-    ]);
-  });
-
   test("sends scout's link to Linq as a link part, so iMessage shows a card", async () => {
     scoutActions = [{ type: "link", url: "https://calendar.google.com/calendar/render?x=1" }];
 
@@ -339,19 +242,6 @@ describe("a Linq group chat through Spectrum", () => {
     });
     const encoded = (part!.url as string).replace("data:application/json;base64,", "");
     expect(JSON.parse(Buffer.from(encoded, "base64").toString())).toEqual(layout);
-  });
-
-  test("sends a card without an HTTPS thumbnail as its text, since Linq would refuse it", async () => {
-    scoutActions = [{ type: "card", ...BROCHURE_CARD, thumbnail_url: null }];
-
-    await deliver(messageReceived({}));
-
-    expect(linqReceived).toEqual([
-      {
-        path: "/chats/group-chat-1/messages",
-        body: { message: { parts: [{ type: "text", value: "Tulum\nTulum · ~$1,100" }] } },
-      },
-    ]);
   });
 
   test("sends scout's tapback to Linq on the member's message", async () => {

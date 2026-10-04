@@ -3,18 +3,12 @@
 
 import type { Tapback } from "./tapbacks";
 
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { $ } from "bun";
-
 const DEFAULT_SCOUT_URL = "http://127.0.0.1:8787";
-// Claude reads images up to about this many pixels on the long side; bigger
-// photos only cost more to send.
-const MAX_PHOTO_EDGE_PIXELS = 1568;
 
-export type IncomingPhoto = {
-  media_type: "image/jpeg";
+// A photo (image/...) or voice note (audio/...), exactly as it was sent, like
+// an iPhone's image/heic or audio/x-caf. scout keeps and converts it.
+export type IncomingAttachment = {
+  media_type: string;
   base64_data: string;
 };
 
@@ -24,7 +18,7 @@ export type IncomingText = {
   text: string;
   sent_at: string;
   participant_phones: string[];
-  photo: IncomingPhoto | null;
+  attachment: IncomingAttachment | null;
   // The line's ID for this message, so scout can react or reply to it.
   message_id: string;
   // The words of the message this one is a threaded reply to, if it is one.
@@ -85,24 +79,4 @@ async function postToScout(path: string, body: object): Promise<ScoutAction[]> {
   }
   const { actions } = (await response.json()) as { actions: ScoutAction[] };
   return actions;
-}
-
-// iPhones send HEIC, which Claude can't read, so every photo goes through
-// macOS's built-in `sips` to become a downsized JPEG.
-export async function toJpeg(photoBytes: Buffer): Promise<IncomingPhoto> {
-  if (!Bun.which("sips")) {
-    throw new Error("Photos need macOS's sips to become JPEGs, so they only work on a Mac.");
-  }
-  const folder = await mkdtemp(join(tmpdir(), "scout-photo-"));
-  try {
-    // sips reads the format from the file's contents, so the name doesn't matter.
-    const original = join(folder, "original");
-    const converted = join(folder, "photo.jpg");
-    await writeFile(original, photoBytes);
-    await $`sips -s format jpeg -Z ${MAX_PHOTO_EDGE_PIXELS} ${original} --out ${converted}`.quiet();
-    const jpeg = await readFile(converted);
-    return { media_type: "image/jpeg", base64_data: jpeg.toString("base64") };
-  } finally {
-    await rm(folder, { recursive: true, force: true });
-  }
 }

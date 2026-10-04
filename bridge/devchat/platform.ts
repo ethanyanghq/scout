@@ -2,7 +2,7 @@
 // group from the terminal. Messages go through the bridge's real relay loop
 // (spectrum.ts) to the real scout service. Only the iMessage line is fake.
 
-import { basename, join } from "node:path";
+import { basename, extname, join } from "node:path";
 import { Spectrum, definePlatform, stream, type Content, type Message } from "spectrum-ts";
 import {
   asAttachment,
@@ -40,7 +40,11 @@ const CARDS_FOLDER = join(import.meta.dir, "..", ".devchat", "cards");
 // replies to it.
 export type Exchange = { sent: ChatEntry; outcome: MessageOutcome; replies: ChatEntry[] };
 
-export type Photo = { fileName: string; mimeType: string; bytes: Buffer };
+// A photo or voice note a member sends from a file.
+export type MediaFile = { fileName: string; mimeType: string; bytes: Buffer };
+
+// Bun doesn't know iPhone photos' and voice memos' types from the file name.
+const IPHONE_MEDIA_TYPES: Record<string, string> = { ".heic": "image/heic", ".caf": "audio/x-caf" };
 
 type InboundRecord = {
   id: string;
@@ -77,13 +81,14 @@ export class DevChat {
     return this.send(memberName, { text: `${emoji} on ${on.id}`, tapback, on: on.id }, content);
   }
 
-  sendPhoto(memberName: string, photo: Photo): Promise<Exchange> {
+  sendMediaFile(memberName: string, file: MediaFile): Promise<Exchange> {
     const content = asAttachment({
-      name: photo.fileName,
-      mimeType: photo.mimeType,
-      read: async () => photo.bytes,
+      name: file.fileName,
+      mimeType: file.mimeType,
+      read: async () => file.bytes,
     });
-    return this.send(memberName, { text: `[photo] ${photo.fileName}` }, content);
+    const kind = file.mimeType.startsWith("audio/") ? "voice note" : "photo";
+    return this.send(memberName, { text: `[${kind}] ${file.fileName}` }, content);
   }
 
   // A threaded reply under `target`, which works as it does for react().
@@ -189,11 +194,10 @@ export class DevChat {
   }
 }
 
-export async function readPhoto(path: string): Promise<Photo> {
+export async function readMediaFile(path: string): Promise<MediaFile> {
   const file = Bun.file(path);
-  if (!(await file.exists())) throw new Error(`There's no photo at ${path}.`);
-  // Bun doesn't know iPhone photos' type from the file name.
-  const mimeType = path.toLowerCase().endsWith(".heic") ? "image/heic" : file.type;
+  if (!(await file.exists())) throw new Error(`There's no file at ${path}.`);
+  const mimeType = IPHONE_MEDIA_TYPES[extname(path).toLowerCase()] ?? file.type;
   return { fileName: basename(path), mimeType, bytes: Buffer.from(await file.arrayBuffer()) };
 }
 

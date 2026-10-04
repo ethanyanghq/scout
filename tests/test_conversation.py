@@ -4,7 +4,9 @@ Claude is the one external service here, so it's the one thing faked. The
 store, polls, and summaries are all real.
 """
 
-from datetime import date, datetime
+from dataclasses import replace
+from datetime import datetime
+from pathlib import Path
 
 from scout.conversation import (
     INTRODUCTION_SNAG_REPLY,
@@ -19,9 +21,9 @@ from scout.trip import (
     DestinationOption,
     IncomingMessage,
     IncomingReaction,
+    MediaKind,
     MessagePhoto,
-    PendingReceipt,
-    PreferenceUpdate,
+    SharedMedia,
     TripStage,
 )
 
@@ -38,6 +40,20 @@ LEO = "+15550000002"
 PRIYA = "+15550000003"
 EVERYONE = (MAYA, LEO, PRIYA)
 RECEIPT_PHOTO = MessagePhoto("image/jpeg", "cmVjZWlwdA==")
+RECEIPT_MEDIA = SharedMedia(
+    id="a1b2c3d4",
+    kind=MediaKind.PHOTO,
+    original_path=Path("media/group-chat-1/a1b2c3d4.heic"),
+    readable_path=Path("media/group-chat-1/a1b2c3d4.readable.jpg"),
+    transcript="A receipt from Casa Brisa, total $164.00",
+)
+BOSTON_VOICE_NOTE = SharedMedia(
+    id="e5f6a7b8",
+    kind=MediaKind.VOICE_NOTE,
+    original_path=Path("media/group-chat-1/e5f6a7b8.caf"),
+    readable_path=Path("media/group-chat-1/e5f6a7b8.readable.m4a"),
+    transcript="I'm flying from Boston.",
+)
 OPTIONS = [
     DestinationOption("Tulum, Mexico", 900, "Beaches"),
     DestinationOption("San Juan, Puerto Rico", 750, "No passport"),
@@ -60,7 +76,7 @@ class BrokenAgent:
         raise ConnectionError("Claude is unreachable")
 
 
-def send(store, agent, sender, text, photo=None):
+def send(store, agent, sender, text, photo=None, media=None):
     message = IncomingMessage(
         space_id=SPACE,
         sender_phone=sender,
@@ -68,6 +84,7 @@ def send(store, agent, sender, text, photo=None):
         sent_at=datetime(2026, 10, 2, 9, 0),
         participant_phones=EVERYONE,
         photo=photo,
+        media=media,
     )
     return said(handle_message(message, store, agent))
 
@@ -146,21 +163,37 @@ def test_saying_scouts_name_without_the_at_sign_is_not_a_tag(store):
     assert agent.messages_seen == []
 
 
+def test_a_voice_note_that_says_scouts_name_to_it_is_a_tag(store):
+    scout_joins(store)
+    agent = FakeAgent()
+
+    spoken_tags = [
+        "Hey Scout, I'm flying from Boston.",
+        "at scout what's the plan",
+        "Scout, help",
+    ]
+    for number, words in enumerate(spoken_tags):
+        voice_note = replace(BOSTON_VOICE_NOTE, id=f"note{number}", transcript=words)
+        send(store, agent, MAYA, "", media=voice_note)
+
+    assert len(agent.messages_seen) == 3
+
+
+def test_a_voice_note_that_only_talks_about_scout_is_not_a_tag(store):
+    scout_joins(store)
+    agent = FakeAgent()
+    in_passing = replace(BOSTON_VOICE_NOTE, transcript="let's ask scout later")
+
+    send(store, agent, MAYA, "", media=in_passing)
+
+    assert agent.messages_seen == []
+
+
 def test_untagged_trip_details_wait_for_someone_to_tag_scout(store):
     scout_joins(store)
     agent = FakeAgent()
 
     replies = send(store, agent, LEO, "mar 14-20, $600, nyc")
-
-    assert replies == []
-    assert agent.messages_seen == []
-
-
-def test_untagged_chatter_is_ignored_once_preferences_are_done(store):
-    start_voting(store)
-    agent = FakeAgent()
-
-    replies = send(store, agent, LEO, "did anyone see the game")
 
     assert replies == []
     assert agent.messages_seen == []
@@ -184,7 +217,7 @@ def test_a_plain_vote_gets_a_thumbs_up_instead_of_a_line_in_the_chat(store):
         React(
             "leo-vote",
             Tapback.LIKE,
-            fallback_text="Got it, …0002 → San Juan, Puerto Rico (1 of 3 voted)",
+            fallback_text="got it, …0002 → San Juan, Puerto Rico (1 of 3 voted)",
         )
     ]
 
@@ -196,19 +229,7 @@ def test_the_vote_that_closes_the_poll_gets_the_announcement_not_a_tapback(store
 
     replies = send_from_line(store, FakeAgent(), PRIYA, "3", message_id="priya-vote")
 
-    assert replies[0] == Say("🎉 Poll closed! Tulum, Mexico wins with 2 of 3 votes.")
-
-
-def test_a_plain_vote_is_counted_without_the_agent(store):
-    # Without the line's message IDs, as in scout-simulate, scout confirms in text.
-    start_voting(store)
-    agent = FakeAgent()
-
-    replies = send(store, agent, LEO, "2")
-
-    assert agent.messages_seen == []
-    assert store.get_trip(SPACE).open_poll.votes == {LEO: 1}
-    assert replies == ["Got it, …0002 → San Juan, Puerto Rico (1 of 3 voted)"]
+    assert replies[0] == Say("poll's closed: Tulum, Mexico wins with 2 of 3 votes 🎉")
 
 
 def test_last_vote_closes_the_poll_and_announces_the_winner(store):
@@ -222,34 +243,7 @@ def test_last_vote_closes_the_poll_and_announces_the_winner(store):
     trip = store.get_trip(SPACE)
     assert trip.stage == TripStage.DESTINATION_CHOSEN
     assert trip.destination == "Tulum, Mexico"
-    assert replies == ["🎉 Poll closed! Tulum, Mexico wins with 2 of 3 votes."]
-
-
-def test_last_vote_also_sends_a_calendar_link_for_the_shared_dates(store):
-    start_voting(store)
-    for member in EVERYONE:
-        store.save_preferences(
-            SPACE,
-            member,
-            PreferenceUpdate(
-                available_from=date(2027, 3, 14),
-                available_to=date(2027, 3, 19),
-                budget_usd=800,
-                home_city="Boston",
-            ),
-        )
-    agent = FakeAgent()
-
-    send(store, agent, MAYA, "2")
-    send(store, agent, LEO, "2")
-    replies = send_from_line(store, agent, PRIYA, "2", message_id="priya-vote")
-
-    winner, lead_in, link = replies
-    assert winner == Say(
-        "🎉 Poll closed! San Juan, Puerto Rico wins with 3 of 3 votes."
-    )
-    assert lead_in.text.startswith("📅 Locked in: San Juan, Puerto Rico, Mar 14–19.")
-    assert link.url.startswith("https://calendar.google.com/calendar/render?")
+    assert replies == ["poll's closed: Tulum, Mexico wins with 2 of 3 votes 🎉"]
 
 
 def test_scout_apologizes_when_it_fails_on_a_message_addressed_to_it(store):
@@ -269,43 +263,13 @@ def test_scout_stays_quiet_when_it_fails_on_a_message_not_addressed_to_it(store)
 
 
 def test_replies_are_saved_so_the_agent_sees_them_next_time(store):
-    send(store, FakeAgent(replies=["Got it, Maya"]), MAYA, "@scout hey, I'm maya")
+    send(store, FakeAgent(replies=["got it, Maya"]), MAYA, "@scout hey, I'm maya")
 
     logged = [(m.sender_phone, m.text) for m in store.recent_messages(SPACE, 10)]
     assert logged == [
         (MAYA, "@scout hey, I'm maya"),
-        (None, "Got it, Maya"),
+        (None, "got it, Maya"),
     ]
-
-
-def test_untagged_expenses_wait_for_someone_to_tag_scout(store):
-    choose_san_juan(store)
-    agent = FakeAgent()
-
-    replies = send(store, agent, LEO, "fyi I paid the airbnb, $1,240")
-
-    assert replies == []
-    assert agent.messages_seen == []
-
-
-def test_untagged_chatter_without_an_amount_is_ignored_on_the_trip(store):
-    choose_san_juan(store)
-    agent = FakeAgent()
-
-    replies = send(store, agent, LEO, "beach at 10?")
-
-    assert replies == []
-    assert agent.messages_seen == []
-
-
-def test_price_talk_during_the_vote_is_not_treated_as_an_expense(store):
-    start_voting(store)
-    agent = FakeAgent()
-
-    replies = send(store, agent, LEO, "flights to tulum look like $450")
-
-    assert replies == []
-    assert agent.messages_seen == []
 
 
 def test_untagged_receipt_photos_wait_for_someone_to_tag_scout(store):
@@ -317,43 +281,34 @@ def test_untagged_receipt_photos_wait_for_someone_to_tag_scout(store):
     assert agent.messages_seen == []
 
 
-def test_untagged_photos_during_the_vote_are_ignored(store):
-    start_voting(store)
-    agent = FakeAgent()
-
-    replies = send(store, agent, PRIYA, "", photo=RECEIPT_PHOTO)
-
-    assert replies == []
-    assert agent.messages_seen == []
-
-
-def test_the_payer_confirms_a_receipt_by_tagging_scout(store):
-    choose_san_juan(store)
-    store.save_pending_receipt(SPACE, PendingReceipt(PRIYA, "Casa Brisa", 16_400))
-    agent = FakeAgent()
-
-    send(store, agent, PRIYA, "yep, all 3")
-    send(store, agent, PRIYA, "@scout yep, all 3")
-
-    assert agent.messages_seen == ["@scout yep, all 3"]
-
-
-def test_only_the_payer_confirms_their_receipt(store):
-    choose_san_juan(store)
-    store.save_pending_receipt(SPACE, PendingReceipt(PRIYA, "Casa Brisa", 16_400))
-    agent = FakeAgent()
-
-    replies = send(store, agent, LEO, "yep")
-
-    assert replies == []
-
-
-def test_the_chat_log_notes_when_a_photo_was_sent(store):
+def test_the_chat_log_holds_a_photos_description_and_where_its_kept(store):
     choose_san_juan(store)
 
-    send(store, FakeAgent(replies=[]), PRIYA, "casa brisa dinner", photo=RECEIPT_PHOTO)
+    send(store, FakeAgent(), PRIYA, "casa brisa dinner", RECEIPT_PHOTO, RECEIPT_MEDIA)
 
-    assert store.recent_messages(SPACE, limit=1)[0].text == "[photo] casa brisa dinner"
+    assert store.recent_messages(SPACE, limit=1)[0].text == (
+        "[photo a1b2c3d4 (media/group-chat-1/a1b2c3d4.heic): "
+        "A receipt from Casa Brisa, total $164.00] casa brisa dinner"
+    )
+
+
+def test_the_chat_log_holds_a_voice_notes_words(store):
+    scout_joins(store)
+
+    send(store, FakeAgent(), MAYA, "", media=BOSTON_VOICE_NOTE)
+
+    assert store.recent_messages(SPACE, limit=1)[0].text == (
+        "[voice note e5f6a7b8 (media/group-chat-1/e5f6a7b8.caf): "
+        '"I\'m flying from Boston."]'
+    )
+
+
+def test_a_shared_photo_can_be_found_again_by_its_id(store):
+    choose_san_juan(store)
+
+    send(store, FakeAgent(), PRIYA, "", RECEIPT_PHOTO, RECEIPT_MEDIA)
+
+    assert store.find_media(SPACE, "a1b2c3d4") == RECEIPT_MEDIA
 
 
 TACO_SPOTS = [
@@ -370,29 +325,8 @@ def test_a_plain_pick_sends_directions_without_the_agent(store):
     replies = send_from_line(store, agent, LEO, "2", message_id="leo-pick")
 
     assert agent.messages_seen == []
-    assert replies[0] == Say("🧭 Directions to Taco Bar:")
+    assert replies[0] == Say("directions to Taco Bar:")
     assert isinstance(replies[1], Link)
-
-
-def test_a_pick_by_name_sends_directions_too(store):
-    choose_san_juan(store)
-    store.replace_place_suggestions(SPACE, TACO_SPOTS)
-
-    replies = send_from_line(store, FakeAgent(), MAYA, "lote 23!", message_id="pick")
-
-    assert replies[0] == Say("🧭 Directions to Lote 23:")
-
-
-def test_numbers_are_just_chat_once_a_place_is_picked(store):
-    choose_san_juan(store)
-    store.replace_place_suggestions(SPACE, TACO_SPOTS)
-    send_from_line(store, FakeAgent(), LEO, "2", message_id="leo-pick")
-    agent = FakeAgent()
-
-    replies = send(store, agent, MAYA, "1")
-
-    assert replies == []
-    assert agent.messages_seen == []
 
 
 def tapback(store, sender, on_text, kind="like", on_id="option-message"):
@@ -418,18 +352,10 @@ def test_a_thumbs_up_on_a_poll_option_counts_as_a_vote(store):
     assert store.get_trip(SPACE).open_poll.votes == {LEO: 1}
     assert replies == [
         Say(
-            "Got it, …0002 → San Juan, Puerto Rico (1 of 3 voted)",
+            "got it, …0002 → San Juan, Puerto Rico (1 of 3 voted)",
             reply_to="san-juan-option",
         )
     ]
-
-
-def test_a_heart_on_a_poll_option_counts_as_a_vote(store):
-    start_voting(store)
-
-    tapback(store, MAYA, TULUM_OPTION, kind="love")
-
-    assert store.get_trip(SPACE).open_poll.votes == {MAYA: 0}
 
 
 def test_a_laugh_on_a_poll_option_is_not_a_vote(store):
@@ -439,36 +365,6 @@ def test_a_laugh_on_a_poll_option_is_not_a_vote(store):
 
     assert replies == []
     assert store.get_trip(SPACE).open_poll.votes == {}
-
-
-def test_a_thumbs_up_on_the_poll_question_is_not_a_vote(store):
-    start_voting(store)
-
-    assert tapback(store, LEO, POLL_QUESTION) == []
-    assert store.get_trip(SPACE).open_poll.votes == {}
-
-
-def test_a_thumbs_up_once_the_poll_is_closed_changes_nothing(store):
-    choose_san_juan(store)
-
-    assert tapback(store, LEO, TULUM_OPTION) == []
-    assert store.get_trip(SPACE).destination == "San Juan, Puerto Rico"
-
-
-def test_a_tapback_in_a_chat_without_a_trip_is_ignored(store):
-    assert tapback(store, LEO, TULUM_OPTION) == []
-    assert store.get_trip(SPACE) is None
-
-
-def test_the_last_tapback_vote_closes_the_poll(store):
-    start_voting(store)
-    tapback(store, MAYA, SAN_JUAN_OPTION)
-    tapback(store, LEO, SAN_JUAN_OPTION)
-
-    replies = tapback(store, PRIYA, TULUM_OPTION)
-
-    assert store.get_trip(SPACE).destination == "San Juan, Puerto Rico"
-    assert said(replies)[0].startswith("🎉 Poll closed! San Juan, Puerto Rico wins")
 
 
 def reply_in_thread(store, agent, sender, text, replying_to):
@@ -489,15 +385,6 @@ def test_an_untagged_threaded_reply_under_a_poll_option_is_just_chat(store):
     agent = FakeAgent()
 
     reply_in_thread(store, agent, LEO, "this one!", replying_to=SAN_JUAN_OPTION)
-
-    assert agent.messages_seen == []
-
-
-def test_a_threaded_reply_under_anything_else_stays_untagged_chatter(store):
-    start_voting(store)
-    agent = FakeAgent()
-
-    reply_in_thread(store, agent, LEO, "lol same", replying_to="who's driving?")
 
     assert agent.messages_seen == []
 

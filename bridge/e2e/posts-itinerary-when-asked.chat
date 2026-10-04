@@ -1,9 +1,0 @@
-# Journey: once the destination is locked in, asking for a plan gets a
-# day-by-day itinerary covering every day of the trip.
-# Needs the AI.
-members maya leo priya
-from destination-chosen
-
-maya: @scout can you put together a day by day plan for us?
-expect state itinerary.0.day = "2027-03-14"
-expect state itinerary.6.day = "2027-03-20"

@@ -4,7 +4,7 @@ from scout.trip import ItineraryDay
 
 
 def format_itinerary(days: list[ItineraryDay]) -> str:
-    lines = ["🗓️ The plan:"]
+    lines = ["the plan:"]
     lines.extend(
         f"{day.day:%a} {day.day.month}/{day.day.day} · {day.plan}" for day in days
     )

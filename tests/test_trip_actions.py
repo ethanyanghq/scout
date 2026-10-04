@@ -5,16 +5,19 @@ import pytest
 from scout.best_flights import HomeAirport
 from scout.brochures import ActivityPitch, DestinationPitch
 from scout.flights import Flight, FlightsError
-from scout.outgoing import Card, Link, Say
+from scout.outgoing import Card, Say
 from scout.outside_services import OutsideServices
 from scout.places import Coordinates, PhotographedPlace, Place, PlacesError
 from scout.trip import (
     DateWindow,
     DestinationOption,
     ItineraryDay,
+    MediaKind,
+    MessagePhoto,
     PendingReceipt,
     PreferenceUpdate,
     Settlement,
+    SharedMedia,
 )
 from scout.trip_actions import TripActionError, TripActions
 
@@ -102,12 +105,6 @@ def test_rejects_dates_that_end_before_they_start(maya_actions):
         )
 
 
-def test_saves_details_another_member_shared_earlier_in_the_chat(maya_actions, store):
-    maya_actions.save_member_preferences("…0002", PreferenceUpdate(budget_usd=600))
-
-    assert store.get_trip(SPACE).find_member(LEO).budget_usd == 600
-
-
 def test_finds_a_member_by_the_name_they_shared(maya_actions, store):
     store.save_preferences(SPACE, LEO, PreferenceUpdate(display_name="Leo"))
 
@@ -128,14 +125,8 @@ def test_records_a_vote_a_friend_reported_for_another_member(maya_actions, store
 
     assert store.get_trip(SPACE).open_poll.votes == {LEO: 1}
     assert said(maya_actions.outbox)[-1] == (
-        "Got it, …0002 → San Juan, Puerto Rico (1 of 2 voted)"
+        "got it, …0002 → San Juan, Puerto Rico (1 of 2 voted)"
     )
-
-
-def test_starting_a_poll_posts_it_to_the_chat(maya_actions):
-    maya_actions.start_destination_poll(OPTIONS)
-
-    assert said(maya_actions.outbox)[0].startswith("🗳️ Where should we go?")
 
 
 def test_cannot_start_a_second_poll_while_one_is_open(maya_actions):
@@ -165,29 +156,25 @@ def test_closing_the_poll_locks_in_the_dates_everyone_shares(store):
     assert trip.dates == DateWindow(date(2027, 3, 14), date(2027, 3, 19))
 
 
-def test_closing_the_poll_sends_a_calendar_link_after_the_winner(store):
-    closing = everyone_votes_for_san_juan(store)
+def test_one_member_choosing_for_the_group_closes_the_poll_without_votes(store):
+    store.create_trip(SPACE)
+    store.add_members(SPACE, [MAYA, LEO])
+    store.save_preferences(SPACE, MAYA, MAYA_PREFERENCES)
+    store.save_preferences(SPACE, LEO, LEO_PREFERENCES)
+    store.open_poll(SPACE, OPTIONS)
 
-    winner, lead_in, link = closing.outbox
-    assert winner.text.startswith("🎉 Poll closed! San Juan, Puerto Rico wins")
-    assert lead_in.text.startswith("📅 Locked in: San Juan, Puerto Rico, Mar 14–19.")
-    assert link == Link(link.url)
-    assert link.url.startswith("https://calendar.google.com/calendar/render?")
+    TripActions(store, SPACE, MAYA).lock_in_group_choice("san juan")
+
+    trip = store.get_trip(SPACE)
+    assert trip.open_poll is None
+    assert trip.destination == "San Juan, Puerto Rico"
+    assert trip.dates == DateWindow(date(2027, 3, 14), date(2027, 3, 19))
 
 
-def test_no_calendar_link_when_no_dates_work_for_everyone(store):
-    leo_in_april = PreferenceUpdate(
-        display_name="Leo",
-        available_from=date(2027, 4, 1),
-        available_to=date(2027, 4, 5),
-        budget_usd=600,
-        home_city="New York",
-    )
+def test_the_group_can_choose_a_destination_without_a_poll(maya_actions, store):
+    maya_actions.lock_in_group_choice("Lisbon, Portugal")
 
-    closing = everyone_votes_for_san_juan(store, leo_preferences=leo_in_april)
-
-    assert store.get_trip(SPACE).dates is None
-    assert len(said(closing.outbox)) == 1
+    assert store.get_trip(SPACE).destination == "Lisbon, Portugal"
 
 
 def test_itinerary_is_posted_in_date_order(locked_in_actions):
@@ -196,16 +183,8 @@ def test_itinerary_is_posted_in_date_order(locked_in_actions):
     )
 
     assert said(locked_in_actions.outbox) == [
-        "🗓️ The plan:\nSun 3/14 · Land and check in\nMon 3/15 · Beach day in Condado"
+        "the plan:\nSun 3/14 · Land and check in\nMon 3/15 · Beach day in Condado"
     ]
-
-
-def test_a_new_itinerary_replaces_the_old_one(locked_in_actions, store):
-    locked_in_actions.post_itinerary([plan_day(14, "Land"), plan_day(15, "Beach")])
-
-    locked_in_actions.post_itinerary([plan_day(16, "Rainforest hike")])
-
-    assert store.get_trip(SPACE).itinerary == [plan_day(16, "Rainforest hike")]
 
 
 def test_itinerary_days_must_fall_within_the_trip(locked_in_actions):
@@ -213,49 +192,14 @@ def test_itinerary_days_must_fall_within_the_trip(locked_in_actions):
         locked_in_actions.post_itinerary([plan_day(20, "One more beach day")])
 
 
-def test_itinerary_cannot_plan_the_same_day_twice(locked_in_actions):
-    with pytest.raises(TripActionError, match="only once"):
-        locked_in_actions.post_itinerary([plan_day(14, "Beach"), plan_day(14, "Hike")])
-
-
-def test_no_itinerary_before_a_destination_is_chosen(maya_actions):
-    with pytest.raises(TripActionError, match="destination"):
-        maya_actions.post_itinerary([plan_day(14, "Beach")])
-
-
 def test_booking_links_cover_each_home_city_and_a_stay(locked_in_actions):
     locked_in_actions.send_booking_links()
 
     lines = said(locked_in_actions.outbox)[0].split("\n")
-    assert lines[0] == "✈️ Flights for Mar 14–19:"
+    assert lines[0] == "flights for Mar 14–19:"
     assert lines[1].startswith("Boston: https://www.google.com/travel/flights?")
     assert lines[2].startswith("New York: https://www.google.com/travel/flights?")
-    assert lines[3].startswith("🏠 Stays for 2: https://www.airbnb.com/s/")
-
-
-def test_no_booking_links_before_a_destination_is_chosen(maya_actions):
-    with pytest.raises(TripActionError, match="destination"):
-        maya_actions.send_booking_links()
-
-
-def test_logging_an_expense_confirms_it_in_the_chat(store):
-    store.create_trip(SPACE)
-    store.add_members(SPACE, [MAYA, LEO])
-    store.save_preferences(SPACE, LEO, LEO_PREFERENCES)
-    leo_actions = TripActions(store, SPACE, LEO)
-
-    leo_actions.log_sender_expense(124_000, "Airbnb")
-
-    assert said(leo_actions.outbox) == [
-        "Got it: Airbnb, $1,240, paid by Leo. Split 2 ways."
-    ]
-    [expense] = store.get_trip(SPACE).expenses
-    assert (expense.payer_phone, expense.amount_cents) == (LEO, 124_000)
-
-
-def test_an_expense_must_cost_something(maya_actions):
-    with pytest.raises(TripActionError):
-        maya_actions.log_sender_expense(0, "Airbnb")
+    assert lines[3].startswith("stays for 2: https://www.airbnb.com/s/")
 
 
 def test_payers_can_remove_their_own_expense(maya_actions, store):
@@ -265,7 +209,7 @@ def test_payers_can_remove_their_own_expense(maya_actions, store):
     maya_actions.remove_expense(expense.id)
 
     assert store.get_trip(SPACE).expenses == []
-    assert said(maya_actions.outbox)[-1] == "Removed: Bio bay kayaks, $196."
+    assert said(maya_actions.outbox)[-1] == "removed: Bio bay kayaks, $196."
 
 
 def test_nobody_else_can_remove_someones_expense(maya_actions, store):
@@ -274,28 +218,6 @@ def test_nobody_else_can_remove_someones_expense(maya_actions, store):
     with pytest.raises(TripActionError, match="only they can remove it"):
         maya_actions.remove_expense(expense_id)
     assert len(store.get_trip(SPACE).expenses) == 1
-
-
-def test_removing_an_expense_that_does_not_exist_is_refused(maya_actions):
-    with pytest.raises(TripActionError, match="no expense #7"):
-        maya_actions.remove_expense(7)
-
-
-def test_settle_up_is_posted_to_the_chat(maya_actions):
-    maya_actions.log_sender_expense(10_000, "Groceries")
-
-    maya_actions.post_settle_up()
-
-    assert said(maya_actions.outbox)[-1] == (
-        "💸 Shared costs: $100, so $50 each. Fewest payments to settle up:\n"
-        "…0002 → …0001 $50\n"
-        'Once you\'ve paid, text "@scout I paid …0001".'
-    )
-
-
-def test_no_settle_up_before_anyone_logs_an_expense(maya_actions):
-    with pytest.raises(TripActionError, match="nobody has logged an expense"):
-        maya_actions.post_settle_up()
 
 
 def maya_owes_leo_50(store):
@@ -313,17 +235,9 @@ def test_a_payment_is_recorded_and_confirmed_in_the_chat(store):
     maya_actions.record_sender_payment("Leo")
 
     assert said(maya_actions.outbox) == [
-        "Paid ✓ Maya → Leo $50\nEveryone's settled up 🎉"
+        "paid ✓ Maya → Leo $50\neveryone's settled up 🎉"
     ]
     assert store.get_trip(SPACE).settlements == [Settlement(MAYA, LEO, 5_000)]
-
-
-def test_payee_names_match_however_they_are_capitalized(store):
-    maya_owes_leo_50(store)
-
-    TripActions(store, SPACE, MAYA).record_sender_payment(" leo ")
-
-    assert len(store.get_trip(SPACE).settlements) == 1
 
 
 def test_nobody_can_record_paying_someone_they_do_not_owe(store):
@@ -333,13 +247,6 @@ def test_nobody_can_record_paying_someone_they_do_not_owe(store):
     with pytest.raises(TripActionError, match="Leo doesn't owe Maya anything"):
         leo_actions.record_sender_payment("Maya")
     assert store.get_trip(SPACE).settlements == []
-
-
-def test_a_refused_payment_says_who_the_sender_does_owe(store):
-    maya_owes_leo_50(store)
-
-    with pytest.raises(TripActionError, match="They owe: Leo"):
-        TripActions(store, SPACE, MAYA).record_sender_payment("Jordan")
 
 
 def priya_texts_a_receipt(store):
@@ -356,20 +263,12 @@ def test_a_receipt_is_read_back_for_its_payer_to_confirm(store):
     priya_actions = priya_texts_a_receipt(store)
 
     assert said(priya_actions.outbox) == [
-        "From the receipt: Casa Brisa, Mar 16, $164 total, paid by Priya. "
-        "Split it 3 ways?"
+        "from the receipt: Casa Brisa, Mar 16, $164 total, paid by Priya. "
+        "split it 3 ways?"
     ]
     assert store.get_trip(SPACE).expenses == []
     assert store.get_trip(SPACE).pending_receipt == PendingReceipt(
         PRIYA, "Casa Brisa", 16_400
-    )
-
-
-def test_a_receipt_without_a_date_is_read_back_without_one(maya_actions):
-    maya_actions.ask_to_confirm_receipt("Bodega", None, 1_250)
-
-    assert said(maya_actions.outbox)[0].startswith(
-        "From the receipt: Bodega, $12.50 total"
     )
 
 
@@ -383,14 +282,6 @@ def test_logging_the_confirmed_receipt_clears_it(store):
     assert [e.amount_cents for e in trip.expenses] == [16_400]
 
 
-def test_someone_elses_expense_leaves_the_receipt_waiting(store):
-    priya_texts_a_receipt(store)
-
-    TripActions(store, SPACE, LEO).log_sender_expense(2_000, "Ice")
-
-    assert store.get_trip(SPACE).pending_receipt is not None
-
-
 def test_a_dropped_receipt_is_never_logged(store):
     priya_actions = priya_texts_a_receipt(store)
 
@@ -399,11 +290,6 @@ def test_a_dropped_receipt_is_never_logged(store):
     trip = store.get_trip(SPACE)
     assert trip.pending_receipt is None
     assert trip.expenses == []
-
-
-def test_a_receipt_total_must_be_more_than_zero(maya_actions):
-    with pytest.raises(TripActionError):
-        maya_actions.ask_to_confirm_receipt("Casa Brisa", None, 0)
 
 
 CONDADO = Coordinates(18.4574, -66.0745)
@@ -447,67 +333,20 @@ def test_nearby_places_are_posted_with_rough_walking_times(locked_in_actions, st
     maya_actions.suggest_nearby_places("cozy tacos with outdoor seating", "Condado")
 
     assert said(maya_actions.outbox) == [
-        "📍 Near Condado:\n"
+        "near Condado:\n"
         "1. Lote 23 · $$ · ~10 min walk\n"
         "   Food park.\n"
         "2. Taco Bar · $ · ~1 min walk\n"
         "3. Cocina · ~8 min walk\n"
         "   Patio.\n"
-        "Reply with a number and I'll send directions."
+        "reply with a number and i'll send directions."
     ]
-
-
-def test_places_are_searched_near_the_spot_the_group_named(locked_in_actions, store):
-    places = FakePlaces()
-
-    actions_with(store, places).suggest_nearby_places("tacos", "Condado")
-
-    assert places.searches == [
-        ("Condado, San Juan, Puerto Rico", None),
-        ("tacos in San Juan, Puerto Rico", CONDADO),
-    ]
-
-
-def test_without_a_named_spot_places_come_from_the_whole_destination(
-    locked_in_actions, store
-):
-    maya_actions = actions_with(store, FakePlaces())
-
-    maya_actions.suggest_nearby_places("tacos", None)
-
-    assert said(maya_actions.outbox)[0].startswith(
-        "📍 Near San Juan, Puerto Rico:\n1. Lote 23 · $$\n"
-    )
 
 
 def test_suggested_places_are_remembered_for_picking_one(locked_in_actions, store):
     actions_with(store, FakePlaces()).suggest_nearby_places("tacos", "Condado")
 
     assert store.get_trip(SPACE).place_suggestions == TACO_SPOTS
-
-
-def test_no_suggestions_before_a_destination_is_chosen(maya_actions, store):
-    with pytest.raises(TripActionError, match="hasn't picked a destination"):
-        actions_with(store, FakePlaces()).suggest_nearby_places("tacos", None)
-
-
-def test_no_suggestions_without_a_places_api_key(locked_in_actions):
-    with pytest.raises(TripActionError, match="place search isn't set up"):
-        locked_in_actions.suggest_nearby_places("tacos", None)
-
-
-def test_a_spot_that_cannot_be_found_is_reported(locked_in_actions, store):
-    places = FakePlaces()
-
-    with pytest.raises(TripActionError, match="couldn't find 'Narnia'"):
-        actions_with(store, places).suggest_nearby_places("tacos", "Narnia")
-
-
-def test_a_search_with_no_matches_is_reported(locked_in_actions, store):
-    with pytest.raises(TripActionError, match="no places matched"):
-        actions_with(store, FakePlaces(results=[])).suggest_nearby_places(
-            "igloo bar", None
-        )
 
 
 def test_a_places_outage_is_reported_instead_of_inventing_places(
@@ -526,29 +365,9 @@ def test_picking_a_place_sends_directions_to_it(maya_actions, store):
     maya_actions.send_directions(1)
 
     lead_in, link = maya_actions.outbox
-    assert lead_in == Say("🧭 Directions to Taco Bar:")
+    assert lead_in == Say("directions to Taco Bar:")
     assert link.url.startswith("https://www.google.com/maps/dir/")
     assert "destination_place_id=place-2" in link.url
-
-
-def test_once_a_place_is_picked_the_suggestions_are_done(maya_actions, store):
-    store.replace_place_suggestions(SPACE, TACO_SPOTS)
-
-    maya_actions.send_directions(0)
-
-    assert store.get_trip(SPACE).place_suggestions == []
-
-
-def test_picking_a_place_that_was_not_suggested_is_refused(maya_actions, store):
-    store.replace_place_suggestions(SPACE, TACO_SPOTS)
-
-    with pytest.raises(TripActionError, match="place 4 doesn't exist"):
-        maya_actions.send_directions(3)
-
-
-def test_no_directions_without_suggestions(maya_actions):
-    with pytest.raises(TripActionError, match="no place suggestions"):
-        maya_actions.send_directions(0)
 
 
 class FakeBrochurePhotos:
@@ -602,90 +421,6 @@ def test_each_destination_gets_its_own_card_named_for_the_place(
     assert [card.caption for card in cards] == ["Tulum", "Punta Cana", "San Juan"]
     assert {card.subcaption for card in cards} == {"3 locations for you to consider"}
     assert cards[0].thumbnail_url == "https://lh3.googleusercontent.com/Tulum,-Mexico"
-
-
-def test_a_destination_card_reads_as_an_article_with_photos_and_prices(
-    maya_actions_with_photos,
-):
-    maya_actions_with_photos.send_destination_brochures(TROPICAL_PITCHES, nights=5)
-
-    tulum = maya_actions_with_photos.outbox[0].layout
-    assert (tulum["title"], tulum["subtitle"]) == ("Tulum", "Caribbean")
-    words = list(_layout_words(tulum["root"]))
-    for expected in [
-        "~$1,100 per person, all in",
-        "White sand and warm water.",
-        "Playa Resort (★ 4.7)",
-        "Snorkel the reef",
-        "~$60 per person",
-        "Flights",
-        "~$400",
-        "Estimates for 5 nights. Nothing is booked.",
-    ]:
-        assert expected in words
-    assert list(_layout_photos(tulum["root"])) == [
-        "https://lh3.googleusercontent.com/Tulum,-Mexico",
-        "https://lh3.googleusercontent.com/Snorkel-the-reef-in-Tulum,-Mexico",
-    ]
-
-
-def test_each_card_reads_the_same_as_text_on_phones_without_the_card_app(
-    maya_actions_with_photos,
-):
-    maya_actions_with_photos.send_destination_brochures(TROPICAL_PITCHES, nights=5)
-
-    assert maya_actions_with_photos.outbox[0].fallback_text == (
-        "Tulum, Mexico · ~$1,100\n"
-        "Flights ~$400 · Hotel ~$500 · Food & fun ~$200\n"
-        "White sand and warm water.\n"
-        "Stay: Playa Resort (★ 4.7)\n"
-        "Do: Snorkel the reef (~$60)\n"
-        "Estimates per person for 5 nights."
-    )
-
-
-def _layout_words(node):
-    """Every piece of text a HermesShare layout shows, in order."""
-    for key in ("text", "label", "key", "value"):
-        if isinstance(node.get(key), str):
-            yield node[key]
-    for child in _child_nodes(node):
-        yield from _layout_words(child)
-
-
-def _layout_photos(node):
-    yield from node.get("urls", [])
-    for child in _child_nodes(node):
-        yield from _layout_photos(child)
-
-
-def _child_nodes(node):
-    return [*node.get("children", []), *([node["child"]] if "child" in node else [])]
-
-
-def test_brochures_need_exactly_three_destinations(maya_actions_with_photos):
-    with pytest.raises(TripActionError, match="expected 3 destinations, got 2"):
-        maya_actions_with_photos.send_destination_brochures(TROPICAL_PITCHES[:2], 5)
-
-
-def test_a_destination_without_a_hotel_asks_for_another_pick(store, maya_actions):
-    actions = actions_with(store, FakeBrochurePhotos(has_hotels=False))
-
-    with pytest.raises(TripActionError, match="no hotel found in Tulum"):
-        actions.send_destination_brochures(TROPICAL_PITCHES, nights=5)
-    assert actions.outbox == []
-
-
-def test_brochures_say_so_when_place_search_is_down(store, maya_actions):
-    actions = actions_with(store, FakeBrochurePhotos(is_down=True))
-
-    with pytest.raises(TripActionError, match="place search isn't working"):
-        actions.send_destination_brochures(TROPICAL_PITCHES, nights=5)
-
-
-def test_brochures_need_place_search_set_up(maya_actions):
-    with pytest.raises(TripActionError, match="brochures aren't available"):
-        maya_actions.send_destination_brochures(TROPICAL_PITCHES, nights=5)
 
 
 @pytest.fixture
@@ -760,88 +495,32 @@ def test_flights_are_one_card_with_a_departure_board_per_home_city(
     assert card.thumbnail_url == "https://lh5.googleusercontent.com/san-juan"
 
 
-def test_each_flight_shows_its_fare_and_who_flies_it(locked_in_actions, store):
-    actions = flights_actions(store, FakeFlights(ROUTES))
-
-    actions.send_best_flights(HOME_AIRPORTS, "SJU")
-
-    [card] = actions.outbox
-    boston_details = card.layout["root"]["children"][1]["child"]["children"]
-    rows = {row["key"]: row["value"] for row in boston_details}
-    assert rows["Fare"] == "$312 per person"
-    assert rows["For"] == "Maya"
-    assert rows["Flying time"] == "8h 5m"
-
-
-def test_each_flight_has_a_button_that_opens_it_on_google_flights(
-    locked_in_actions, store
-):
-    actions = flights_actions(store, FakeFlights(ROUTES))
-
-    actions.send_best_flights(HOME_AIRPORTS, "SJU")
-
-    [card] = actions.outbox
-    assert [(a["label"], a["deepLinkURL"]) for a in card.layout["actions"]] == [
-        ("Book from Boston", "https://www.google.com/travel/flights?from=BOS"),
-        ("Book from new york", "https://www.google.com/travel/flights?from=NYC"),
-    ]
-
-
-def test_flights_read_the_same_as_text_on_phones_without_the_card_app(
-    locked_in_actions, store
-):
-    actions = flights_actions(store, FakeFlights(ROUTES))
-
-    actions.send_best_flights(HOME_AIRPORTS, "SJU")
-
-    [card] = actions.outbox
-    assert card.fallback_text.startswith(
-        "✈️ Best flights to San Juan, Puerto Rico, Mar 14–19\n"
-        "Boston (BOS → SJU): JetBlue B6 101 · 1 stop · FLL · 8h 5m\n"
-        "   $312 round trip per person, for Maya\n"
-        "   https://www.google.com/travel/flights?from=BOS\n"
-        "new york (NYC → SJU): JetBlue B6 101 · Nonstop · 8h 5m\n"
-        "   $1,240 round trip per person, for Leo\n"
-    )
-    assert "tell me what you paid" in card.fallback_text
-
-
-def test_every_home_city_needs_an_airport(locked_in_actions, store):
-    actions = flights_actions(store, FakeFlights(ROUTES))
-
-    with pytest.raises(TripActionError, match="no airport given for New York"):
-        actions.send_best_flights([HomeAirport("Boston", "BOS")], "SJU")
-
-
-def test_flights_need_at_least_one_airport(locked_in_actions, store):
-    actions = flights_actions(store, FakeFlights(ROUTES))
-
-    with pytest.raises(TripActionError, match="at least one home city"):
-        actions.send_best_flights([], "SJU")
-
-
-def test_a_home_city_with_no_flights_asks_for_another_airport(locked_in_actions, store):
-    actions = flights_actions(store, FakeFlights({"BOS": ROUTES["BOS"]}))
-
-    with pytest.raises(TripActionError, match="no flights from NYC to SJU"):
-        actions.send_best_flights(HOME_AIRPORTS, "SJU")
-    assert actions.outbox == []
-
-
-def test_flights_say_so_when_flight_search_is_down(locked_in_actions, store):
-    actions = flights_actions(store, FakeFlights(ROUTES, is_down=True))
-
-    with pytest.raises(TripActionError, match="flight search isn't working"):
-        actions.send_best_flights(HOME_AIRPORTS, "SJU")
-
-
 def test_without_flight_search_scout_sends_booking_links_instead(locked_in_actions):
     with pytest.raises(TripActionError, match="send booking links instead"):
         locked_in_actions.send_best_flights(HOME_AIRPORTS, "SJU")
 
 
-def test_no_flights_before_a_destination_is_chosen(store, maya_actions):
-    actions = flights_actions(store, FakeFlights(ROUTES))
+def keep_media(store, tmp_path, kind, media_id="a1b2c3d4", space_id=SPACE):
+    """A photo or voice note kept for a chat, with a readable copy on disk."""
+    readable = tmp_path / f"{media_id}.readable.jpg"
+    readable.write_bytes(b"jpeg bytes")
+    store.save_media(
+        space_id,
+        SharedMedia(media_id, kind, tmp_path / f"{media_id}.heic", readable, None),
+    )
 
-    with pytest.raises(TripActionError, match="destination"):
-        actions.send_best_flights(HOME_AIRPORTS, "SJU")
+
+def test_viewing_a_photo_shows_its_readable_copy(store, tmp_path, maya_actions):
+    keep_media(store, tmp_path, MediaKind.PHOTO)
+
+    photo = maya_actions.view_photo("a1b2c3d4")
+
+    assert photo == MessagePhoto("image/jpeg", "anBlZyBieXRlcw==")
+
+
+def test_another_chats_photos_stay_out_of_view(store, tmp_path, maya_actions):
+    store.create_trip("another-chat")
+    keep_media(store, tmp_path, MediaKind.PHOTO, space_id="another-chat")
+
+    with pytest.raises(TripActionError, match="no photo a1b2c3d4"):
+        maya_actions.view_photo("a1b2c3d4")

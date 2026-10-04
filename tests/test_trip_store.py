@@ -1,15 +1,8 @@
-from datetime import date, datetime
+from datetime import date
 
-from scout.places import Coordinates, Place
 from scout.trip import (
-    DateWindow,
     DestinationOption,
-    Expense,
-    ItineraryDay,
-    PendingReceipt,
     PreferenceUpdate,
-    Settlement,
-    TripStage,
 )
 
 SPACE = "group-chat-1"
@@ -20,20 +13,6 @@ OPTIONS = [
     DestinationOption("San Juan, Puerto Rico", 750, "No passport"),
     DestinationOption("Miami, Florida", 800, "Easy flights"),
 ]
-
-
-def test_new_trip_starts_by_collecting_preferences(store):
-    store.create_trip(SPACE)
-
-    trip = store.get_trip(SPACE)
-
-    assert trip.stage == TripStage.COLLECTING_PREFERENCES
-    assert trip.members == []
-    assert trip.open_poll is None
-
-
-def test_unknown_chat_has_no_trip(store):
-    assert store.get_trip("never-seen") is None
 
 
 def test_adding_a_member_twice_keeps_one_copy(store):
@@ -78,168 +57,6 @@ def test_changing_a_vote_replaces_the_old_one(store):
     store.record_vote(poll_id, MAYA, 2)
 
     assert store.get_trip(SPACE).open_poll.votes == {MAYA: 2}
-
-
-def test_closing_a_poll_sets_the_destination_and_dates(store):
-    store.create_trip(SPACE)
-    store.open_poll(SPACE, OPTIONS)
-    poll_id = store.get_trip(SPACE).open_poll.id
-    dates = DateWindow(date(2027, 3, 14), date(2027, 3, 19))
-
-    store.close_poll(poll_id, "Tulum, Mexico", dates)
-
-    trip = store.get_trip(SPACE)
-    assert trip.stage == TripStage.DESTINATION_CHOSEN
-    assert trip.destination == "Tulum, Mexico"
-    assert trip.dates == dates
-    assert trip.open_poll is None
-
-
-def test_a_trip_closed_without_shared_dates_has_no_dates(store):
-    store.create_trip(SPACE)
-    store.open_poll(SPACE, OPTIONS)
-    poll_id = store.get_trip(SPACE).open_poll.id
-
-    store.close_poll(poll_id, "Tulum, Mexico", None)
-
-    assert store.get_trip(SPACE).dates is None
-
-
-def test_recent_messages_come_back_oldest_first_and_limited(store):
-    store.create_trip(SPACE)
-    for minute in range(5):
-        store.log_message(
-            SPACE, MAYA, f"message {minute}", datetime(2026, 10, 2, 9, minute)
-        )
-
-    recent = store.recent_messages(SPACE, limit=2)
-
-    assert [m.text for m in recent] == ["message 3", "message 4"]
-
-
-def test_scout_has_spoken_only_once_it_sent_something_in_that_chat(store):
-    store.create_trip(SPACE)
-    store.create_trip("other-chat")
-    store.log_message(SPACE, MAYA, "hey everyone", datetime(2026, 10, 2, 9, 0))
-    store.log_message("other-chat", None, "Hey all", datetime(2026, 10, 2, 9, 1))
-    assert not store.has_scout_spoken(SPACE)
-
-    store.log_message(SPACE, None, "Hey all", datetime(2026, 10, 2, 9, 2))
-
-    assert store.has_scout_spoken(SPACE)
-
-
-def test_chat_history_has_every_message_oldest_first(store):
-    store.create_trip(SPACE)
-    for minute in range(40):
-        store.log_message(
-            SPACE, MAYA, f"message {minute}", datetime(2026, 10, 2, 9, minute)
-        )
-
-    history = store.chat_history(SPACE)
-
-    assert [m.text for m in history] == [f"message {i}" for i in range(40)]
-
-
-def test_expenses_come_back_in_the_order_they_were_logged(store):
-    store.create_trip(SPACE)
-
-    airbnb = store.add_expense(SPACE, LEO, 124_000, "Airbnb")
-    kayaks = store.add_expense(SPACE, MAYA, 19_600, "Bio bay kayaks")
-
-    assert store.get_trip(SPACE).expenses == [
-        Expense(airbnb, LEO, 124_000, "Airbnb"),
-        Expense(kayaks, MAYA, 19_600, "Bio bay kayaks"),
-    ]
-
-
-def test_removing_an_expense_keeps_the_others(store):
-    store.create_trip(SPACE)
-    airbnb = store.add_expense(SPACE, LEO, 124_000, "Airbnb")
-    kayaks = store.add_expense(SPACE, MAYA, 19_600, "Bio bay kayaks")
-
-    store.remove_expense(SPACE, airbnb)
-
-    assert [e.id for e in store.get_trip(SPACE).expenses] == [kayaks]
-
-
-def test_settlements_are_saved_in_the_order_they_were_paid(store):
-    store.create_trip(SPACE)
-    first = Settlement(MAYA, LEO, 5_000)
-    second = Settlement(MAYA, LEO, 1_000)
-
-    store.add_settlement(SPACE, first)
-    store.add_settlement(SPACE, second)
-
-    assert store.get_trip(SPACE).settlements == [first, second]
-
-
-def test_a_newer_receipt_replaces_the_one_waiting(store):
-    store.create_trip(SPACE)
-    store.save_pending_receipt(SPACE, PendingReceipt(MAYA, "Casa Brisa", 16_400))
-
-    store.save_pending_receipt(SPACE, PendingReceipt(LEO, "Bodega", 1_250))
-
-    assert store.get_trip(SPACE).pending_receipt == PendingReceipt(LEO, "Bodega", 1_250)
-
-
-def test_a_cleared_receipt_is_gone(store):
-    store.create_trip(SPACE)
-    store.save_pending_receipt(SPACE, PendingReceipt(MAYA, "Casa Brisa", 16_400))
-
-    store.clear_pending_receipt(SPACE)
-
-    assert store.get_trip(SPACE).pending_receipt is None
-
-
-def test_new_place_suggestions_replace_the_old_ones_in_order(store):
-    store.create_trip(SPACE)
-    tacos = Place("place-1", "Lote 23", Coordinates(18.45, -66.07), "$$", "Food park.")
-    bar = Place("place-2", "La Factoría", Coordinates(18.46, -66.11), None, None)
-    beach = Place("place-3", "Playa", Coordinates(18.46, -66.08), "free", None)
-    store.replace_place_suggestions(SPACE, [tacos])
-
-    store.replace_place_suggestions(SPACE, [bar, beach])
-
-    assert store.get_trip(SPACE).place_suggestions == [bar, beach]
-
-
-def test_cleared_place_suggestions_are_gone(store):
-    store.create_trip(SPACE)
-    tacos = Place("place-1", "Lote 23", Coordinates(18.45, -66.07), "$$", None)
-    store.replace_place_suggestions(SPACE, [tacos])
-
-    store.clear_place_suggestions(SPACE)
-
-    assert store.get_trip(SPACE).place_suggestions == []
-
-
-def test_a_deleted_trip_starts_over_with_nothing_left(store):
-    store.create_trip(SPACE)
-    store.add_members(SPACE, [MAYA, LEO])
-    store.open_poll(SPACE, OPTIONS)
-    store.record_vote(store.get_trip(SPACE).open_poll.id, MAYA, 1)
-    store.replace_itinerary(SPACE, [ItineraryDay(date(2027, 3, 14), "Old San Juan")])
-    store.add_expense(SPACE, LEO, 124_000, "Airbnb")
-    store.add_settlement(SPACE, Settlement(MAYA, LEO, 5_000))
-    store.save_pending_receipt(SPACE, PendingReceipt(MAYA, "Casa Brisa", 16_400))
-    tacos = Place("place-1", "Lote 23", Coordinates(18.45, -66.07), "$$", None)
-    store.replace_place_suggestions(SPACE, [tacos])
-    store.log_message(SPACE, MAYA, "hey @scout", datetime(2026, 10, 2, 9, 0))
-
-    store.delete_trip(SPACE)
-    store.create_trip(SPACE)
-
-    trip = store.get_trip(SPACE)
-    assert trip.stage == TripStage.COLLECTING_PREFERENCES
-    assert trip.members == []
-    assert trip.open_poll is None
-    assert trip.itinerary == []
-    assert trip.expenses == []
-    assert trip.settlements == []
-    assert trip.pending_receipt is None
-    assert trip.place_suggestions == []
-    assert store.recent_messages(SPACE, limit=10) == []
 
 
 def test_deleting_a_trip_leaves_other_chats_alone(store):

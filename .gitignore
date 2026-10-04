@@ -4,8 +4,10 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 
-# scout's local database: real people's trip details, never commit it
+# scout's local database and the photos and voice notes members sent: real
+# people's trip details, never commit them
 *.db
+/media/
 
 # Secrets
 .env

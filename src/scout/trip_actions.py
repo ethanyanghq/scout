@@ -28,6 +28,7 @@ from scout.cards import best_flights, destination_article, flights_thumbnail_url
 from scout.flights import FlightsError
 from scout.group_summary import format_group_summary, summarize_group
 from scout.itinerary import format_itinerary
+from scout.media import load_photo
 from scout.money import format_usd
 from scout.nearby import directions_link, format_directions, format_nearby_places
 from scout.outgoing import Card, Link, Outgoing, Say
@@ -40,9 +41,12 @@ from scout.settle_up import (
     plan_payments,
 )
 from scout.trip import (
+    DateWindow,
     DestinationOption,
     ItineraryDay,
+    MediaKind,
     Member,
+    MessagePhoto,
     PendingReceipt,
     PreferenceUpdate,
     Settlement,
@@ -146,7 +150,7 @@ class TripActions:
         voter = trip.find_member(voter_phone)
         self.outbox.append(
             confirm(
-                f"Got it, {voter.label} → {poll.options[option_index].name} "
+                f"got it, {voter.label} → {poll.options[option_index].name} "
                 f"({len(poll.votes)} of {len(trip.members)} voted)"
             )
         )
@@ -157,6 +161,24 @@ class TripActions:
         if trip.open_poll is None:
             raise TripActionError("there is no open poll")
         return self._close(trip)
+
+    def lock_in_group_choice(self, destination: str) -> str:
+        """Locks in the destination one member chose for the whole group ("we
+        picked San Juan"), closing any open poll without waiting for votes."""
+        if not destination.strip():
+            raise TripActionError("name the destination the group chose")
+        trip = self._load_trip()
+        if trip.open_poll is not None:
+            option_names = [option.name for option in trip.open_poll.options]
+            choice = polls.parse_vote(destination, option_names)
+            if choice is not None:
+                destination = option_names[choice]
+
+        dates = summarize_group(trip.members).shared_window
+        self._store.lock_in_destination(self._space_id, destination, dates)
+        self.outbox.append(Say(f"{destination} it is, the group's pick 🎉"))
+        calendar = self._send_calendar(destination, dates)
+        return f"Destination is now {destination}. {calendar}"
 
     def post_itinerary(self, days: list[ItineraryDay]) -> str:
         trip = self._load_locked_in_trip()
@@ -235,8 +257,8 @@ class TripActions:
         payer = trip.find_member(self._sender_phone)
         self.outbox.append(
             Say(
-                f"Got it: {description}, {format_usd(amount_cents)}, paid by "
-                f"{payer.label}. Split {len(trip.members)} ways."
+                f"got it: {description}, {format_usd(amount_cents)}, paid by "
+                f"{payer.label}. split {len(trip.members)} ways."
             )
         )
         return f"Logged as expense #{expense_id}."
@@ -255,8 +277,8 @@ class TripActions:
         when = f", {purchased_on:%b} {purchased_on.day}" if purchased_on else ""
         self.outbox.append(
             Say(
-                f"From the receipt: {merchant}{when}, {format_usd(total_cents)} total, "
-                f"paid by {payer.label}. Split it {len(trip.members)} ways?"
+                f"from the receipt: {merchant}{when}, {format_usd(total_cents)} total, "
+                f"paid by {payer.label}. split it {len(trip.members)} ways?"
             )
         )
         return f"Asked {payer.label} to confirm. Log it once they do."
@@ -267,6 +289,13 @@ class TripActions:
             raise TripActionError("no receipt is waiting for confirmation")
         self._store.clear_pending_receipt(self._space_id)
         return "Receipt dropped. Nothing was logged."
+
+    def view_photo(self, photo_id: str) -> MessagePhoto:
+        """A photo sent earlier in this chat, for the agent to look at again."""
+        media = self._store.find_media(self._space_id, photo_id)
+        if media is None or media.kind is not MediaKind.PHOTO:
+            raise TripActionError(f"there is no photo {photo_id} in this chat")
+        return load_photo(media.readable_path)
 
     def remove_expense(self, expense_id: int) -> str:
         """Removes one of the sender's own expenses, e.g. one logged by mistake."""
@@ -283,7 +312,7 @@ class TripActions:
 
         self._store.remove_expense(self._space_id, expense_id)
         self.outbox.append(
-            Say(f"Removed: {expense.description}, {format_usd(expense.amount_cents)}.")
+            Say(f"removed: {expense.description}, {format_usd(expense.amount_cents)}.")
         )
         return "Expense removed."
 
@@ -307,7 +336,7 @@ class TripActions:
             ),
         )
         paid = (
-            f"Paid ✓ {payment.payer.label} → {payment.payee.label} "
+            f"paid ✓ {payment.payer.label} → {payment.payee.label} "
             f"{format_usd(payment.amount_cents)}"
         )
         self.outbox.append(Say(f"{paid}\n{format_payments_left(self._load_trip())}"))
@@ -404,18 +433,21 @@ class TripActions:
         dates = summarize_group(trip.members).shared_window
         self._store.close_poll(trip.open_poll.id, result.winner.name, dates)
         self.outbox.append(Say(polls.format_result(result, len(trip.open_poll.votes))))
+        calendar = self._send_calendar(result.winner.name, dates)
+        return f"Poll closed. Destination is now {result.winner.name}. {calendar}"
+
+    def _send_calendar(self, destination: str, dates: DateWindow | None) -> str:
+        """Sends the calendar link for the locked-in trip, if it has dates, and
+        says which happened."""
         if dates is None:
-            return (
-                f"Poll closed. Destination is now {result.winner.name}, "
-                "but no dates work for everyone, so the trip has no dates."
-            )
+            return "No dates work for everyone, so the trip has no dates."
         self.outbox.extend(
             [
-                Say(format_calendar_message(result.winner.name, dates)),
-                Link(google_calendar_link(result.winner.name, dates)),
+                Say(format_calendar_message(destination, dates)),
+                Link(google_calendar_link(destination, dates)),
             ]
         )
-        return f"Poll closed. Destination is now {result.winner.name}."
+        return "Sent the calendar link."
 
     def _load_locked_in_trip(self) -> Trip:
         """Loads a trip whose destination and dates are both settled."""

@@ -1,21 +1,23 @@
 """The HTTP endpoint the Photon bridge calls with each incoming text."""
 
+import base64
 import logging
 import os
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
-from typing import Literal
 
 import uvicorn
 from fastapi import FastAPI
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from scout.ai_provider import connect_agent
 from scout.conversation import Agent, handle_message, handle_reaction
 from scout.dev_endpoints import create_dev_router
+from scout.media import Attachment, MediaLibrary, load_photo
+from scout.openai_transcriber import connect_transcriber
 from scout.outgoing import Card, Link, Outgoing, React, Say
-from scout.trip import IncomingMessage, IncomingReaction, MessagePhoto
+from scout.trip import IncomingMessage, IncomingReaction, MediaKind
 from scout.trip_store import TripStore
 
 logger = logging.getLogger(__name__)
@@ -24,24 +26,25 @@ logger = logging.getLogger(__name__)
 HOST = "127.0.0.1"
 DEFAULT_PORT = 8787
 DEFAULT_DB_PATH = "scout.db"
+DEFAULT_MEDIA_DIR = "media"
 ACTION_TYPES = {Say: "say", React: "react", Link: "link", Card: "card"}
 
 
-class IncomingPhoto(BaseModel):
-    # The image types Claude can read. The bridge converts iPhone HEIC photos
-    # to JPEG before sending them.
-    media_type: Literal["image/jpeg", "image/png", "image/gif", "image/webp"]
+class IncomingAttachment(BaseModel):
+    # A photo (image/...) or voice note (audio/...), exactly as it was sent,
+    # like an iPhone's image/heic or audio/x-caf. scout converts it (media.py).
+    media_type: str = Field(pattern=r"^(image|audio)/")
     base64_data: str
 
 
 class IncomingText(BaseModel):
     space_id: str
     sender_phone: str
-    # Empty when someone sends only a photo.
+    # Empty when someone sends only a photo or voice note.
     text: str
     sent_at: datetime
     participant_phones: list[str] = []
-    photo: IncomingPhoto | None = None
+    attachment: IncomingAttachment | None = None
     message_id: str | None = None
     reply_to_text: str | None = None
 
@@ -64,24 +67,32 @@ class Actions(BaseModel):
     actions: list[dict]
 
 
-def create_app(store: TripStore, agent: Agent) -> FastAPI:
+def create_app(store: TripStore, agent: Agent, media: MediaLibrary) -> FastAPI:
     app = FastAPI(title="scout")
 
     # A plain `def` (not `async def`) makes FastAPI run this in a worker
-    # thread, so the slow AI call doesn't freeze the server.
+    # thread, so the slow AI and transcription calls don't freeze the server.
     @app.post("/messages")
     def receive_message(incoming: IncomingText) -> Actions:
+        kept = (
+            media.keep(incoming.space_id, _as_attachment(incoming.attachment))
+            if incoming.attachment
+            else None
+        )
         message = IncomingMessage(
             space_id=incoming.space_id,
             sender_phone=incoming.sender_phone,
             text=incoming.text,
             sent_at=incoming.sent_at,
             participant_phones=tuple(incoming.participant_phones),
+            # The newest photo goes to the AI as an image too, so it can read
+            # a receipt right away.
             photo=(
-                MessagePhoto(incoming.photo.media_type, incoming.photo.base64_data)
-                if incoming.photo
+                load_photo(kept.readable_path)
+                if kept and kept.kind is MediaKind.PHOTO
                 else None
             ),
+            media=kept,
             message_id=incoming.message_id,
             reply_to_text=incoming.reply_to_text,
         )
@@ -92,8 +103,12 @@ def create_app(store: TripStore, agent: Agent) -> FastAPI:
         reaction = IncomingReaction(**incoming.model_dump())
         return _as_actions(handle_reaction(reaction, store))
 
-    app.include_router(create_dev_router(store))
+    app.include_router(create_dev_router(store, media))
     return app
+
+
+def _as_attachment(incoming: IncomingAttachment) -> Attachment:
+    return Attachment(incoming.media_type, base64.b64decode(incoming.base64_data))
 
 
 def _as_actions(outgoing: list[Outgoing]) -> Actions:
@@ -108,11 +123,15 @@ def main() -> None:
     _log_decisions_only()
     store = TripStore(Path(os.environ.get("SCOUT_DB_PATH", DEFAULT_DB_PATH)))
     agent = connect_agent(store)
+    media = MediaLibrary(
+        Path(os.environ.get("SCOUT_MEDIA_DIR", DEFAULT_MEDIA_DIR)),
+        connect_transcriber(),
+    )
     port = int(os.environ.get("SCOUT_PORT", DEFAULT_PORT))
     logger.info("scout service is listening on http://%s:%d", HOST, port)
     # The bridge logs every message, so a line per request would only repeat it.
     uvicorn.run(
-        create_app(store, agent),
+        create_app(store, agent, media),
         host=HOST,
         port=port,
         access_log=False,

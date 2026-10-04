@@ -22,6 +22,7 @@ const RUN_FOLDER = join(BRIDGE_FOLDER, ".devchat", "e2e");
 // Both are kept after a run, to look into failures.
 const SERVICE_LOG = join(RUN_FOLDER, "service.log");
 const DATABASE = join(RUN_FOLDER, "scout.db");
+const MEDIA_FOLDER = join(RUN_FOLDER, "media");
 const SERVICE_START_TIMEOUT_MS = 30_000;
 
 const scripts = await chooseScripts(process.argv.slice(2));
@@ -67,9 +68,11 @@ function findFreePort(): number {
   return port;
 }
 
-// A fresh database each run, so scripts never see a developer's trips.
+// A fresh database and media folder each run, so scripts never see a
+// developer's trips.
 async function startService(port: number) {
   await rm(DATABASE, { force: true });
+  await rm(MEDIA_FOLDER, { recursive: true, force: true });
   const envFile = (await Bun.file(join(REPO_ROOT, ".env")).exists()) ? ["--env-file", ".env"] : [];
   const log = openSync(SERVICE_LOG, "w");
   const service = Bun.spawn(["uv", "run", ...envFile, "scout-server"], {
@@ -78,6 +81,7 @@ async function startService(port: number) {
       ...process.env,
       SCOUT_PORT: String(port),
       SCOUT_DB_PATH: DATABASE,
+      SCOUT_MEDIA_DIR: MEDIA_FOLDER,
     },
     stdout: log,
     stderr: log,

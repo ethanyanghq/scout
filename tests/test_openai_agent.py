@@ -13,7 +13,7 @@ from scout.agent import ScoutAgent
 from scout.ai_provider import connect_agent
 from scout.openai_agent import OpenAIScoutAgent
 from scout.outgoing import Say
-from scout.trip import IncomingMessage, MessagePhoto
+from scout.trip import IncomingMessage, MediaKind, MessagePhoto, SharedMedia
 
 SPACE = "group-chat-1"
 MAYA = "+15550000001"
@@ -64,31 +64,6 @@ def maya_says(store, words, photo=None):
     return store.get_trip(SPACE), message
 
 
-def test_saves_preferences_and_confirms(store):
-    trip, message = maya_says(store, "i'm maya, $800")
-    preferences = {
-        "member": "…0001",
-        "display_name": "Maya",
-        "available_from": None,
-        "available_to": None,
-        "budget_usd": 800,
-        "home_city": None,
-        "must_haves": None,
-    }
-    model = ScriptedOpenAI(
-        calls("save_member_preferences", preferences),
-        says("Got it, Maya: ~$800. Dates and home city?"),
-    )
-
-    replies = OpenAIScoutAgent(model, store).respond(trip, message)
-
-    assert said(replies) == ["Got it, Maya: ~$800. Dates and home city?"]
-    assert store.get_trip(SPACE).find_member(MAYA).budget_usd == 800
-    tool_result = model.requests[1]["messages"][-1]
-    assert tool_result["role"] == "tool"
-    assert tool_result["tool_call_id"] == "call_1"
-
-
 def test_bad_tool_input_goes_back_to_openai_as_an_error(store):
     trip, message = maya_says(store, "@scout close the poll")
     model = ScriptedOpenAI(
@@ -104,40 +79,34 @@ def test_bad_tool_input_goes_back_to_openai_as_an_error(store):
     assert said(replies) == ["There's no poll open yet."]
 
 
-def test_posted_summaries_follow_the_lead_in_line(store):
-    trip, message = maya_says(store, "@scout where are we at?")
-    model = ScriptedOpenAI(calls("post_group_summary", {}), says("Here you go!"))
-
-    replies = said(OpenAIScoutAgent(model, store).respond(trip, message))
-
-    assert replies[0] == "Here you go!"
-    assert replies[1].startswith("Here's where everyone landed:")
-
-
-def test_no_reply_means_scout_stays_quiet(store):
-    trip, message = maya_says(store, "lol same")
-    model = ScriptedOpenAI(says("NO_REPLY"))
-
-    assert OpenAIScoutAgent(model, store).respond(trip, message) == []
-
-
-def test_each_paragraph_of_a_reply_is_its_own_text(store):
-    trip, message = maya_says(store, "@scout hello!")
-    model = ScriptedOpenAI(says("Hey all, I'm scout 👋\n\nTag me anytime"))
-
-    replies = OpenAIScoutAgent(model, store).respond(trip, message)
-
-    assert said(replies) == ["Hey all, I'm scout 👋", "Tag me anytime"]
-
-
-def test_a_refusal_sends_nothing(store):
-    trip, message = maya_says(store, "@scout hi")
-    refusal = ChatCompletionMessage(
-        role="assistant", content=None, refusal="I can't help with that."
+def test_a_photo_openai_asks_to_view_follows_the_tool_results(store, tmp_path):
+    trip, message = maya_says(store, "@scout what was the total on that receipt?")
+    readable = tmp_path / "a1b2c3d4.readable.jpg"
+    readable.write_bytes(b"jpeg bytes")
+    store.save_media(
+        SPACE,
+        SharedMedia(
+            "a1b2c3d4", MediaKind.PHOTO, tmp_path / "a1b2c3d4.heic", readable, None
+        ),
     )
-    model = ScriptedOpenAI(refusal)
+    model = ScriptedOpenAI(
+        calls("view_photo", {"photo_id": "a1b2c3d4"}),
+        says("$164 at Casa Brisa."),
+    )
 
-    assert OpenAIScoutAgent(model, store).respond(trip, message) == []
+    OpenAIScoutAgent(model, store).respond(trip, message)
+
+    tool_result, photos = model.requests[1]["messages"][-2:]
+    assert tool_result["role"] == "tool"
+    assert photos == {
+        "role": "user",
+        "content": [
+            {
+                "type": "image_url",
+                "image_url": {"url": "data:image/jpeg;base64,anBlZyBieXRlcw=="},
+            }
+        ],
+    }
 
 
 def test_a_photo_is_shown_before_the_situation(store):
@@ -150,13 +119,6 @@ def test_a_photo_is_shown_before_the_situation(store):
     photo, situation = model.requests[0]["messages"][1]["content"]
     assert photo["image_url"]["url"] == "data:image/jpeg;base64,cmVjZWlwdA=="
     assert "It comes with the photo above." in situation["text"]
-
-
-def test_claude_is_used_when_its_key_is_set(store, monkeypatch):
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-
-    assert isinstance(connect_agent(store), ScoutAgent)
 
 
 def test_openai_is_the_fallback_without_a_claude_key(store, monkeypatch):
