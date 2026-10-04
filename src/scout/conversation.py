@@ -55,6 +55,13 @@ def handle_message(
     """Records the message and returns what scout should send back."""
     if is_private_chat(message):
         return handle_private_message(message, store)
+    if message.arrived_late:
+        # It should take seconds. The bridge's log says whether Linq delivered
+        # it late or it waited behind scout's earlier replies.
+        logger.warning(
+            "This message reached scout %ds after it was sent, so the AI is told",
+            message.delivery_delay.total_seconds(),
+        )
 
     if store.get_trip(message.space_id) is None:
         store.create_trip(message.space_id)

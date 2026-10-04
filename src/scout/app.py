@@ -114,6 +114,7 @@ def create_app(
             media=kept,
             message_id=incoming.message_id,
             reply_to_text=incoming.reply_to_text,
+            received_at=datetime.now(UTC),
         )
         return _as_actions(handle_message(message, store, agent, gate, services))
 

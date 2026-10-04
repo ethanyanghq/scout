@@ -2,7 +2,7 @@
 
 import re
 from dataclasses import dataclass, field
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from enum import IntEnum, StrEnum
 from pathlib import Path
 
@@ -19,6 +19,9 @@ ADDRESSES_SCOUT = re.compile(
     r"|^\W*(?:scout|scott)\s*,",
     re.IGNORECASE,
 )
+# A message normally reaches scout within seconds. One this late may answer a
+# chat that has since moved on, so the AI is told (see agent.py).
+LATE_MESSAGE_DELAY = timedelta(minutes=1)
 
 
 class TripStage(StrEnum):
@@ -103,6 +106,21 @@ class IncomingMessage:
     # The words of the message this one is a threaded reply to, if it is one
     # and the bridge could find them.
     reply_to_text: str | None = None
+    # When the service got it. None where that isn't known, as in scout-simulate.
+    received_at: datetime | None = None
+
+    @property
+    def delivery_delay(self) -> timedelta | None:
+        """How long after it was sent the message reached scout. None when
+        either time is unknown, or the sent time has no time zone to compare."""
+        if self.received_at is None or self.sent_at.tzinfo is None:
+            return None
+        return self.received_at - self.sent_at
+
+    @property
+    def arrived_late(self) -> bool:
+        delay = self.delivery_delay
+        return delay is not None and delay >= LATE_MESSAGE_DELAY
 
     @property
     def mentions_scout(self) -> bool:

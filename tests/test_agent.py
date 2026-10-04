@@ -1,7 +1,7 @@
 """The agent loop, with a scripted stand-in for the Claude API."""
 
 from dataclasses import replace
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -256,6 +256,32 @@ def test_tells_claude_when_it_was_not_tagged_and_should_lean_toward_silence(stor
     situation = situation_text(claude)
     assert "It does not tag you." in situation
     assert "reply NO_REPLY unless the group clearly needs you" in situation
+
+
+def test_tells_claude_when_a_message_reached_it_minutes_after_it_was_sent(store):
+    trip, message = maya_says(store, "ethan wants somewhere spanish-speaking")
+    sent_at = datetime(2026, 10, 2, 9, 0, tzinfo=UTC)
+    late = replace(message, sent_at=sent_at, received_at=sent_at + timedelta(minutes=9))
+    claude = ScriptedClaude(response("end_turn", text("NO_REPLY")))
+
+    ScoutAgent(claude, store).respond(trip, late)
+
+    situation = situation_text(claude)
+    assert "It was sent about 9 min ago and only just reached you" in situation
+    assert "skip a question that has since been answered" in situation
+
+
+def test_says_nothing_about_timing_for_a_message_that_arrived_promptly(store):
+    trip, message = maya_says(store, "ethan wants somewhere spanish-speaking")
+    sent_at = datetime(2026, 10, 2, 9, 0, tzinfo=UTC)
+    prompt = replace(
+        message, sent_at=sent_at, received_at=sent_at + timedelta(seconds=2)
+    )
+    claude = ScriptedClaude(response("end_turn", text("NO_REPLY")))
+
+    ScoutAgent(claude, store).respond(trip, prompt)
+
+    assert "only just reached you" not in situation_text(claude)
 
 
 def test_a_threaded_reply_to_one_of_scouts_texts_counts_as_addressing_it(store):

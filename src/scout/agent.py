@@ -2,7 +2,7 @@
 
 import logging
 import re
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 import anthropic
@@ -175,6 +175,8 @@ def describe_situation(store: TripStore, trip: Trip, message: IncomingMessage) -
     )
     if message.reply_to_text is not None:
         tagged += f' It replies in a thread to: "{message.reply_to_text}".'
+    if message.arrived_late:
+        tagged += " " + _late_message_note(message.delivery_delay)
     if not store.has_scout_spoken(trip.space_id):
         tagged += " You haven't said anything in this chat yet."
     today = date.today()
@@ -184,6 +186,16 @@ def describe_situation(store: TripStore, trip: Trip, message: IncomingMessage) -
         f"# The chat so far, oldest first\n{chat}\n\n"
         f"# Newest message\nFrom {sender.label}. {tagged}\n"
         f"{message.readable_text}"
+    )
+
+
+def _late_message_note(delay: timedelta) -> str:
+    minutes = max(1, round(delay.total_seconds() / 60))
+    return (
+        f"It was sent about {minutes} min ago and only just reached you, so "
+        "the chat above can include messages sent after it. Act on it as it "
+        "fits the chat now: save what it shares, but skip a question that has "
+        "since been answered or a choice the group has since made."
     )
 
 

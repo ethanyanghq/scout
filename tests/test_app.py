@@ -3,7 +3,7 @@
 import base64
 import re
 import shutil
-from datetime import date, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -69,6 +69,37 @@ def test_a_vote_with_a_message_id_comes_back_as_a_tapback_on_it(client):
             }
         ]
     }
+
+
+class RecordingAgent:
+    def __init__(self):
+        self.messages = []
+
+    def respond(self, trip, message):
+        self.messages.append(message)
+        return []
+
+
+def test_a_message_sent_minutes_before_it_arrives_reaches_the_ai_marked_late(
+    store, tmp_path
+):
+    agent = RecordingAgent()
+    client = TestClient(
+        create_app(store, agent, SilentGate(), MediaLibrary(tmp_path / "media", None))
+    )
+    nine_minutes_ago = datetime.now(UTC) - timedelta(minutes=9)
+
+    client.post(
+        "/messages",
+        json={
+            "space_id": SPACE,
+            "sender_phone": MAYA,
+            "text": "@scout ethan wants somewhere spanish-speaking",
+            "sent_at": nine_minutes_ago.isoformat(),
+        },
+    )
+
+    assert agent.messages[0].arrived_late
 
 
 def send_attachment(client, media_type, data):
