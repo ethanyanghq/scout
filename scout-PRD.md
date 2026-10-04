@@ -8,12 +8,13 @@
 | **Last updated** | October 2026 |
 | **Owner** | [Your name] |
 | **Interactive journey** | [scout user journey](https://claude.ai/artifact/F2mTb9DJeGZR4mq2bFLFEu) (private until you share it) |
+| **Flow spec** | [integration.md](integration.md): the eight stages, the four cards, and how a card comes back |
 
 ---
 
 ## 1. Summary
 
-scout is an AI agent that plans group outings and trips from inside the group chat itself. Anyone can add its phone number to an existing text thread, so there's no app to download and no one has to sign up for anything. The flagship use case is a friend group planning spring break: instead of a chaotic thread where ideas get buried and no one commits, scout collects each person's constraints (dates, budget, home city, must-dos), suggests destinations and day-by-day itineraries, runs polls so the group can vote, and keeps a running summary of what's been decided. Once the group decides, it texts a link that puts the trip on everyone's Google Calendar in one tap. During the trip it handles in-the-moment requests like "find us a cozy taco spot with outdoor seating nearby" and sends directions once the group picks. Once money starts moving, it tracks who paid for what (members can just text a photo of the receipt), splits shared costs, tells everyone who owes whom, and settles each payment in the chat ("@scout pay Leo") over a sandbox bank, Capital One's Nessie API. It also creates a shared trip album, adds everyone in the group, and collects the photos people take along the way.
+scout is an AI agent that plans group outings and trips from inside the group chat itself. Anyone can add its phone number to an existing text thread, so there's no app to download and no one has to sign up for anything. The flagship use case is a friend group planning spring break: instead of a chaotic thread where ideas get buried and no one commits, scout interviews each person about their constraints (dates, budget, home city, the kind of trip they want, whether they're an early riser or a night owl), then runs each decision as an interactive card in the thread — three destination brochures to look through and vote on, a deck of activities to tick, an itinerary built from what people actually picked, and one hotel and one flight to confirm into a shared ledger. Once it's settled, it texts a link that puts the whole trip on everyone's calendar in one tap. The flow is specified in [integration.md](integration.md). During the trip it handles in-the-moment requests like "find us a cozy taco spot with outdoor seating nearby" and sends directions once the group picks. Once money starts moving, it tracks who paid for what (members can just text a photo of the receipt), splits shared costs, tells everyone who owes whom, and settles each payment in the chat ("@scout pay Leo") over a sandbox bank, Capital One's Nessie API. It also creates a shared trip album, adds everyone in the group, and collects the photos people take along the way.
 
 ## 2. Problem
 
@@ -55,12 +56,15 @@ The core journey follows one group from "we should go somewhere" to "everyone's 
 
 | Step | What the group does | What scout does |
 |---|---|---|
-| 1. Add scout | A member adds scout's number to the existing group text. | Introduces itself and asks everyone for dates, budget, home city, and one must-have. |
-| 2. Share preferences | Members reply casually ("mar 13–20, ~$800, flying from boston"). | Extracts constraints, finds the date overlap, and posts a summary of where everyone landed. |
-| 3. Vote on a destination | Members vote on the options. | Suggests 3 destinations that fit everyone's dates and budget, runs the poll, announces the result, and breaks ties with cost or fit. Texts a link to add the trip to Google Calendar. |
-| 4. Get the itinerary | A member asks for a plan ("not too packed pls"). | Builds a day-by-day itinerary around the group's must-haves and sends booking links for flights and lodging. Creates a shared trip album and texts everyone the link. |
-| 5. Explore on the trip | A member asks for a vibe ("cozy, outdoor seating, not touristy"). Members add photos as the trip goes. | Returns 3 nearby options with walking time and price level, then sends directions once the group picks. Adds photos members upload or text to it into the album. |
-| 6. Settle up | Members mention what they paid ("I paid the airbnb, $1,240") or text a photo of the receipt. | Reads receipts, logs each expense, calculates the fewest payments to settle up, pays each one over the Nessie sandbox when the payer says "@scout pay Leo", and shows who still owes. Reminds everyone to add their last photos to the album. |
+| 1. Add scout | A member adds scout's number to the existing group text. | Introduces itself as a travel assistant that also tracks expenses, then interviews everyone: dates, budget, home city, what kind of trip they want, and whether they're an early riser or a night owl. |
+| 2. Share preferences | Members reply casually ("mar 13–20, ~$800, flying from boston, beach, night owl"). | Extracts constraints, finds the date overlap, confirms each reply in one line, and posts a summary of where everyone landed. |
+| 3. Pick a destination | Members open the brochures, look around, and each sends their pick. | Posts one card holding 3 destinations that fit the dates, budget and interests. Each tapped open shows a photo, the top-rated hotel, its amenities, and the estimated total. Each person's submit is a vote; scout announces the result and breaks ties on cost. |
+| 4. Pick activities | Everyone ticks what they'd do and hits send once. | Posts a deck of activities at that destination and hotel, each with a photo, a description and a price. Aggregates the picks and says what the group agreed on. |
+| 5. Get the itinerary | A member asks for a plan, or scout posts it once everyone has ticked. | Builds a day-by-day itinerary from what people actually picked, paced to the group's chronotype. |
+| 6. Book the room and the flight | The organizer books and confirms what it cost. | Asks the member who added it to book the one hotel for everyone, then posts the one best-value flight. Each confirmation goes into the shared ledger. |
+| 7. Put it on the calendar | A member taps once. | Sends the whole trip — days, activities, hotel, flight — as one add-to-calendar, then a shared album link. |
+| 8. Explore on the trip | A member asks for a vibe ("cozy, outdoor seating, not touristy"). Members add photos as the trip goes. | Returns 3 nearby options with walking time and price level, then sends directions once the group picks. Adds photos members upload or text to it into the album. |
+| 9. Settle up | Members mention what they paid ("I paid the airbnb, $1,240") or text a photo of the receipt. | Reads receipts, logs each expense, calculates the fewest payments to settle up, pays each one over the Nessie sandbox when the payer says "@scout pay Leo", and shows who still owes. Reminds everyone to add their last photos to the album. |
 
 scout also works for smaller plans with the same building blocks: a birthday dinner for eight, tacos before a concert, a ski weekend, or splitting a cabin rental.
 
@@ -84,27 +88,47 @@ Priorities: **P0** is required for the demo, **P1** is a stretch goal, and **P2*
 | ID | Requirement | Priority |
 |---|---|---|
 | PR-1 | Extract dates, budget, departure city, and must-haves from free-form messages, including casual phrasing and typos. | P0 |
+| PR-5 | Ask each member what kind of trip they want (beach, lakefront, tropical, city) and save it, so the destinations scout suggests fit the group's taste rather than only its budget. | P0 |
+| PR-6 | Ask each member whether they're an early riser, a late riser, or a night owl, and use it to pace the itinerary (IT-1). It is collected for that reason only; if it doesn't change the plan, don't ask for it. | P0 |
 | PR-2 | Compute the date window that works for everyone and the group's budget range, and post a short summary. | P0 |
 | PR-3 | Nudge members who haven't shared preferences after a set period. | P1 |
 | PR-4 | Let members update their preferences at any time and refresh the summary. | P1 |
 
-### 6.3 Destination suggestions and polls
+### 6.3 Destination brochures and the ballot
 
 | ID | Requirement | Priority |
 |---|---|---|
-| DS-1 | Suggest 3 destinations that fit the shared dates, budget, and must-haves, each with an estimated per-person cost and a one-line reason. | P0 |
-| DS-2 | Run a poll in the thread. Over SMS, members vote by replying with a number or the option name. | P0 |
-| DS-3 | Announce the winner when everyone has voted or the poll closes. On a tie, recommend one option and explain why (for example, lower cost). | P0 |
-| DS-4 | Reuse the same poll flow for any group decision, such as restaurants or activities. | P1 |
+| DS-1 | Suggest 3 destinations that fit the shared dates, the lowest budget in the group, the shared departure city, and what people said they want, each with an estimated per-person total for the whole trip. | P0 |
+| DS-2 | Post them as one brochure card. Each destination collapses to a name and an estimate, and opens to a photo, the top-rated hotel there with its rating, the hotel's amenities, and the cost breakdown. Hotels come from a places data source, never invented. | P0 |
+| DS-3 | The brochure card is the ballot: each member picks one and submits, and that submit is their vote. Members can also settle it in words ("@scout we'd like to go to Cancun"), which locks the destination immediately. | P0 |
+| DS-4 | Announce the winner when everyone has submitted. On a tie, recommend one option and explain why (for example, lower cost). | P0 |
+| DS-5 | Fall back to a numbered text poll for any member whose phone can't render the card, so nobody is locked out of voting. | P1 |
+| DS-6 | Reuse the same card-and-submit flow for any group decision, such as restaurants. | P1 |
 
-### 6.4 Itinerary and booking links
+### 6.3a Activity picks
 
 | ID | Requirement | Priority |
 |---|---|---|
-| IT-1 | Generate a day-by-day itinerary with one anchor activity per day, respecting must-haves and the group's requested pace. | P0 |
-| IT-2 | Send booking links for flights from each member's home city and for lodging that fits the group size and budget. scout never books on the group's behalf. | P0 |
-| IT-3 | Edit the itinerary on request ("swap Tuesday and Wednesday"). | P1 |
-| IT-4 | Keep a trip summary (destination, dates, plan, bookings) that any member can request with "@scout summary." | P1 |
+| AC-1 | Once the destination is locked, post a deck of around 8 activities at that destination and its hotel, each with a photo, a short description and an estimated price. | P0 |
+| AC-2 | Each member marks each activity as interested or pass and sends their whole set in one submit, so the thread doesn't fill with one message per tap. | P0 |
+| AC-3 | Aggregate the picks and post what everyone wants, what most people want, and what only one person wants. | P0 |
+| AC-4 | Name who hasn't sent their picks yet, the same way scout chases missing preferences. | P1 |
+| AC-5 | Let a member change their picks and refresh the aggregate. | P1 |
+
+### 6.4 Itinerary and booking
+
+The group shares one departure city, one set of dates, one hotel, one flight and one itinerary. No loyalty points, fares or status.
+
+| ID | Requirement | Priority |
+|---|---|---|
+| IT-1 | Generate a day-by-day itinerary with one anchor activity per day, drawn from what the group actually picked (AC-3) and paced to its chronotype (PR-6): night owls get late starts, early risers get the anchor before noon. Keep the first and last days light for travel. | P0 |
+| IT-2 | Schedule the activities everyone picked, and offer the ones only a single person picked as optional add-ons rather than dropping them silently. | P0 |
+| IT-3 | Post the itinerary as a read-only card, with the text version underneath so it still reads on a phone that can't render the card. | P0 |
+| IT-4 | Ask the member who added scout to book the one hotel from the brochure, with the dates, the guest count, the estimate, and a link. scout never books on the group's behalf. | P0 |
+| IT-5 | Once the hotel is confirmed, post the one best-value flight for the whole group from the shared departure city, with a link. Label the price an estimate: scout has no flight data source. | P0 |
+| IT-6 | When a member confirms a booking, log what they actually paid as a shared expense split evenly (CS-1), so settle-up already understands it. | P0 |
+| IT-7 | Edit the itinerary on request ("swap Tuesday and Wednesday"). | P1 |
+| IT-8 | Keep a trip summary (destination, dates, plan, bookings) that any member can request with "@scout summary." | P1 |
 
 ### 6.5 On-trip discovery
 
@@ -144,13 +168,13 @@ Priorities: **P0** is required for the demo, **P1** is a stretch goal, and **P2*
 
 ### 6.8 Google Calendar
 
-scout puts the plan on people's calendars before it ever reads them. The first requirements use plain "Add to Google Calendar" links, which need no sign-in and keep the zero-onboarding promise. Reading calendars comes later, and only for members who choose to connect.
+scout puts the plan on people's calendars before it ever reads them, and only once the plan is finished. The first requirements use plain "Add to Google Calendar" links, which need no sign-in and keep the zero-onboarding promise. Reading calendars comes later, and only for members who choose to connect.
 
 | ID | Requirement | Priority |
 |---|---|---|
-| CAL-1 | When the destination and dates are locked in, text one "Add to Google Calendar" link for the trip: an all-day event across the shared dates, with the destination as the location and the trip summary as the description. Tapping it opens Google Calendar with the event filled in. Nobody signs in, and scout stores nothing. | P0 |
+| CAL-1 | Once the flight is confirmed, text one "Add to Google Calendar" link covering the whole trip: an all-day event across the shared dates, with the destination as the location and the trip summary as the description. It goes out at the end rather than when the destination is picked, so it carries the plan people actually made. Tapping it opens Google Calendar with the event filled in. Nobody signs in, and scout stores nothing. | P0 |
 | CAL-2 | Send a standard calendar file (.ics) with the link so members on Apple Calendar or Outlook can add the trip too. Most iMessage users are on iPhone, and many use Apple Calendar rather than Google. | P1 |
-| CAL-3 | Once the itinerary exists, send it as one calendar file with an event for each day's anchor activity. Members can also ask for a single day ("@scout add Tuesday to my calendar"). One file per trip keeps the thread from filling with links. | P1 |
+| CAL-3 | Send the itinerary as one calendar file with an event for each day's anchor activity, plus the hotel check-in and the flight. Members can also ask for a single day ("@scout add Tuesday to my calendar"). One file per trip keeps the thread from filling with links. | P1 |
 | CAL-4 | When the dates or itinerary change (IT-3), text an updated link and say what changed. A link can't edit an event someone already added, so scout tells them to remove the old one. | P1 |
 | CAL-5 | Members can optionally connect Google Calendar through a sign-in link that scout texts them privately. scout asks only for free/busy access: it sees when someone is busy, never event names, attendees, or locations. Members can disconnect at any time, which deletes scout's access. | P2 |
 | CAL-6 | For connected members, scout finds their free dates in the trip's rough timeframe and asks them to confirm instead of typing dates. Members who don't connect share dates by text as before. Connecting is never required. | P2 |
@@ -159,13 +183,13 @@ scout puts the plan on people's calendars before it ever reads them. The first r
 
 The biggest open design question is when scout should speak. A group chat agent that talks too much gets muted or removed; one that talks too little doesn't move the plan forward.
 
-**Decision (October 2026): scout reads every message and speaks only when it's useful.** It always replies when tagged or addressed by name. While collecting preferences, it saves details people share without tagging it and confirms each in one line, asking only for what's still missing. While a poll is open, it counts plain votes like "2" or "Tulum" without being tagged. Everything else (chatter, side conversations) gets no reply. It also speaks unprompted at a few moments where the group clearly benefits: after everyone has shared preferences, when a poll closes, and later for payment reminders. A daily cap on proactive messages and a pause command (GC-5) are still planned. Validate this with real groups and loosen or tighten it based on how often groups pause or remove scout.
+**Decision (October 2026): scout reads every message and speaks only when it's useful.** It always replies when tagged or addressed by name. While collecting preferences, it saves details people share without tagging it and confirms each in one line, asking only for what's still missing. While a brochure is open, it counts each submit, and plain votes like "2" or "Tulum", without being tagged. While the activity deck is open it stays silent for every submit but the last, so four people ticking eight activities never floods the thread. Everything else (chatter, side conversations) gets no reply. It also speaks unprompted at a few moments where the group clearly benefits: after everyone has shared preferences, when the destination is settled, when the last person sends their activity picks, and later for payment reminders. A daily cap on proactive messages and a pause command (GC-5) are still planned. Validate this with real groups and loosen or tighten it based on how often groups pause or remove scout.
 
 ## 8. Conversation design
 
 scout's messages are read on phones, often in a busy thread, so every message should be short, scannable, and clearly actionable. It writes in a friendly, plain tone that matches how friends text, uses emoji sparingly, and avoids lecturing. It always confirms what it understood or logged ("Got it: Airbnb, $1,240, paid by Leo") so the group can correct it. It never implies it booked something, it labels prices as estimates, and every payment it confirms is labeled as Nessie sandbox money.
 
-Because SMS has no rich cards or buttons, structured content (summaries, polls, itineraries, settle-up lists) should be formatted as short numbered or line-by-line text that reads well in any messaging app. Long content should be split into a few messages rather than one wall of text.
+Structured content (summaries, settle-up lists, the itinerary) is formatted as short numbered or line-by-line text that reads well in any messaging app, and long content is split into a few messages rather than one wall of text. The four decision points — destination, activities, itinerary, each booking — go out as interactive cards instead ([integration.md](integration.md)). Every card has a text equivalent and every decision a card makes can be made by saying it instead, so a member whose phone can't render the card is never locked out, and the group never has to talk to scout like an app.
 
 ## 9. Non-functional requirements
 
@@ -184,13 +208,15 @@ Because SMS has no rich cards or buttons, structured content (summaries, polls, 
 | Messaging | iMessage through [Photon](https://photon.codes)'s Spectrum SDK (`spectrum-ts`). Group chats run on a [Linq](https://linqapp.com) line, plugged into Spectrum as a custom platform. | Photon's cheaper plans use shared numbers that can't join group chats, and Business costs $250 per number per month. A Linq line is a real iMessage number that members add to their group, with no Apple ID needed. On Linq's free line, every member texts scout privately once first. See [scout-imessage-groups.md](scout-imessage-groups.md). |
 | Agent | Claude Opus 5.5 via the Anthropic API, with tool calling | Claude handles language: extracting preferences, deciding when to speak, suggesting destinations. Plain code handles the rules: date overlap, budget range, vote counting, tie-breaks. |
 | Places and directions | [Google Places API (New)](https://developers.google.com/maps/documentation/places/web-service/text-search) Text Search, and Google Maps directions links | Text Search takes a free-text request ("cozy tacos with outdoor seating"), which fits a vibe better than category filters, and returns each place's name, location, price level, and a short summary. scout first finds the place the group names ("near our Airbnb in Condado"), then searches near it. Walking and driving times are estimated from straight-line distance and labeled as estimates, which avoids a second, routing API. Directions links (`google.com/maps/dir/?api=1`) need no API and open with the member's own location as the start. Needs a Google Cloud key with billing on; without one, scout says recommendations aren't set up rather than inventing places. |
-| Travel prices | Flight and lodging search APIs, or cached estimates for the demo | Estimates are acceptable for the demo if clearly labeled. |
+| Hotels and activities | Google Places API (New), the same key as on-trip discovery | Gives a real name, rating, price level and photo, which also feeds the HTTPS thumbnail every card needs. `FIELD_MASK` in `places.py` is deliberately minimal because Google bills by the fields requested, so adding `rating`, `userRatingCount` and `photos` raises the per-search cost. Places photo URLs embed the API key, so scout's host has to proxy them rather than putting them in a payload that lands on phones. |
+| Flight and trip prices | Claude estimates, labeled as estimates | There is no flight data source, and adding one close to the demo is a new key, a new module and a new way to fail. The real number comes from whoever books. |
 | Payments | [Capital One's Nessie API](https://api.nessieisreal.com), a sandbox bank, as a demo payment rail | HTTPS only, with the API key as a `?key=` query parameter. Each member gets a Nessie customer and checking account with a starting sandbox balance. Nessie's transfer endpoint has no payee field, so a payment is a withdrawal from the payer's account plus a deposit into the payee's. Nessie amounts are whole dollars, so scout's own ledger keeps exact cents and stays the source of truth for who owes whom. Calls time out after a few seconds; if the key is missing or a call fails, the payment is recorded and labeled simulated. Nessie's enterprise endpoints show every team's data to anyone with a key, so scout sends it no names or phone numbers. |
 | Photo album | A scout-hosted web album backed by file storage, shared through a private link | Hosting the album keeps it account-free and works the same on iPhone and Android. Google retired its Photos API method for sharing albums in March 2025, and Apple doesn't offer a public API for iCloud Shared Albums, so building on either is unreliable. Photos texted to scout arrive as MMS attachments through the messaging provider. |
 | Calendar | "Add to Google Calendar" links (`calendar.google.com/calendar/render?action=TEMPLATE`) and .ics files at first. Later, the Google Calendar API's `freebusy.query` with the `calendar.freebusy` scope, behind a scout-hosted Google sign-in page | Links and .ics files need no API, credentials, or Google review. For an all-day trip, the link's end date is the day after the last day. Calendar scopes count as sensitive, so reading calendars beyond a small test group needs Google's OAuth app verification. |
 | Receipt reading | The same vision-capable language model reads receipt photos | The bridge forwards photos to the Python service along with the text. The model extracts merchant, date, total, and line items, and tells receipts apart from trip photos. Every extracted total is confirmed in the chat before it's logged. |
 | Storage | SQLite | Stores trips, members, preferences, polls, itineraries, expenses, payments, and the recent chat. |
-| Polls | Numbered text replies ("1", "2", "3") | Plain-number replies work on every line and for members on SMS. Linq reports native iMessage poll votes as webhook events, so native polls are possible later (untested). |
+| In-chat cards | [HermesShare](https://github.com/time-attack/HermesShare) layouts, sent as a Linq `imessage_app` part | Apple forbids runtime code in an iMessage extension, so a web app can't live in a bubble. HermesShare ships a fixed, Apple-signed SwiftUI renderer and the message carries declarative JSON, so a card is data, not code. A control with a `fieldId` holds its state and fires nothing; the card's one submit bar sends every field at once, so a deck of 8 activities costs one message per person instead of eight. Hard constraints: `interactive: false`, a 16,384-character payload cap, and a required HTTPS thumbnail. Every phone in the group needs the extension sideloaded. |
+| Polls | A card submit, with numbered text replies as the fallback | A brochure submit is a vote, so the existing counting, tie-breaks and quiet-member tracking are unchanged. Plain-number replies still work on every line and for members on SMS. |
 
 ### Architecture
 
@@ -202,8 +228,12 @@ Photon can only send messages from its TypeScript SDK, but scout's logic is writ
 |---|---|
 | Trip | Group thread ID, destination, dates, status |
 | Member | Phone number, display name, home city, Nessie account ID (opened on the member's first payment) |
-| Preference | Member, available dates, budget, must-haves |
-| Poll | Question, options, votes by member, result |
+| Preference | Member, available dates, budget, must-haves, vacation interest, chronotype |
+| Poll | Question, options, votes by member, result. A brochure submit records a vote here |
+| Destination option | Name, estimated per-person total, reason, hotel, amenities, photo |
+| Activity | Trip, name, description, estimated price, photo, place ID |
+| Activity pick | Member, activity, interested or pass |
+| Booking | Trip, hotel or flight, link, who booked it, amount once confirmed |
 | Itinerary day | Date, anchor activity, notes |
 | Expense | Payer, amount in cents, description, who it's split among, receipt image (optional) |
 | Receipt line item | Expense, item, price, who it belongs to |
@@ -221,7 +251,7 @@ Payments already made count toward each balance, so after Maya pays, the plan sh
 
 ## 11. Success metrics
 
-For the hackathon, success means the full journey runs end to end in a real group text during the demo: adding scout, collecting preferences, a live vote, an itinerary, an on-the-spot recommendation, and a settle-up.
+For the hackathon, success means the full journey runs end to end in a real group text during the demo: adding scout, collecting preferences, picking a destination off the brochure card, ticking the activity deck, an itinerary, booking the room and the flight into the ledger, an on-the-spot recommendation, and a settle-up.
 
 If the project continues beyond the demo, these metrics would show whether scout is working:
 
@@ -238,9 +268,10 @@ If the project continues beyond the demo, these metrics would show whether scout
 
 | Phase | Scope | Outcome |
 |---|---|---|
-| 1. Core loop (built, not yet tested in a real group) | GC-1 to GC-4, PR-1 and PR-2, DS-1 to DS-3 | scout joins a group text, gathers preferences, and runs a destination vote. |
-| 2. Full journey | IT-1 and IT-2, OT-1 to OT-3, CS-1 to CS-4, CS-7, AL-1 and AL-2, CAL-1 | The complete six-step journey works end to end. |
-| 3. Polish and demo | Selected P1 items, demo script, fallback plan | A reliable live demo plus the interactive journey as backup. |
+| 1. Core loop (built, not yet tested in a real group) | GC-1 to GC-4, PR-1 and PR-2, and the vote counting underneath DS-3 and DS-4 | scout joins a group text, gathers preferences, and runs a destination vote in plain text. |
+| 2. Cards | The card pipeline, then DS-1 to DS-4 and AC-1 to AC-3 | The destination and activity decisions happen on cards in the thread. Blocked on HTTPS hosting and on sideloading the extension — see [integration.md](integration.md) §6. |
+| 3. Full journey | PR-5 and PR-6, IT-1 to IT-6, OT-1 to OT-3, CS-1 to CS-4, CS-7, AL-1 and AL-2, CAL-1 | The complete journey works end to end. |
+| 4. Polish and demo | Selected P1 items, demo script, fallback plan | A reliable live demo plus the interactive journey as backup. |
 
 ## 13. Risks and mitigations
 
@@ -249,6 +280,11 @@ If the project continues beyond the demo, these metrics would show whether scout
 | Photon's shared-number plans (Free and Pro) can't join group chats. | Run group chats on a Linq line plugged into Photon's Spectrum SDK, and test it in a real group on day one. Keep a fallback demo (1:1 texting, `scout-simulate`, or the interactive journey page) ready. |
 | Linq's free line takes only 20 contacts, and each must text scout privately first. A demo phone that skipped this can't reach scout. | Add every demo phone and have each text scout days before the demo. Each teammate develops on their own line. |
 | Apple flags scout's number for automated messaging. | Follow Photon's deliverability guidance: people message scout first, no cold outreach, no message bursts, and stay well under Linq's rate limits. |
+| A phone in the group doesn't have the HermesShare extension, so every card is just its fallback text. | Sideload the extension on every demo phone during setup and check it the morning of. Write each card's fallback text so the thread still makes sense without it, and keep the numbered text poll as the voting fallback (DS-5). |
+| No HTTPS host exists yet, and a card without a thumbnail is refused outright. | This is now a blocker rather than an open question: stand up hosting before any card work. It also has to proxy Places photos, whose URLs embed the API key. |
+| It isn't yet known whether a card submit arrives as JSON or as a readable summary, or whether Linq's free line accepts `imessage_app` parts at all. | Send one hand-written card to a real group and read what comes back, before writing the parser. Until then, parse both shapes. |
+| The activity deck exceeds the 16,384-character payload cap and won't send. | Measure the 8-activity deck early. Photos are URLs rather than data, so there's headroom; trim descriptions if not. |
+| Cards make scout feel like an app, and the group stops talking to it in words. | Every card has a text equivalent, and every decision a card makes can also be made by saying it. |
 | On lines that can't list a group's members (Photon's shared lines and local mode), people who never text are invisible to scout. Linq lists them. | Ask everyone to reply to the introduction. The agent only posts the summary once the people it knows about have all shared, and anyone can ask for it with "@scout summary." |
 | scout becomes noisy or annoying. | Tag-first interaction model, a daily cap on proactive messages, and a pause command. |
 | Suggestions include made-up places or wrong prices. | Pull places only from a data source and label all prices as estimates. |

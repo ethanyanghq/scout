@@ -5,7 +5,7 @@
 | **Question** | How does scout join iMessage group chats when we're on Photon's Pro plan, not Business, and can't get an Apple ID for scout? |
 | **Decision** | scout's iMessage number is a Linq line, and members add it to their group like any person. The bridge plugs Linq into Photon's Spectrum SDK as a custom platform, so every group message still goes through Photon. This replaces the October 2 plan, which ran scout's own Apple ID on a Mac with BlueBubbles. |
 | **Docs version** | spectrum-ts 12.10.1 and Linq Partner API v3, read October 3, 2026 |
-| **Related** | [scout-PRD.md](scout-PRD.md): GC-1, GC-4, GC-6, DS-1 to DS-3, AL-4, and the messaging risks in the risks table |
+| **Related** | [scout-PRD.md](scout-PRD.md): GC-1, GC-4, GC-6, DS-1 to DS-3, AL-4, and the messaging risks in the risks table. [integration.md](integration.md): the cards this carries |
 
 ## Summary
 
@@ -86,7 +86,9 @@ POST /reactions  {"space_id": "c1", "sender_phone": "+15551234567", "tapback": "
 {"actions": [
   {"type": "react", "message_id": "m42", "tapback": "like", "fallback_text": "Got it, Leo → San Juan, Puerto Rico (1 of 3 voted)"},
   {"type": "say", "text": "Got it, Maya → San Juan, Puerto Rico (2 of 3 voted)", "reply_to": "m40"},
-  {"type": "link", "url": "https://calendar.google.com/calendar/render?..."}
+  {"type": "link", "url": "https://calendar.google.com/calendar/render?..."},
+  {"type": "card", "layout": {...}, "caption": "3 spots that fit Mar 13-20",
+   "image_url": "https://...", "fallback_text": "Open in HermesShare"}
 ]}
 ```
 
@@ -94,7 +96,9 @@ POST /reactions  {"space_id": "c1", "sender_phone": "+15551234567", "tapback": "
 - **Every action has a plain-text fallback.** Spectrum resolves a send to nothing when a line can't do it, and the bridge then sends the text version.
 - **Not built yet:** message effects, member joins and leaves, and typing. Each lands when a feature needs it.
 - **Capabilities, later.** Once two lines in use support different actions (local mode has no reactions, for example), the bridge will tell scout which actions work so the agent only offers those. Linq and the developer console support the same actions, so this waits.
-- **Link cards.** A `link` action sends one URL as a message of its own, which Linq requires. iMessage shows it as a card built from the page's Open Graph tags, and tapping it opens the page in Safari. iMessage never runs HTML or JavaScript in the chat, so anything interactive (a live poll board, the itinerary with a map, the album) lives on a page scout hosts. The card is a snapshot from when it was sent, so scout sends a new link to show new state.
+- **Link cards.** A `link` action sends one URL as a message of its own, which Linq requires. iMessage shows it as a card built from the page's Open Graph tags, and tapping it opens the page in Safari. The card is a snapshot from when it was sent, so scout sends a new link to show new state.
+- **Native cards.** iMessage never runs HTML or JavaScript in the chat, so a web app can't live in a bubble. A `card` action instead sends a [HermesShare](https://github.com/time-attack/HermesShare) layout as a Linq `imessage_app` part: declarative JSON that an Apple-signed extension draws as real SwiftUI. That's how the group picks a destination, ticks activities and confirms a booking without leaving the thread. What someone submits on a card arrives as an ordinary inbound message. Every phone in the group needs the extension installed, or the bubble shows only the action's fallback text. See [integration.md](integration.md).
+- **Hosted pages** are still how anything genuinely web-shaped works, like the photo album.
 - **The agent never writes this format.** scout's code builds the actions (`src/scout/outgoing.py`), and the bridge turns each into one Spectrum `send`.
 - **Typing** has to start before scout's reply is ready, so it needs either a streamed response or a second call from the service. Decide this when building it.
 
@@ -179,7 +183,9 @@ Once scout serves its own pages, they can come from the local service in develop
 | Receipt photos (CS-7) | Linq media URLs, converted to JPEG by the bridge |
 | Members joining or leaving (AL-4) | Linq participant events |
 | Native group polls (DS-2) | Linq poll events (untested); numbered replies until then |
-| Link cards for scout's pages (live poll board, itinerary, album) | Linq `link` parts, as Spectrum rich links; the pages are hosted by scout |
+| Link cards for scout's pages (the album) | Linq `link` parts, as Spectrum rich links; the pages are hosted by scout |
+| Interactive cards (destination brochures, the activity deck, bookings) | Linq `imessage_app` parts carrying HermesShare layouts ([integration.md](integration.md)) |
+| What someone picks on a card | A HermesShare submit, which arrives as an ordinary inbound message |
 | Message effects (confetti for the winner) | Linq message effects |
 | Pictures scout makes (an itinerary card, poll results) | Linq media uploads |
 | Chat background, group name and photo | Linq (renaming and the group photo to confirm) |
@@ -207,7 +213,9 @@ The milestones and their checklist are in [scout-group-chat-plan.md](scout-group
 ## Open questions to test
 
 - **Free-line features.** Do reactions, threaded replies, typing, polls, effects and link cards work on Linq's free line, or only on paid lines? Can scout rename the group and set its photo?
-- **Hosting scout's pages.** Link cards need a public HTTPS URL, but the bridge and service run on a Mac. Should that be a tunnel from the Mac, or a separate host? The calendar link's card reads "Google Calendar - Sign in to Access & Edit Your Schedule", so a page of scout's own would help the demo too.
+- **Hosting scout's pages — now a blocker, not a question.** Every HermesShare card needs an HTTPS thumbnail URL or it won't send, so no card ships until this exists. It also has to proxy Google Places photos, whose URLs embed the API key and so can't go to phones. Still to decide: a tunnel from the Mac, or a separate host. The calendar link's card reads "Google Calendar - Sign in to Access & Edit Your Schedule", so a page of scout's own would help the demo too.
+- **What a card submit puts in the thread.** The raw `HermesSubmission` JSON, or a readable summary of the chosen labels? This decides how scout parses a card, and one real send answers it.
+- **Does the free line accept `imessage_app` parts?** Same question as the rest of the free-line features below.
 - **Payload shapes.** What do `reaction.added` and `participant.added` look like, and does `message.received` say which message it replies to? Record real payloads as test fixtures.
 - **Photo format.** Do iPhone photos arrive from Linq as HEIC, or already as JPEG?
 - **Spectrum events.** Can a custom platform raise member joins and leaves, or only messages?

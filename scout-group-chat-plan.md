@@ -3,8 +3,8 @@
 | | |
 | --- | --- |
 | **Goal** | scout lives in real iMessage group chats through a Linq line running inside Photon's Spectrum SDK. Teammates and their AI agents build and test group chat features, including tapbacks, threaded replies and link cards, without phones, and the demo group can be set up in minutes. |
-| **Status** | Milestones 1 and 2 are built. What's left of them needs a real Linq line, phones or a Claude key: recording real webhooks, testing the free line, running the journey in a real group, and running the two Claude scripts. Milestone 3's commands are built, but only tested against a stand-in for Linq's API: checking them on the demo line and rehearsing the on-stage moment need the line and the phones. Last updated October 3, 2026. |
-| **Design** | [scout-imessage-groups.md](scout-imessage-groups.md): why Linq, how it plugs into Spectrum, the developer console |
+| **Status** | Milestone 4 is new and entirely unbuilt. Milestones 1 and 2 are built. What's left of them needs a real Linq line, phones or a Claude key: recording real webhooks, testing the free line, running the journey in a real group, and running the two Claude scripts. Milestone 3's commands are built, but only tested against a stand-in for Linq's API: checking them on the demo line and rehearsing the on-stage moment need the line and the phones. Last updated October 3, 2026. |
+| **Design** | [scout-imessage-groups.md](scout-imessage-groups.md): why Linq, how it plugs into Spectrum, the developer console. [integration.md](integration.md): the card-driven trip flow milestone 4 builds |
 | **How to use it** | [DEVELOPING.md](DEVELOPING.md): what exists today, and how to test without phones |
 | **Rest of the demo** | [TODO.md](TODO.md) |
 
@@ -18,7 +18,8 @@ Check items off in the pull request that finishes them. When a pull request ship
 - **The bridge runs on a Mac only.** It converts iPhone photos with macOS's `sips`.
 - **The developer console is a second custom Spectrum platform.** A fake group goes through the real bridge and service. People and AI agents script it, agents run it one shell command at a time, and it previews link cards the way iMessage will show them.
 - **Scripts read like the chat.** They check the trip's state, words a reply must contain and link card fields, never whole replies, because Claude's wording changes between runs.
-- **iMessage never runs HTML or JavaScript.** Anything interactive is a page scout hosts, sent as a link card.
+- **iMessage never runs HTML or JavaScript.** Apple forbids runtime code in an iMessage extension, so a web app can't live in a bubble. Anything genuinely web-shaped, like the photo album, is a page scout hosts, sent as a link card.
+- **In-chat interaction is a native card, not a page.** The four moments where the group has to choose something (destination, activities, itinerary, each booking) are [HermesShare](https://github.com/time-attack/HermesShare) layouts: declarative JSON an Apple-signed extension draws as real SwiftUI. That's data, not code, so it doesn't contradict the rule above. See [integration.md](integration.md).
 - **We're not building an SDK.** Each iMessage action gets added only when a feature needs it, in four parts: a case in the bridge, an action type and agent tool in Python, how the console shows it, and a script that uses it. No packaging, versioning or docs for outsiders. The capability report waits until two lines in use support different actions.
 
 ## Checklist
@@ -72,14 +73,29 @@ Shipped when the demo phones can be set up for scout in a few minutes, a rehears
 - [ ] Rehearse the on-stage moment: a member adds scout's number to a group of the demo phones, and scout introduces itself. On stage this is done by hand, not with the group command, because it's the moment the demo shows.
 - [x] DEVELOPING.md's "Set up the demo group" section uses the new commands.
 
+### 4. Cards: the trip flow
+
+Shipped when scout can send a HermesShare card, read what people submit on it, and the four decision cards in [integration.md](integration.md) are live. Design: [integration.md](integration.md).
+
+Nothing here can start until the first two items are done: the pipe is unproven and no card sends without a thumbnail URL.
+
+- [ ] Prove the pipe. Clone HermesShare, send one hand-written card to a real Linq group, submit it, and record what lands in the thread. This answers whether a submit arrives as `HermesSubmission` JSON or as a readable summary, whether the free line accepts `imessage_app` parts, and how big a payload really gets.
+- [ ] Decide and stand up HTTPS hosting. Card thumbnails require it, so this blocks every card. It also carries the Places photo proxy, because Google's photo URLs embed the API key and can't go to phones.
+- [ ] Sideload `docs/install/HermesShare.ipa` on every demo phone, and add it to the demo setup command's checklist. Without it a card is just its fallback text.
+- [ ] A `Card` action end to end: `outgoing.py`, the bridge case, the `imessage_app` part in `linq.ts`, the console preview, and a script.
+- [ ] The console previews a card: the layout tree as text, and warnings for a payload over 16,384 chars, a missing or non-HTTPS thumbnail, and a `fieldId` with no submit action to carry it.
+- [ ] The brochure card, with the existing poll engine counting the submits.
+- [ ] The activity deck, and the aggregate it produces.
+- [ ] The itinerary and booking cards, the calendar at the end, and the album link.
+
 ## Still open
 
 - **Free-line features, payload shapes and photo format.** These get answered by milestone 2's first items. The full list is in the design doc's open questions.
-- **Where scout's web pages are hosted.** Link cards need a public HTTPS URL, and so would the album. This is tracked in TODO's Decide section. The console's preview of the calendar link makes this more pressing: Google's page titles the card "Google Calendar - Sign in to Access & Edit Your Schedule", which reads like a login.
+- **Where scout's web pages are hosted.** No longer open as a question, only as work: milestone 4 can't start without it, because every HermesShare card needs an HTTPS thumbnail and the Places photo proxy needs somewhere to live. The album needs it too, and the console's preview of the calendar link shows a third reason: Google's page titles the card "Google Calendar - Sign in to Access & Edit Your Schedule", which reads like a login.
 - **Private chats (GC-6).** Photon's cloud line, or the Linq line's private chats.
 
 ## Later, not in this plan
 
-- Native iMessage polls through Linq, if poll events work on our line.
-- Building scout's web pages, once hosting is decided.
+- Native iMessage polls through Linq, if poll events work on our line. The brochure card in milestone 4 makes this less useful: a card submit already votes.
+- Building scout's web pages beyond what milestone 4 needs: the live poll board, the album.
 - Publishing the Linq provider or the console for other Spectrum developers. Decide after the demo.

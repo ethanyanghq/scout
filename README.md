@@ -13,15 +13,16 @@ you know the thread. someone says "we should go somewhere," everyone hearts it, 
 here's how it goes:
 
 1. **add me.** put my number in the group text. no app, no accounts, nobody signs up for anything.
-2. **tell me what you want.** everyone sends their dates, budget, home city, and one must-have. i confirm each one so you can catch my mistakes, and i keep track of who hasn't answered yet.
-3. **i pitch three places.** once i know where your dates overlap, i suggest three destinations that fit everyone's budget and must-haves.
-4. **you vote.** reply "2" or "tulum" and i count it. i announce the winner and send a link that puts the trip on your Google Calendar.
-5. **i plan the days.** ask for a plan and i'll send a day-by-day itinerary, plus Google Flights links from each person's home city and an Airbnb search for the group.
-6. **we settle up.** tell me what you paid ("i got the airbnb, $1,240") or text me a photo of the receipt. i split it, work out the fewest payments to square everyone up, and pay people back in sandbox money, so nothing real moves.
+2. **tell me what you want.** everyone sends their dates, budget, home city, the kind of trip they're after, and whether they're an early riser or a night owl. i confirm each one so you can catch my mistakes, and i keep track of who hasn't answered yet.
+3. **i pitch three places.** once i know where your dates overlap, i send three brochures you can tap through: a photo, the best hotel there, what it comes with, and what the whole trip runs. pick one and hit send — that's your vote. or just tell me ("we want cancun") and i'll lock it in.
+4. **you tell me what you'd actually do.** i send a deck of things to do at that hotel and that town, each with a picture and a price. tick what you're up for, send once, and i'll tell you what the group agreed on.
+5. **i plan the days.** a day-by-day plan built from what you actually picked, paced for whether you're up at six or noon. then one room and one flight for everyone — you book, i put what it cost in the ledger.
+6. **i put it on your calendar.** the whole trip in one tap, then a shared album link for the photos.
+7. **we settle up.** tell me what you paid ("i got the airbnb, $1,240") or text me a photo of the receipt. i split it, work out the fewest payments to square everyone up, and pay people back in sandbox money, so nothing real moves.
 
 i never book anything or touch real money. i find the links, you book. and i stay quiet unless you tag me or tell me something about the trip, because a scout that talks too much gets kicked out of the chat.
 
-**where i'm at:** joining, collecting preferences, and running the vote all work (phase 1). phase 2 so far has the itinerary, booking links, the calendar link, and cost splitting. on-trip recommendations and a shared photo album are next. the full plan lives in [scout-PRD.md](scout-PRD.md).
+**where i'm at:** joining, collecting preferences, and running the vote all work, in plain text (phase 1). the itinerary, booking links, the calendar link, and cost splitting are built too. the cards in steps 3 and 4 aren't: they're specified in [integration.md](integration.md) and not written yet, so today the vote is a numbered text poll. on-trip recommendations and a shared photo album are also still to come. the full plan lives in [scout-PRD.md](scout-PRD.md).
 
 ## How it fits together
 

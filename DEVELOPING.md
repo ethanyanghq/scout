@@ -5,6 +5,7 @@ How to run scout, test a change in a group chat, and set up the demo group. It's
 - [AGENTS.md](AGENTS.md): coding rules, and rules for agents working with real messages.
 - [scout-imessage-groups.md](scout-imessage-groups.md): why group chats run on a Linq line inside Photon's Spectrum SDK, and the plan for the tools below.
 - [scout-group-chat-plan.md](scout-group-chat-plan.md): the plan for these tools, with its checklist.
+- [integration.md](integration.md): the card-driven trip flow — the eight stages, the four cards, and how a card comes back.
 - [TODO.md](TODO.md): everything else the demo needs.
 
 ## What exists today
@@ -23,6 +24,8 @@ Several tools are planned but not built yet. **If a tool is marked planned, it d
 | Seeded stages and resetting one chat | Built | |
 | Tapbacks, threaded replies and link cards, with console previews | Built, but only tested against a stand-in for Linq's API | |
 | Message effects (confetti) | Planned (design doc, events in, actions out) | Plain text |
+| HermesShare cards (brochure, activity deck, itinerary, booking) | Planned ([integration.md](integration.md), milestone 4 of the group chat plan). Blocked on HTTPS hosting and on sideloading the extension. | Plain text, and the numbered text poll for voting |
+| Card previews in the console | Planned | Nothing — a card can't be sent yet |
 | Demo group commands (`bun run demo`) | Built, but only tested against a stand-in for Linq's API | |
 
 When a pull request ships one of these, it updates this table and the instructions below.
@@ -37,7 +40,7 @@ iPhone in the group
   → bridge/spectrum.ts, the one relay loop, which posts to the service:
       a message to 127.0.0.1:8787/messages, a tapback to /reactions
   → src/scout/conversation.py decides what to do
-  ← actions (src/scout/outgoing.py): say (maybe threaded), react, or link
+  ← actions (src/scout/outgoing.py): say (maybe threaded), react, or link. A card action is planned.
   ← the relay performs each one through Spectrum and Linq
 ```
 
@@ -210,7 +213,7 @@ Every action lands with the same parts: its type on both sides, a case in the re
 
 ### Link cards
 
-iMessage never runs HTML or JavaScript in the chat. A link card is a preview of a page, and anything interactive lives on that page. Linq's rules:
+iMessage never runs HTML or JavaScript in the chat. A link card is a preview of a page, and anything web-shaped lives on that page. Interactive content in the bubble itself is a HermesShare card instead, which is declarative JSON rather than code ([integration.md](integration.md)) — planned, not built. Linq's rules for link cards:
 
 - The link must be the only thing in its message.
 - The URL must be HTTPS, and at most 2,048 characters.
