@@ -89,7 +89,10 @@ class ScoutAgent:
 
     def _show_situation(self, trip: Trip, message: IncomingMessage) -> list[dict]:
         """The first prompt: the situation in words, plus any photo just sent."""
-        situation = {"type": "text", "text": self._describe_situation(trip, message)}
+        situation = {
+            "type": "text",
+            "text": describe_situation(self._store, trip, message),
+        }
         if message.photo is None:
             return [situation]
         photo = {
@@ -102,31 +105,33 @@ class ScoutAgent:
         }
         return [photo, situation]
 
-    def _describe_situation(self, trip: Trip, message: IncomingMessage) -> str:
-        recent = self._store.recent_messages(trip.space_id, RECENT_MESSAGE_COUNT)
-        labels = {member.phone: member.label for member in trip.members}
-        chat = "\n".join(
-            f"[{labels.get(logged.sender_phone, 'scout')}] {logged.text}"
-            for logged in recent
-        )
-        sender = trip.find_member(message.sender_phone)
-        tagged = (
-            "It tags or addresses you."
-            if message.mentions_scout
-            else ("It does not tag you.")
-        )
-        if message.photo is not None:
-            tagged += " It comes with the photo above."
-        if message.reply_to_text is not None:
-            tagged += f' It replies in a thread to: "{message.reply_to_text}".'
-        today = date.today()
-        return (
-            f"Today is {today:%A, %B} {today.day}, {today.year}.\n\n"
-            f"# Trip state\n{_describe_trip(trip)}\n\n"
-            f"# Recent chat, oldest first\n{chat}\n\n"
-            f"# Newest message\nFrom {sender.label}. {tagged}\n"
-            f"{message.text}"
-        )
+
+def describe_situation(store: TripStore, trip: Trip, message: IncomingMessage) -> str:
+    """The trip, the recent chat, and the newest message, in words for the model."""
+    recent = store.recent_messages(trip.space_id, RECENT_MESSAGE_COUNT)
+    labels = {member.phone: member.label for member in trip.members}
+    chat = "\n".join(
+        f"[{labels.get(logged.sender_phone, 'scout')}] {logged.text}"
+        for logged in recent
+    )
+    sender = trip.find_member(message.sender_phone)
+    tagged = (
+        "It tags or addresses you."
+        if message.mentions_scout
+        else ("It does not tag you.")
+    )
+    if message.photo is not None:
+        tagged += " It comes with the photo above."
+    if message.reply_to_text is not None:
+        tagged += f' It replies in a thread to: "{message.reply_to_text}".'
+    today = date.today()
+    return (
+        f"Today is {today:%A, %B} {today.day}, {today.year}.\n\n"
+        f"# Trip state\n{_describe_trip(trip)}\n\n"
+        f"# Recent chat, oldest first\n{chat}\n\n"
+        f"# Newest message\nFrom {sender.label}. {tagged}\n"
+        f"{message.text}"
+    )
 
 
 def _describe_trip(trip: Trip) -> str:
