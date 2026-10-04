@@ -3,30 +3,9 @@
   text-align: center;
 }
 
-.hero-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 38px;
-  padding: 6px 16px;
-  border-radius: 999px;
-  background: #fff;
-  box-shadow: 0 0 0 1px rgba(15, 21, 53, 0.08);
-  font-size: 15px;
-  font-weight: 450;
-}
-.hero-tag::before {
-  content: "";
-  flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--leaf);
-}
-
 .hero h1 {
   max-width: 980px;
-  margin: 28px auto 0;
+  margin: 0 auto;
   font-size: clamp(46px, 8.4vw, 96px);
   font-weight: 700;
   line-height: 0.98;
@@ -48,11 +27,6 @@
 .hero .join-form,
 .hero .join-confirmation {
   margin: 38px auto 0;
-}
-
-.hero-note {
-  margin-top: 18px;
-  font-size: 15px;
 }
 
 /* ---------- the phone, between the mess and the plan ---------- */
@@ -170,13 +144,5 @@
   .hero-before,
   .hero-after {
     display: none;
-  }
-}
-
-@media (max-width: 560px) {
-  .hero-tag {
-    font-size: 13.5px;
-    text-align: left;
-    text-wrap: balance;
   }
 }

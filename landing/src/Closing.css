@@ -63,3 +63,15 @@
     bottom: -260px;
   }
 }
+
+/* On a phone the form spans the panel, so the panel grows taller and the
+   sun rises in the room below the form instead of behind it. */
+@media (max-width: 560px) {
+  .closing-panel {
+    padding-bottom: 150px;
+  }
+  .closing-panel::after {
+    right: -120px;
+    bottom: -310px;
+  }
+}

@@ -45,7 +45,7 @@ function StillChat() {
         <div className="chat-scout-turn">
           <img src="/logo.png" alt="" />
           <div>
-            <p className="chat-bubble">hi all, i’m scout. tap through the card and i’ll take it from here</p>
+            <p className="chat-bubble">hi all, i’m scout. tap through this card</p>
             <div className="chat-card">
               <img src="/trip-card.jpg" alt="" />
               <p>
@@ -60,7 +60,7 @@ function StillChat() {
         <div className="chat-scout-turn">
           <img src="/logo.png" alt="" />
           <div>
-            <p className="chat-bubble">4 of 5 in, and you’re leaning beach. three places coming up</p>
+            <p className="chat-bubble">4 of 5 say beach. three places coming up</p>
             <div className="chat-card is-brochure">
               <img src="/brochure.jpg" alt="" />
               <p>

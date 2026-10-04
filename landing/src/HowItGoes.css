@@ -30,6 +30,7 @@
 .step h3 + p {
   margin-top: 10px;
   font-size: 16.5px;
+  text-wrap: pretty;
 }
 
 @media (max-width: 1000px) {
@@ -37,12 +38,24 @@
     grid-template-columns: repeat(2, 1fr);
   }
 }
+/* On a phone each step is one compact row: its number beside its title. */
 @media (max-width: 560px) {
   .steps {
     grid-template-columns: 1fr;
-    gap: 32px;
+    gap: 22px;
+  }
+  .step {
+    display: grid;
+    grid-template-columns: 44px 1fr;
+    align-items: baseline;
+    padding-top: 18px;
   }
   .step h3 {
-    margin-top: 16px;
+    margin-top: 0;
+    font-size: 23px;
+  }
+  .step h3 + p {
+    grid-column: 2;
+    margin-top: 4px;
   }
 }
