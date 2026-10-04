@@ -25,7 +25,8 @@ def format_settle_up(trip: Trip) -> str:
         return f"{lead_in} Everyone's already even."
     lines = [f"{lead_in} Fewest payments to settle up:"]
     lines.extend(_format_payment(payment) for payment in payments)
-    lines.append(f'To pay, text "@scout pay {payments[0].payee.label}".')
+    payee = payments[0].payee.label
+    lines.append(f'Once you\'ve paid, text "@scout I paid {payee}".')
     return "\n".join(lines)
 
 

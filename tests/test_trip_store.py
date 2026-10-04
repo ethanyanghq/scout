@@ -1,6 +1,5 @@
 from datetime import date, datetime
 
-from scout.nessie import SandboxPayment
 from scout.places import Coordinates, Place
 from scout.trip import (
     DateWindow,
@@ -140,24 +139,15 @@ def test_removing_an_expense_keeps_the_others(store):
     assert [e.id for e in store.get_trip(SPACE).expenses] == [kayaks]
 
 
-def test_settlements_remember_whether_sandbox_money_moved(store):
+def test_settlements_are_saved_in_the_order_they_were_paid(store):
     store.create_trip(SPACE)
-    through_nessie = Settlement(MAYA, LEO, 5_000, went_through_nessie=True)
-    simulated = Settlement(MAYA, LEO, 1_000, went_through_nessie=False)
+    first = Settlement(MAYA, LEO, 5_000)
+    second = Settlement(MAYA, LEO, 1_000)
 
-    store.add_settlement(SPACE, through_nessie, SandboxPayment("w-1", "d-1"))
-    store.add_settlement(SPACE, simulated, None)
+    store.add_settlement(SPACE, first)
+    store.add_settlement(SPACE, second)
 
-    assert store.get_trip(SPACE).settlements == [through_nessie, simulated]
-
-
-def test_a_members_nessie_account_is_saved(store):
-    store.create_trip(SPACE)
-    store.add_members(SPACE, [MAYA])
-
-    store.save_nessie_account(SPACE, MAYA, "account-1")
-
-    assert store.get_trip(SPACE).find_member(MAYA).nessie_account_id == "account-1"
+    assert store.get_trip(SPACE).settlements == [first, second]
 
 
 def test_a_newer_receipt_replaces_the_one_waiting(store):
@@ -207,7 +197,7 @@ def test_a_deleted_trip_starts_over_with_nothing_left(store):
     store.record_vote(store.get_trip(SPACE).open_poll.id, MAYA, 1)
     store.replace_itinerary(SPACE, [ItineraryDay(date(2027, 3, 14), "Old San Juan")])
     store.add_expense(SPACE, LEO, 124_000, "Airbnb")
-    store.add_settlement(SPACE, Settlement(MAYA, LEO, 5_000, False), None)
+    store.add_settlement(SPACE, Settlement(MAYA, LEO, 5_000))
     store.save_pending_receipt(SPACE, PendingReceipt(MAYA, "Casa Brisa", 16_400))
     tacos = Place("place-1", "Lote 23", Coordinates(18.45, -66.07), "$$", None)
     store.replace_place_suggestions(SPACE, [tacos])

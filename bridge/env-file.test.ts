@@ -14,7 +14,7 @@ describe("reading an env file", () => {
       path,
       `# Required.
 ANTHROPIC_API_KEY=sk-ant-123
-# NESSIE_API_KEY=old
+# SCOUT_DB_PATH=old.db
 IMESSAGE_MODE = "linq"
 GOOGLE_PLACES_API_KEY=
 `,

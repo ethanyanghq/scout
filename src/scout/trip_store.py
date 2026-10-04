@@ -8,7 +8,6 @@ from dataclasses import asdict, dataclass
 from datetime import date, datetime
 from pathlib import Path
 
-from scout.nessie import SandboxPayment
 from scout.places import Coordinates, Place
 from scout.trip import (
     DateWindow,
@@ -45,7 +44,6 @@ CREATE TABLE IF NOT EXISTS members (
     budget_usd     INTEGER,
     home_city      TEXT,
     must_haves     TEXT NOT NULL DEFAULT '[]',
-    nessie_account_id TEXT,
     PRIMARY KEY (space_id, phone)
 );
 
@@ -86,10 +84,7 @@ CREATE TABLE IF NOT EXISTS settlements (
     space_id             TEXT NOT NULL REFERENCES trips (space_id),
     payer_phone          TEXT NOT NULL,
     payee_phone          TEXT NOT NULL,
-    amount_cents         INTEGER NOT NULL,
-    -- Both empty when the payment was simulated.
-    nessie_withdrawal_id TEXT,
-    nessie_deposit_id    TEXT
+    amount_cents         INTEGER NOT NULL
 );
 
 -- At most one receipt per trip waits for its payer to confirm; a newer one
@@ -332,30 +327,16 @@ class TripStore:
         with self._transaction() as db:
             db.execute("DELETE FROM place_suggestions WHERE space_id = ?", (space_id,))
 
-    def save_nessie_account(self, space_id: str, phone: str, account_id: str) -> None:
-        with self._transaction() as db:
-            db.execute(
-                "UPDATE members SET nessie_account_id = ? "
-                "WHERE space_id = ? AND phone = ?",
-                (account_id, space_id, phone),
-            )
-
-    def add_settlement(
-        self, space_id: str, settlement: Settlement, nessie_ids: SandboxPayment | None
-    ) -> None:
-        """Saves a payment. nessie_ids is None when it was simulated."""
+    def add_settlement(self, space_id: str, settlement: Settlement) -> None:
         with self._transaction() as db:
             db.execute(
                 "INSERT INTO settlements (space_id, payer_phone, payee_phone, "
-                "amount_cents, nessie_withdrawal_id, nessie_deposit_id) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
+                "amount_cents) VALUES (?, ?, ?, ?)",
                 (
                     space_id,
                     settlement.payer_phone,
                     settlement.payee_phone,
                     settlement.amount_cents,
-                    nessie_ids.withdrawal_id if nessie_ids else None,
-                    nessie_ids.deposit_id if nessie_ids else None,
                 ),
             )
 
@@ -419,7 +400,6 @@ def _load_members(db: sqlite3.Connection, space_id: str) -> list[Member]:
             budget_usd=row["budget_usd"],
             home_city=row["home_city"],
             must_haves=json.loads(row["must_haves"]),
-            nessie_account_id=row["nessie_account_id"],
         )
         for row in rows
     ]
@@ -468,8 +448,8 @@ def _load_expenses(db: sqlite3.Connection, space_id: str) -> list[Expense]:
 
 def _load_settlements(db: sqlite3.Connection, space_id: str) -> list[Settlement]:
     rows = db.execute(
-        "SELECT payer_phone, payee_phone, amount_cents, nessie_deposit_id "
-        "FROM settlements WHERE space_id = ? ORDER BY id",
+        "SELECT payer_phone, payee_phone, amount_cents FROM settlements "
+        "WHERE space_id = ? ORDER BY id",
         (space_id,),
     ).fetchall()
     return [
@@ -477,7 +457,6 @@ def _load_settlements(db: sqlite3.Connection, space_id: str) -> list[Settlement]
             payer_phone=row["payer_phone"],
             payee_phone=row["payee_phone"],
             amount_cents=row["amount_cents"],
-            went_through_nessie=row["nessie_deposit_id"] is not None,
         )
         for row in rows
     ]

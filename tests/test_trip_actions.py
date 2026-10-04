@@ -2,7 +2,6 @@ from datetime import date
 
 import pytest
 
-from scout.nessie import NessieError, SandboxPayment
 from scout.outgoing import Link, Say
 from scout.outside_services import OutsideServices
 from scout.places import Coordinates, Place, PlacesError
@@ -12,6 +11,7 @@ from scout.trip import (
     ItineraryDay,
     PendingReceipt,
     PreferenceUpdate,
+    Settlement,
 )
 from scout.trip_actions import TripActionError, TripActions
 
@@ -255,36 +255,13 @@ def test_settle_up_is_posted_to_the_chat(maya_actions):
     assert said(maya_actions.outbox)[-1] == (
         "💸 Shared costs: $100, so $50 each. Fewest payments to settle up:\n"
         "…0002 → …0001 $50\n"
-        'To pay, text "@scout pay …0001".'
+        'Once you\'ve paid, text "@scout I paid …0001".'
     )
 
 
 def test_no_settle_up_before_anyone_logs_an_expense(maya_actions):
     with pytest.raises(TripActionError, match="nobody has logged an expense"):
         maya_actions.post_settle_up()
-
-
-class FakeBank:
-    """Stands in for Nessie: opens numbered accounts and records each payment."""
-
-    def __init__(self, is_down=False):
-        self.is_down = is_down
-        self.accounts_opened = 0
-        self.payments = []
-
-    def open_account(self):
-        self._fail_if_down()
-        self.accounts_opened += 1
-        return f"account-{self.accounts_opened}"
-
-    def move_money(self, from_account_id, to_account_id, amount_cents):
-        self._fail_if_down()
-        self.payments.append((from_account_id, to_account_id, amount_cents))
-        return SandboxPayment("withdrawal-1", "deposit-1")
-
-    def _fail_if_down(self):
-        if self.is_down:
-            raise NessieError("POST /customers didn't connect: timed out")
 
 
 def maya_owes_leo_50(store):
@@ -295,81 +272,32 @@ def maya_owes_leo_50(store):
     store.add_expense(SPACE, LEO, 10_000, "Groceries")
 
 
-def test_paying_moves_sandbox_money_and_confirms_in_the_chat(store):
-    maya_owes_leo_50(store)
-    bank = FakeBank()
-    maya_actions = TripActions(store, SPACE, MAYA, OutsideServices(bank=bank))
-
-    maya_actions.pay_from_sender("Leo")
-
-    assert bank.payments == [("account-1", "account-2", 5_000)]
-    assert said(maya_actions.outbox) == [
-        "Paid ✓ Maya → Leo $50 through Capital One's Nessie sandbox "
-        "(not real money)\nEveryone's settled up 🎉"
-    ]
-    [settlement] = store.get_trip(SPACE).settlements
-    assert settlement.went_through_nessie
-
-
-def test_each_member_gets_one_nessie_account_that_is_reused(store):
-    maya_owes_leo_50(store)
-    store.add_expense(SPACE, LEO, 2_000, "Ice")
-    bank = FakeBank()
-    TripActions(store, SPACE, MAYA, OutsideServices(bank=bank)).pay_from_sender("Leo")
-    store.add_expense(SPACE, LEO, 2_000, "Ice")
-
-    TripActions(store, SPACE, MAYA, OutsideServices(bank=bank)).pay_from_sender("Leo")
-
-    assert bank.accounts_opened == 2
-    assert [payment[:2] for payment in bank.payments] == [
-        ("account-1", "account-2"),
-        ("account-1", "account-2"),
-    ]
-    maya = store.get_trip(SPACE).find_member(MAYA)
-    assert maya.nessie_account_id == "account-1"
-
-
-def test_payments_are_simulated_when_no_sandbox_bank_is_set_up(store):
+def test_a_payment_is_recorded_and_confirmed_in_the_chat(store):
     maya_owes_leo_50(store)
     maya_actions = TripActions(store, SPACE, MAYA)
 
-    maya_actions.pay_from_sender("Leo")
+    maya_actions.record_sender_payment("Leo")
 
-    assert said(maya_actions.outbox)[0].startswith(
-        "Paid ✓ Maya → Leo $50 (simulated: no money moved in the Capital One sandbox)"
-    )
-    [settlement] = store.get_trip(SPACE).settlements
-    assert not settlement.went_through_nessie
-
-
-def test_the_group_can_still_settle_up_when_nessie_is_down(store):
-    maya_owes_leo_50(store)
-    maya_actions = TripActions(
-        store, SPACE, MAYA, OutsideServices(bank=FakeBank(is_down=True))
-    )
-
-    maya_actions.pay_from_sender("Leo")
-
-    assert "(simulated" in said(maya_actions.outbox)[0]
-    assert len(store.get_trip(SPACE).settlements) == 1
+    assert said(maya_actions.outbox) == [
+        "Paid ✓ Maya → Leo $50\nEveryone's settled up 🎉"
+    ]
+    assert store.get_trip(SPACE).settlements == [Settlement(MAYA, LEO, 5_000)]
 
 
 def test_payee_names_match_however_they_are_capitalized(store):
     maya_owes_leo_50(store)
 
-    TripActions(store, SPACE, MAYA, OutsideServices(bank=FakeBank())).pay_from_sender(
-        " leo "
-    )
+    TripActions(store, SPACE, MAYA).record_sender_payment(" leo ")
 
     assert len(store.get_trip(SPACE).settlements) == 1
 
 
-def test_nobody_can_pay_someone_they_do_not_owe(store):
+def test_nobody_can_record_paying_someone_they_do_not_owe(store):
     maya_owes_leo_50(store)
-    leo_actions = TripActions(store, SPACE, LEO, OutsideServices(bank=FakeBank()))
+    leo_actions = TripActions(store, SPACE, LEO)
 
     with pytest.raises(TripActionError, match="Leo doesn't owe Maya anything"):
-        leo_actions.pay_from_sender("Maya")
+        leo_actions.record_sender_payment("Maya")
     assert store.get_trip(SPACE).settlements == []
 
 
@@ -377,9 +305,7 @@ def test_a_refused_payment_says_who_the_sender_does_owe(store):
     maya_owes_leo_50(store)
 
     with pytest.raises(TripActionError, match="They owe: Leo"):
-        TripActions(
-            store, SPACE, MAYA, OutsideServices(bank=FakeBank())
-        ).pay_from_sender("Jordan")
+        TripActions(store, SPACE, MAYA).record_sender_payment("Jordan")
 
 
 def priya_texts_a_receipt(store):

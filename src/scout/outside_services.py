@@ -2,15 +2,13 @@
 
 from dataclasses import dataclass
 
-from scout.nessie import NessieBank, connect_bank
 from scout.places import GooglePlaces, connect_places
 
 
 @dataclass(frozen=True)
 class OutsideServices:
-    # None means that service isn't set up, and scout works without it:
-    # payments are simulated, and scout says it can't recommend places.
-    bank: NessieBank | None = None
+    # None means that service isn't set up, and scout works without it: it
+    # says it can't recommend places.
     places: GooglePlaces | None = None
 
 
@@ -20,4 +18,4 @@ NO_OUTSIDE_SERVICES = OutsideServices()
 
 def connect_outside_services() -> OutsideServices:
     """Connects every service whose API key is set in the environment."""
-    return OutsideServices(bank=connect_bank(), places=connect_places())
+    return OutsideServices(places=connect_places())
