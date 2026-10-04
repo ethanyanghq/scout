@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>scout: trips that make it out of the group chat</title>
+    <meta
+      name="description"
+      content="scout is an AI trip planner you add to your group text. It gets you from “we should go somewhere” to an actual trip."
+    />
+    <meta property="og:title" content="scout: trips that make it out of the group chat" />
+    <meta
+      property="og:description"
+      content="An AI trip planner you add to your group text."
+    />
+    <meta name="theme-color" content="#fbf8f0" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="preload" href="/fonts/lexend-latin.woff2" as="font" type="font/woff2" crossorigin />
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <!-- Netlify finds forms by reading the built HTML, and the form people
+         use is drawn by React, so this hidden copy tells Netlify which
+         fields a "join" submission carries. -->
+    <form name="join" data-netlify="true" hidden>
+      <input name="name" />
+      <input name="phone" />
+    </form>
+
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

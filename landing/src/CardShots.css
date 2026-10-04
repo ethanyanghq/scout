@@ -1,0 +1,58 @@
+.card-shots {
+  padding-top: var(--section-gap);
+  text-align: center;
+}
+
+.card-shots-lede {
+  max-width: 540px;
+  margin: 20px auto 0;
+  font-size: clamp(17px, 2vw, 19px);
+  text-wrap: balance;
+}
+
+.card-shots-row {
+  display: flex;
+  justify-content: center;
+  gap: 36px;
+  margin-top: clamp(40px, 5vw, 64px);
+  padding: 0 24px 40px;
+}
+.card-shots-row figure {
+  flex: none;
+  width: 272px;
+}
+.card-shots-row img {
+  height: auto;
+  border-radius: 34px;
+  box-shadow: 0 50px 70px -40px rgba(15, 21, 53, 0.55);
+}
+.card-shots-row figure:first-child {
+  transform: rotate(-3deg) translateY(22px);
+}
+.card-shots-row figure:last-child {
+  transform: rotate(3deg) translateY(22px);
+}
+.card-shots-row figcaption {
+  margin-top: 22px;
+  font-size: 15.5px;
+}
+
+/* Three cards don't fit side by side on a phone, so they become a row to
+   swipe through, starting on the first card. */
+@media (max-width: 960px) {
+  .card-shots-row {
+    justify-content: flex-start;
+    gap: 20px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+  }
+  .card-shots-row figure {
+    width: min(272px, 70vw);
+    scroll-snap-align: center;
+  }
+  .card-shots-row figure:first-child,
+  .card-shots-row figure:last-child {
+    transform: none;
+  }
+}

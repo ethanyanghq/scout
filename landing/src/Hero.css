@@ -1,0 +1,182 @@
+.hero {
+  padding-top: clamp(28px, 5vw, 64px);
+  text-align: center;
+}
+
+.hero-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  padding: 6px 16px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 0 0 1px rgba(15, 21, 53, 0.08);
+  font-size: 15px;
+  font-weight: 450;
+}
+.hero-tag::before {
+  content: "";
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--leaf);
+}
+
+.hero h1 {
+  max-width: 980px;
+  margin: 28px auto 0;
+  font-size: clamp(46px, 8.4vw, 96px);
+  font-weight: 700;
+  line-height: 0.98;
+  letter-spacing: -0.05em;
+  text-wrap: balance;
+}
+.hero h1 em {
+  color: var(--cobalt);
+  font-style: normal;
+}
+
+.hero-lede {
+  max-width: 560px;
+  margin: 30px auto 0;
+  font-size: clamp(18px, 2.2vw, 21px);
+  text-wrap: balance;
+}
+
+.hero .join-form,
+.hero .join-confirmation {
+  margin: 38px auto 0;
+}
+
+.hero-note {
+  margin-top: 18px;
+  font-size: 15px;
+}
+
+/* ---------- the phone, between the mess and the plan ---------- */
+
+.hero-stage {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 56px;
+  margin-top: clamp(56px, 7vw, 84px);
+}
+
+.hero-before,
+.hero-after {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  text-align: left;
+}
+.hero-before {
+  align-items: flex-end;
+}
+.hero-after {
+  align-items: flex-start;
+}
+
+.hero-stage-label {
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.hero-before .hero-stage-label {
+  color: #9a9db3;
+}
+.hero-after .hero-stage-label {
+  color: var(--cobalt);
+}
+
+/* Each stray message sits a little more crooked and fainter than the last,
+   like a thread trailing off. */
+.hero-stray-message {
+  padding: 11px 18px;
+  border-radius: 22px;
+  background: #ebe7dc;
+  font-size: 16.5px;
+}
+.hero-stray-message:nth-child(2) {
+  margin-right: 110px;
+  transform: rotate(-3deg);
+}
+.hero-stray-message:nth-child(3) {
+  margin-right: 12px;
+  transform: rotate(2deg);
+}
+.hero-stray-message:nth-child(4) {
+  margin-right: 150px;
+  transform: rotate(-1.5deg);
+  opacity: 0.8;
+}
+.hero-stray-message:nth-child(5) {
+  margin-right: 40px;
+  transform: rotate(3deg);
+  opacity: 0.65;
+}
+.hero-stray-message:nth-child(6) {
+  margin-right: 120px;
+  transform: rotate(-2deg);
+  opacity: 0.5;
+}
+.hero-stray-message:nth-child(7) {
+  margin-right: 24px;
+  transform: rotate(1deg);
+  opacity: 0.35;
+}
+
+.hero-plan-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 300px;
+  padding: 14px 18px;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow:
+    0 0 0 1px rgba(15, 21, 53, 0.06),
+    0 14px 30px -18px rgba(15, 21, 53, 0.3);
+}
+.hero-plan-item i {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+}
+.hero-plan-item strong {
+  display: block;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.hero-plan-item span {
+  display: block;
+  color: #6a7090;
+  font-size: 14px;
+}
+
+/* The before and after columns need room on both sides of the phone. On
+   narrower screens the phone stands alone. */
+@media (max-width: 1100px) {
+  .hero-stage {
+    display: flex;
+    justify-content: center;
+  }
+  .hero-before,
+  .hero-after {
+    display: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .hero-tag {
+    font-size: 13.5px;
+    text-align: left;
+    text-wrap: balance;
+  }
+}

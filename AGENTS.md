@@ -8,10 +8,10 @@ Write code that a human can read and understand quickly. These rules are strong 
 
 If a value is missing, find it in the README, Makefile, or package configuration rather than guessing.
 
-- Build: `uv sync` (Python service), `cd bridge && bun install` (Photon bridge)
-- Fast tests: `uv run pytest` and `cd bridge && bun test`
+- Build: `uv sync` (Python service), `cd bridge && bun install` (Photon bridge), `cd landing && bun install` (landing page)
+- Fast tests: `uv run pytest`, `cd bridge && bun test` and `cd landing && bun run test`
 - E2E tests: `cd bridge && bun run e2e` plays a console script for each critical user journey (`bridge/e2e/`; needs uv, and `ANTHROPIC_API_KEY` in `.env`). To try a conversation step by step without phones, use the developer console: `cd bridge && bun run devchat` (see [DEVELOPING.md](DEVELOPING.md)).
-- Lint: `uv run ruff check src tests` and `cd bridge && bun run typecheck`
+- Lint: `uv run ruff check src tests`, `cd bridge && bun run typecheck` and `cd landing && bun run typecheck`
 - Format: `uv run ruff format src tests`
 - Critical user journeys: scout joins a chat and introduces itself; members share preferences and scout confirms them; scout posts the summary and destination poll; members vote by number and scout announces the winner.
 
