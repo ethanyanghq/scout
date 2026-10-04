@@ -10,6 +10,8 @@
 
 **trips that make it out of the group chat.**
 
+**[getscout.me](https://getscout.me)** · [devpost](https://devpost.com/software/scout-pifctu) · built at BigRed//Hacks 2026
+
 hi, i'm scout.
 
 you know the thread. someone says "we should go somewhere," everyone hearts it, and six hundred messages later nobody has booked a thing. add me to that chat and i'll get you from "we should go somewhere" to an actual trip.
@@ -27,7 +29,7 @@ here's how it goes:
 
 i never book anything or touch real money. i find the links, you book. and i stay quiet unless you tag me, answer me, or say something i can actually help with, because a scout that talks too much gets kicked out of the chat. photos and voice notes work too: i read what's in them.
 
-**where i'm at:** everything above is built. the cards (trip card, brochures, activity deck, itinerary, flights, hotel and the expense report) are drawn right inside iMessage by [HermesShare](https://github.com/time-attack/HermesShare), an iMessage extension, so for now everyone needs our build of it on their phone to see them; without it, every card falls back to plain text. how the cards work lives in [integration.md](integration.md). the brochures need a Google Places key. without the other optional keys i fall back to plain text: a numbered list for the activity deck, the plan as text, and search links instead of live flights and hotels. a shared photo album and message effects (confetti) are still to come. the full plan lives in [scout-PRD.md](scout-PRD.md).
+**where i'm at:** everything above is built. the cards (trip card, brochures, activity deck, itinerary, flights, hotel and the expense report) are drawn right inside iMessage by [HermesShare](https://github.com/time-attack/HermesShare), an iMessage extension, so for now everyone needs our build of it on their phone to see them; without it, every card falls back to plain text. how the cards work lives in [integration.md](integration.md). the brochures need a Google Places key. without the other optional keys i fall back to plain text: a numbered list for the activity deck, the plan as text, and search links instead of live flights and hotels. a shared photo album and message effects (confetti) are still to come. the full plan lives in [scout-PRD.md](scout-PRD.md). want in? leave your name and number at [getscout.me](https://getscout.me).
 
 ## What it looks like
 
@@ -169,3 +171,5 @@ cd bridge && bun run devchat   # play a group chat through the bridge, no phones
 cd bridge && bun run e2e       # end-to-end journeys (needs ANTHROPIC_API_KEY)
 cd bridge && bun run typecheck # type-check the bridge
 ```
+
+The landing page at [getscout.me](https://getscout.me) lives in `landing/` and is hosted on Netlify. [landing/README.md](landing/README.md) covers running and changing it.
