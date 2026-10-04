@@ -133,7 +133,7 @@ Lines starting with `#` are comments. Check the trip's state, or a word a reply 
 
 `bridge/e2e/` holds a script for each critical user journey in AGENTS.md. `cd bridge && bun run e2e` starts a throwaway service on a free port, plays every script, and stops the service. `bun run e2e votes-and-winner.chat` runs one script. The service's log and database stay in `bridge/.devchat/e2e/` so you can look into failures.
 
-Most journeys go through Claude. Without `ANTHROPIC_API_KEY`, only the introduction and the vote pass.
+Most journeys go through the AI. Without `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`, only the introduction and the vote pass.
 
 ### Without the bridge: scout-simulate and curl
 
