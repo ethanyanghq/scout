@@ -85,3 +85,28 @@ def test_a_threaded_reply_to_a_friend_is_not_addressed_to_scout(store):
     _, reply = say(store, LEO, "same", reply_to_text="i'm free mar 14-20")
 
     assert not is_addressed_to_scout(store, reply)
+
+
+def test_an_answer_right_after_a_question_from_scout_is_addressed_to_scout(store):
+    store.log_message(
+        SPACE, None, "how much was it, and was it shared?", datetime(2026, 10, 2, 9, 1)
+    )
+    _, answer = say(store, MAYA, "Shared, standard price i dont remember")
+
+    assert is_addressed_to_scout(store, answer)
+
+
+def test_chat_after_a_statement_from_scout_is_not_addressed_to_scout(store):
+    store.log_message(SPACE, None, "logged $12 for dinner", datetime(2026, 10, 2, 9, 1))
+    _, chat = say(store, LEO, "lol nice")
+
+    assert not is_addressed_to_scout(store, chat)
+
+
+def test_a_friends_reply_after_the_friends_own_question_is_not_addressed_to_scout(
+    store,
+):
+    store.log_message(SPACE, MAYA, "who is driving?", datetime(2026, 10, 2, 9, 1))
+    _, answer = say(store, LEO, "me")
+
+    assert not is_addressed_to_scout(store, answer)

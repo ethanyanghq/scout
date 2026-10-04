@@ -24,12 +24,25 @@ AskModel = Callable[[str, str], str]
 
 
 def is_addressed_to_scout(store: TripStore, message: IncomingMessage) -> bool:
-    """Whether the message tags scout or replies in a thread to one of its texts."""
+    """Whether the message tags scout, replies in a thread to one of its texts,
+    or comes right after a question from scout, which it is answering. The
+    message is already in the chat log."""
     if message.mentions_scout:
         return True
-    if message.reply_to_text is None:
+    if message.reply_to_text is not None:
+        return store.has_scout_said(message.space_id, message.reply_to_text)
+    return _follows_a_question_from_scout(store, message)
+
+
+def _follows_a_question_from_scout(store: TripStore, message: IncomingMessage) -> bool:
+    latest_two = store.recent_messages(message.space_id, 2)
+    if len(latest_two) < 2:
         return False
-    return store.has_scout_said(message.space_id, message.reply_to_text)
+    before_message = latest_two[0]
+    return (
+        before_message.sender_phone is None
+        and before_message.text.rstrip().endswith("?")
+    )
 
 
 class SpeakGate:
