@@ -1,0 +1,81 @@
+.join-form {
+  width: min(580px, 100%);
+}
+
+.join-fields {
+  display: flex;
+  align-items: center;
+  padding: 6px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow:
+    0 0 0 1px rgba(15, 21, 53, 0.1),
+    0 18px 40px -24px rgba(15, 21, 53, 0.35);
+}
+.join-fields:focus-within {
+  box-shadow:
+    0 0 0 2px var(--cobalt),
+    0 18px 40px -24px rgba(15, 21, 53, 0.35);
+}
+
+.join-fields input {
+  flex: 1;
+  min-width: 0;
+  height: 52px;
+  padding: 0 0 0 22px;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font-size: 17px;
+  outline: none;
+}
+.join-fields input::placeholder {
+  color: #9a9db3;
+}
+.join-fields input + label + input {
+  border-left: 1px solid rgba(15, 21, 53, 0.12);
+}
+
+.join-fields .button {
+  flex: none;
+  height: 52px;
+}
+
+.join-error {
+  margin-top: 12px;
+  color: #b3261e;
+  font-size: 15px;
+}
+
+.join-confirmation {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  min-height: 64px;
+  padding: 12px 28px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 0 0 1px rgba(15, 21, 53, 0.1);
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: 500;
+}
+
+@media (max-width: 560px) {
+  .join-fields {
+    flex-direction: column;
+    align-items: stretch;
+    border-radius: 28px;
+  }
+  .join-fields input {
+    flex: none;
+  }
+  .join-fields input + label + input {
+    border-top: 1px solid rgba(15, 21, 53, 0.12);
+    border-left: 0;
+  }
+  .join-fields .button {
+    margin-top: 6px;
+  }
+}

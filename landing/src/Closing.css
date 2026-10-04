@@ -1,0 +1,65 @@
+.closing {
+  padding-top: var(--section-gap);
+}
+
+.closing-panel {
+  position: relative;
+  padding: clamp(48px, 8vw, 96px) clamp(28px, 6.5vw, 80px);
+  overflow: hidden;
+  border-radius: clamp(32px, 4vw, 48px);
+  background: var(--cobalt);
+  color: #fff;
+}
+/* the sun from the brand banner, rising in the corner */
+.closing-panel::after {
+  content: "";
+  position: absolute;
+  right: -90px;
+  bottom: -170px;
+  width: 420px;
+  height: 420px;
+  border-radius: 50%;
+  background: var(--sun);
+}
+
+.closing-panel h2 {
+  font-size: clamp(44px, 7vw, 76px);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.045em;
+}
+.closing-panel h2 + p {
+  max-width: 470px;
+  margin-top: 24px;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: clamp(17px, 2vw, 19px);
+}
+
+.closing-panel .join-form,
+.closing-panel .join-confirmation {
+  position: relative;
+  z-index: 1;
+  margin-top: 40px;
+}
+.closing-panel .join-fields {
+  box-shadow: none;
+}
+.closing-panel .join-fields:focus-within {
+  box-shadow: 0 0 0 3px var(--sun);
+}
+.closing-panel .join-fields .button {
+  background: var(--sun);
+  color: var(--ink);
+}
+.closing-panel .join-error {
+  color: #fff;
+}
+
+/* On narrower screens the form reaches the corner, so the sun sinks lower
+   and only its rim shows around the form. */
+@media (max-width: 900px) {
+  .closing-panel::after {
+    right: -150px;
+    bottom: -260px;
+  }
+}

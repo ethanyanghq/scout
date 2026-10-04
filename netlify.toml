@@ -1,0 +1,11 @@
+# The landing page (landing/) is the only part of scout that Netlify hosts.
+[build]
+  base = "landing"
+  command = "bun run build"
+  publish = "dist"
+
+# The font files keep the same names forever, so browsers can keep them.
+[[headers]]
+  for = "/fonts/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

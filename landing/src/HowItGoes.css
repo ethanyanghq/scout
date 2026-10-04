@@ -1,0 +1,48 @@
+.how-it-goes {
+  padding-top: var(--section-gap);
+}
+
+.steps {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 40px;
+  margin: clamp(40px, 5vw, 64px) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.step {
+  padding-top: 22px;
+  border-top: 1.5px solid var(--ink);
+}
+.step-number {
+  color: var(--cobalt);
+  font-size: 15px;
+  font-weight: 600;
+}
+.step h3 {
+  margin-top: 36px;
+  font-size: 25px;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.025em;
+}
+.step h3 + p {
+  margin-top: 10px;
+  font-size: 16.5px;
+}
+
+@media (max-width: 1000px) {
+  .steps {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 560px) {
+  .steps {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+  .step h3 {
+    margin-top: 16px;
+  }
+}
