@@ -20,10 +20,12 @@ from scout.best_flights import (
 from scout.group_summary import format_window
 from scout.trip import Trip
 
-# Tints the card's icons and headers. A warm sand, for a resort brochure.
-BROCHURE_ACCENT_HEX = "#E08A3C"
-# Shown when a hero photo won't load.
-BROCHURE_FALLBACK_SYMBOL = "beach.umbrella.fill"
+# A tropical palette for destination articles: lagoon teal for headings, palm
+# green for prices and deep sea for names, over a shallows-to-sky gradient.
+LAGOON_HEX = "#0E7C86"
+PALM_HEX = "#2E9E6B"
+DEEP_SEA_HEX = "#0B4F6C"
+SHALLOWS_GRADIENT_HEX = ["#DDF6EE", "#D3ECFA"]
 # A departure-board blue, matching HermesShare's own flight cards.
 FLIGHT_ACCENT_HEX = "#0A84FF"
 NONSTOP_HEX = "#30D158"
@@ -32,7 +34,7 @@ CONNECTING_HEX = "#FF9F0A"
 
 @dataclass(frozen=True)
 class Activity:
-    """Something to do at a destination, shown in the brochure's photo strip."""
+    """Something to do at a destination, shown with its photo in the article."""
 
     name: str
     estimated_cost_usd: int
@@ -50,11 +52,12 @@ class CostEstimate:
 
 @dataclass(frozen=True)
 class Brochure:
-    """One destination, as the group sees it in the card."""
+    """One destination, as the group sees it in its card."""
 
+    # As the agent named it, e.g. "Cancún, Mexico".
     destination: str
-    # Where it is and how it rates, e.g. "Quintana Roo · ★ 4.7".
-    subtitle: str
+    # Where it is, e.g. "Quintana Roo, Mexico".
+    region: str
     # A sentence on why it fits the group.
     detail: str
     hotel: str
@@ -66,69 +69,113 @@ class Brochure:
     def estimated_cost_per_person_usd(self) -> int:
         return sum(cost.estimated_usd for cost in self.costs)
 
+    @property
+    def place_name(self) -> str:
+        """The name a card leads with: "Cancún" rather than "Cancún, Mexico"."""
+        return self.destination.split(",")[0].strip()
 
-def destination_brochures(brochures: list[Brochure]) -> dict:
-    """A scrollable card of destinations, each tapping open to its own page.
 
-    `photoCatalog` draws an accordion: a hero photo per destination, and the
-    price breakdown and activities once it's opened.
-    """
+def destination_article(brochure: Brochure, nights: int) -> dict:
+    """One destination as a short travel article: a hero photo, why it fits,
+    where to stay, things to do with photos, and what it all costs."""
     return {
         "version": 1,
-        "title": "Where should we go?",
-        "subtitle": f"{len(brochures)} spots that fit · tap one to look around",
-        "accentColorHex": BROCHURE_ACCENT_HEX,
-        "background": {"kind": "plain"},
+        "title": brochure.place_name,
+        "subtitle": brochure.region,
+        "accentColorHex": LAGOON_HEX,
+        "background": {"kind": "gradient", "colorsHex": SHALLOWS_GRADIENT_HEX},
         "root": {
-            "type": "photoCatalog",
-            "catalogItems": [_catalog_item(brochure) for brochure in brochures],
+            "type": "vstack",
+            "spacing": 18,
+            "alignment": "leading",
+            "children": [
+                *_photo_strip(brochure),
+                {
+                    "type": "statusBadge",
+                    "label": f"~${brochure.estimated_cost_per_person_usd:,} "
+                    "per person, all in",
+                    "colorHex": PALM_HEX,
+                },
+                _text(brochure.detail, role="body"),
+                _section_heading("Where you'll stay"),
+                _text(brochure.hotel, role="headline", color_hex=DEEP_SEA_HEX),
+                _section_heading("Things to do"),
+                *[_activity(activity) for activity in brochure.activities],
+                _section_heading("What it costs"),
+                _cost_breakdown(brochure),
+                _text(
+                    f"Estimates for {nights} nights. Nothing is booked.",
+                    role="footnote",
+                    color_hex=LAGOON_HEX,
+                ),
+            ],
         },
     }
 
 
-def _catalog_item(brochure: Brochure) -> dict:
-    item = {
-        "id": _slug(brochure.destination),
-        "title": brochure.destination,
-        "subtitle": brochure.subtitle,
-        "priceText": f"~${brochure.estimated_cost_per_person_usd:,}",
-        "priceUnit": "person, all in",
-        "detail": f"{brochure.detail} Staying at {brochure.hotel}.",
-        # `amenities` is the catalog's icon-tile slot; scout fills it with
-        # what the price is made of.
-        "amenities": [
-            {
-                "label": f"{cost.label} ~${cost.estimated_usd:,}",
-                "systemImage": cost.sf_symbol,
-            }
-            for cost in brochure.costs
+def _photo_strip(brochure: Brochure) -> list[dict]:
+    """The hero photo, then each activity's, to swipe through.
+
+    A `gallery` sizes and clips every photo itself. HermesShare's `image`
+    node doesn't, so one large photo stretches the whole card off screen.
+    """
+    activity_photos = [a.photo_url for a in brochure.activities if a.photo_url]
+    photos = (
+        [brochure.hero_photo_url, *activity_photos]
+        if brochure.hero_photo_url
+        else activity_photos
+    )
+    if not photos:
+        return []
+    return [{"type": "gallery", "urls": photos, "heightPt": 230, "cornerRadius": 18}]
+
+
+def _activity(activity: Activity) -> dict:
+    return {
+        "type": "vstack",
+        "spacing": 2,
+        "alignment": "leading",
+        "children": [
+            _text(activity.name, role="headline", color_hex=DEEP_SEA_HEX),
+            _text(
+                f"~${activity.estimated_cost_usd:,} per person",
+                role="footnote",
+                color_hex=PALM_HEX,
+            ),
         ],
-        "rooms": [_activity_tile(brochure, a) for a in brochure.activities],
-        "fallbackSystemImage": BROCHURE_FALLBACK_SYMBOL,
     }
-    # The renderer hides the hero rather than showing a broken image, so only
-    # send the key when there's a photo.
-    if brochure.hero_photo_url:
-        item["heroImageUrl"] = brochure.hero_photo_url
-    return item
 
 
-def _activity_tile(brochure: Brochure, activity: Activity) -> dict:
-    """One photo in a destination's activity strip. `rooms` is the catalog's
-    gallery slot; scout fills it with things to do rather than hotel rooms."""
-    tile = {
-        "id": f"{_slug(brochure.destination)}-{_slug(activity.name)}",
-        "name": activity.name,
-        "price": f"~${activity.estimated_cost_usd:,}",
+def _cost_breakdown(brochure: Brochure) -> dict:
+    total = f"~${brochure.estimated_cost_per_person_usd:,}"
+    return {
+        "type": "card",
+        "child": {
+            "type": "vstack",
+            "spacing": 4,
+            "children": [
+                *[
+                    _row(cost.label, f"~${cost.estimated_usd:,}", cost.sf_symbol)
+                    for cost in brochure.costs
+                ],
+                {"type": "divider"},
+                _row("Per person, all in", total, "sun.max.fill"),
+            ],
+        },
     }
-    if activity.photo_url:
-        tile["imageUrl"] = activity.photo_url
-    return tile
 
 
-def brochure_thumbnail_url(brochures: list[Brochure]) -> str | None:
-    """The photo iMessage shows on the unopened bubble: the first hero there is."""
-    return next((b.hero_photo_url for b in brochures if b.hero_photo_url), None)
+def _section_heading(title: str) -> dict:
+    heading = _text(title.upper(), role="subheadline", color_hex=LAGOON_HEX)
+    heading["style"]["weight"] = "bold"
+    return heading
+
+
+def _text(words: str, role: str, color_hex: str | None = None) -> dict:
+    style = {"role": role}
+    if color_hex:
+        style["colorHex"] = color_hex
+    return {"type": "text", "text": words, "style": style}
 
 
 def best_flights(trip: Trip, home_city_flights: list[HomeCityFlight]) -> dict:

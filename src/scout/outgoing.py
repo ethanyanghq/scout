@@ -51,6 +51,8 @@ class Card:
     layout: dict
     # One line on the unopened bubble, under the picture.
     caption: str
+    # A smaller second line under the caption.
+    subcaption: str | None = None
     thumbnail_url: str | None = None
     fallback_text: str = "Open in HermesShare"
 

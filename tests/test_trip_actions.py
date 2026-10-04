@@ -592,43 +592,75 @@ TROPICAL_PITCHES = [
 ]
 
 
-def test_brochures_are_one_card_with_real_photos_and_an_all_in_price(
+def test_each_destination_gets_its_own_card_named_for_the_place(
     maya_actions_with_photos,
 ):
     maya_actions_with_photos.send_destination_brochures(TROPICAL_PITCHES, nights=5)
 
-    [card] = maya_actions_with_photos.outbox
-    assert isinstance(card, Card)
-    tulum = card.layout["root"]["catalogItems"][0]
-    assert tulum["title"] == "Tulum, Mexico"
-    assert tulum["priceText"] == "~$1,100"
-    assert tulum["heroImageUrl"] == "https://lh3.googleusercontent.com/Tulum,-Mexico"
-    assert "Playa Resort (★ 4.7)" in tulum["detail"]
-    assert [tile["label"] for tile in tulum["amenities"]] == [
-        "Flights ~$400",
-        "Hotel ~$500",
-        "Food & fun ~$200",
+    cards = maya_actions_with_photos.outbox
+    assert all(isinstance(card, Card) for card in cards)
+    assert [card.caption for card in cards] == ["Tulum", "Punta Cana", "San Juan"]
+    assert {card.subcaption for card in cards} == {"3 locations for you to consider"}
+    assert cards[0].thumbnail_url == "https://lh3.googleusercontent.com/Tulum,-Mexico"
+
+
+def test_a_destination_card_reads_as_an_article_with_photos_and_prices(
+    maya_actions_with_photos,
+):
+    maya_actions_with_photos.send_destination_brochures(TROPICAL_PITCHES, nights=5)
+
+    tulum = maya_actions_with_photos.outbox[0].layout
+    assert (tulum["title"], tulum["subtitle"]) == ("Tulum", "Caribbean")
+    words = list(_layout_words(tulum["root"]))
+    for expected in [
+        "~$1,100 per person, all in",
+        "White sand and warm water.",
+        "Playa Resort (★ 4.7)",
+        "Snorkel the reef",
+        "~$60 per person",
+        "Flights",
+        "~$400",
+        "Estimates for 5 nights. Nothing is booked.",
+    ]:
+        assert expected in words
+    assert list(_layout_photos(tulum["root"])) == [
+        "https://lh3.googleusercontent.com/Tulum,-Mexico",
+        "https://lh3.googleusercontent.com/Snorkel-the-reef-in-Tulum,-Mexico",
     ]
-    [snorkel] = tulum["rooms"]
-    assert snorkel["name"] == "Snorkel the reef"
-    assert snorkel["imageUrl"].startswith("https://lh3.googleusercontent.com/Snorkel")
-    assert card.thumbnail_url == tulum["heroImageUrl"]
 
 
-def test_brochures_read_the_same_as_text_on_phones_without_the_card_app(
+def test_each_card_reads_the_same_as_text_on_phones_without_the_card_app(
     maya_actions_with_photos,
 ):
     maya_actions_with_photos.send_destination_brochures(TROPICAL_PITCHES, nights=5)
 
-    [card] = maya_actions_with_photos.outbox
-    assert card.fallback_text.startswith("Estimates per person for 5 nights.")
-    assert (
+    assert maya_actions_with_photos.outbox[0].fallback_text == (
         "Tulum, Mexico · ~$1,100\n"
         "Flights ~$400 · Hotel ~$500 · Food & fun ~$200\n"
         "White sand and warm water.\n"
         "Stay: Playa Resort (★ 4.7)\n"
-        "Do: Snorkel the reef (~$60)"
-    ) in card.fallback_text
+        "Do: Snorkel the reef (~$60)\n"
+        "Estimates per person for 5 nights."
+    )
+
+
+def _layout_words(node):
+    """Every piece of text a HermesShare layout shows, in order."""
+    for key in ("text", "label", "key", "value"):
+        if isinstance(node.get(key), str):
+            yield node[key]
+    for child in _child_nodes(node):
+        yield from _layout_words(child)
+
+
+def _layout_photos(node):
+    yield from node.get("urls", [])
+    for child in _child_nodes(node):
+        yield from _layout_photos(child)
+
+
+def _child_nodes(node):
+    return [*node.get("children", []), *([node["child"]] if "child" in node else [])]
 
 
 def test_brochures_need_exactly_three_destinations(maya_actions_with_photos):

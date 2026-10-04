@@ -6,6 +6,8 @@
 export type HermesCard = {
   layout: unknown;
   caption: string;
+  // A smaller line under the caption. Older services don't send it.
+  subcaption?: string | null;
   thumbnail_url: string | null;
   fallback_text: string;
 };
@@ -31,7 +33,12 @@ export function cardPart(card: HermesCard) {
     // With it true, iOS runs the extension inside the bubble and the card
     // can't be opened full screen.
     interactive: false,
-    layout: { caption: card.caption, image_url: card.thumbnail_url },
+    layout: {
+      caption: card.caption,
+      // Linq rejects an empty subcaption, so it's left out when there's none.
+      ...(card.subcaption ? { subcaption: card.subcaption } : {}),
+      image_url: card.thumbnail_url,
+    },
   };
 }
 

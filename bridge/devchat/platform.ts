@@ -216,12 +216,13 @@ function describeScoutContent(content: Content): Omit<ChatEntry, "id" | "from"> 
   }
 }
 
-// A card as the console shows it: its caption, the text phones without the
+// A card as the console shows it: its caption and subcaption, the text phones without the
 // extension get, and why Linq would refuse to send it.
 function describeHermesCard(card: HermesCard): string {
   const warnings = cardProblems(card).map((problem) => `⚠ ${problem}`);
   const thumbnail = `thumbnail ${card.thumbnail_url ?? "(none)"}`;
-  return [`🗂 card: ${card.caption}`, thumbnail, ...warnings, card.fallback_text].join("\n");
+  const subcaption = card.subcaption ? [card.subcaption] : [];
+  return [`🗂 card: ${card.caption}`, ...subcaption, thumbnail, ...warnings, card.fallback_text].join("\n");
 }
 
 // Spectrum only needs a message's id and content to aim a tapback at it.

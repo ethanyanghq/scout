@@ -43,6 +43,7 @@ export type ScoutAction =
       type: "card";
       layout: unknown;
       caption: string;
+      subcaption?: string | null;
       thumbnail_url: string | null;
       fallback_text: string;
     };

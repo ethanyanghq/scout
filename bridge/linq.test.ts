@@ -319,7 +319,7 @@ describe("a Linq group chat through Spectrum", () => {
     ]);
   });
 
-  test("sends scout's card to Linq as a HermesShare part carrying its layout", async () => {
+  test("sends scout's card to Linq as a HermesShare part carrying its layout and captions", async () => {
     const layout = { version: 1, title: "Where should we go?" };
     scoutActions = [{ type: "card", ...BROCHURE_CARD, layout }];
 
@@ -331,7 +331,11 @@ describe("a Linq group chat through Spectrum", () => {
       app: { name: "HermesShare" },
       fallback_text: "Tulum · ~$1,100",
       interactive: false,
-      layout: { caption: "3 spots to look around", image_url: "https://lh3.googleusercontent.com/tulum" },
+      layout: {
+        caption: "Tulum",
+        subcaption: "3 locations for you to consider",
+        image_url: "https://lh3.googleusercontent.com/tulum",
+      },
     });
     const encoded = (part!.url as string).replace("data:application/json;base64,", "");
     expect(JSON.parse(Buffer.from(encoded, "base64").toString())).toEqual(layout);
@@ -345,7 +349,7 @@ describe("a Linq group chat through Spectrum", () => {
     expect(linqReceived).toEqual([
       {
         path: "/chats/group-chat-1/messages",
-        body: { message: { parts: [{ type: "text", value: "3 spots to look around\nTulum · ~$1,100" }] } },
+        body: { message: { parts: [{ type: "text", value: "Tulum\nTulum · ~$1,100" }] } },
       },
     ]);
   });
@@ -363,7 +367,8 @@ describe("a Linq group chat through Spectrum", () => {
 
 const BROCHURE_CARD = {
   layout: {},
-  caption: "3 spots to look around",
+  caption: "Tulum",
+  subcaption: "3 locations for you to consider",
   thumbnail_url: "https://lh3.googleusercontent.com/tulum",
   fallback_text: "Tulum · ~$1,100",
 };

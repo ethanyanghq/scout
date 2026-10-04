@@ -320,10 +320,11 @@ TOOL_DEFINITIONS = [
     {
         "name": "send_destination_brochures",
         "description": (
-            "Post a card the group can tap and scroll: exactly 3 destinations, "
-            "each with a real photo, its top-rated hotel, things to do with "
-            "photos, and an all-in price estimate per person. Use it when "
-            "someone asks to see or browse destinations. It doesn't start a vote."
+            "Post 3 cards, one per destination, each a short travel article "
+            "the group can open and scroll: a real photo, its top-rated hotel, "
+            "things to do with photos, and an all-in price estimate per person. "
+            "Use it when someone asks to see or browse destinations. It doesn't "
+            "start a vote."
         ),
         "strict": True,
         "input_schema": {

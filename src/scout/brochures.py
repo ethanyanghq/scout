@@ -48,10 +48,22 @@ def build_brochures(
         return list(pool.map(lambda pitch: _build_brochure(places, pitch), pitches))
 
 
-def format_brochures(brochures: list[Brochure], nights: int) -> str:
-    """The brochures as text, for phones that can't open the card."""
-    sections = [_format_brochure(brochure) for brochure in brochures]
-    return f"Estimates per person for {nights} nights.\n\n" + "\n\n".join(sections)
+def format_brochure(brochure: Brochure, nights: int) -> str:
+    """A brochure as text, for phones that can't open its card."""
+    costs = " · ".join(f"{c.label} ~${c.estimated_usd:,}" for c in brochure.costs)
+    activities = ", ".join(
+        f"{a.name} (~${a.estimated_cost_usd:,})" for a in brochure.activities
+    )
+    return "\n".join(
+        [
+            f"{brochure.destination} · ~${brochure.estimated_cost_per_person_usd:,}",
+            costs,
+            brochure.detail,
+            f"Stay: {brochure.hotel}",
+            f"Do: {activities}",
+            f"Estimates per person for {nights} nights.",
+        ]
+    )
 
 
 def _build_brochure(places: GooglePlaces, pitch: DestinationPitch) -> Brochure:
@@ -61,7 +73,7 @@ def _build_brochure(places: GooglePlaces, pitch: DestinationPitch) -> Brochure:
         raise NoHotelFound(f"no hotel found in {pitch.name}")
     return Brochure(
         destination=pitch.name,
-        subtitle=pitch.region,
+        region=pitch.region,
         detail=pitch.description,
         hotel=_hotel_label(hotel),
         costs=[
@@ -91,19 +103,3 @@ def _hotel_label(hotel: PhotographedPlace) -> str:
     if hotel.rating is None:
         return hotel.name
     return f"{hotel.name} (★ {hotel.rating})"
-
-
-def _format_brochure(brochure: Brochure) -> str:
-    costs = " · ".join(f"{c.label} ~${c.estimated_usd:,}" for c in brochure.costs)
-    activities = ", ".join(
-        f"{a.name} (~${a.estimated_cost_usd:,})" for a in brochure.activities
-    )
-    return "\n".join(
-        [
-            f"{brochure.destination} · ~${brochure.estimated_cost_per_person_usd:,}",
-            costs,
-            brochure.detail,
-            f"Stay: {brochure.hotel}",
-            f"Do: {activities}",
-        ]
-    )

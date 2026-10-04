@@ -21,15 +21,10 @@ from scout.brochures import (
     DestinationPitch,
     NoHotelFound,
     build_brochures,
-    format_brochures,
+    format_brochure,
 )
 from scout.calendar_link import format_calendar_message, google_calendar_link
-from scout.cards import (
-    best_flights,
-    brochure_thumbnail_url,
-    destination_brochures,
-    flights_thumbnail_url,
-)
+from scout.cards import best_flights, destination_article, flights_thumbnail_url
 from scout.flights import FlightsError
 from scout.group_summary import format_group_summary, summarize_group
 from scout.itinerary import format_itinerary
@@ -367,8 +362,8 @@ class TripActions:
     def send_destination_brochures(
         self, pitches: list[DestinationPitch], nights: int
     ) -> str:
-        """Posts a card the group can scroll: three destinations, each with
-        real photos, its top hotel, things to do and an all-in estimate."""
+        """Posts a card for each of three destinations, each a short article
+        with real photos, its top hotel, things to do and an all-in estimate."""
         if len(pitches) != DESTINATION_OPTION_COUNT:
             raise TripActionError(
                 f"expected {DESTINATION_OPTION_COUNT} destinations, got {len(pitches)}"
@@ -387,13 +382,15 @@ class TripActions:
         except NoHotelFound as error:
             raise TripActionError(f"{error}; pick another destination") from error
 
-        self.outbox.append(
+        self.outbox.extend(
             Card(
-                layout=destination_brochures(brochures),
-                caption=f"{len(brochures)} spots to look around",
-                thumbnail_url=brochure_thumbnail_url(brochures),
-                fallback_text=format_brochures(brochures, nights),
+                layout=destination_article(brochure, nights),
+                caption=brochure.place_name,
+                subcaption=f"{len(brochures)} locations for you to consider",
+                thumbnail_url=brochure.hero_photo_url,
+                fallback_text=format_brochure(brochure, nights),
             )
+            for brochure in brochures
         )
         return "Brochures posted."
 
