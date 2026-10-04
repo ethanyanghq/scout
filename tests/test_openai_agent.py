@@ -13,7 +13,7 @@ from scout.agent import ScoutAgent
 from scout.ai_provider import connect_agent
 from scout.openai_agent import OpenAIScoutAgent
 from scout.outgoing import Say
-from scout.trip import IncomingMessage, MediaKind, MessagePhoto, SharedMedia
+from scout.trip import IncomingMessage, MediaKind, SharedMedia
 
 SPACE = "group-chat-1"
 MAYA = "+15550000001"
@@ -54,13 +54,11 @@ def said(outgoing):
     return [item.text for item in outgoing]
 
 
-def maya_says(store, words, photo=None):
+def maya_says(store, words):
     store.create_trip(SPACE)
     store.add_members(SPACE, [MAYA])
     store.log_message(SPACE, MAYA, words, datetime(2026, 10, 2, 9, 0))
-    message = IncomingMessage(
-        SPACE, MAYA, words, datetime(2026, 10, 2, 9, 0), photo=photo
-    )
+    message = IncomingMessage(SPACE, MAYA, words, datetime(2026, 10, 2, 9, 0))
     return store.get_trip(SPACE), message
 
 
@@ -107,18 +105,6 @@ def test_a_photo_openai_asks_to_view_follows_the_tool_results(store, tmp_path):
             }
         ],
     }
-
-
-def test_a_photo_is_shown_before_the_situation(store):
-    receipt = MessagePhoto("image/jpeg", "cmVjZWlwdA==")
-    trip, message = maya_says(store, "casa brisa dinner", photo=receipt)
-    model = ScriptedOpenAI(says("NO_REPLY"))
-
-    OpenAIScoutAgent(model, store).respond(trip, message)
-
-    photo, situation = model.requests[0]["messages"][1]["content"]
-    assert photo["image_url"]["url"] == "data:image/jpeg;base64,cmVjZWlwdA=="
-    assert "It comes with the photo above." in situation["text"]
 
 
 def test_openai_is_the_fallback_without_a_claude_key(store, monkeypatch):

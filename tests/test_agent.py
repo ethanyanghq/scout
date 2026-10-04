@@ -9,7 +9,6 @@ from scout.outgoing import Say
 from scout.trip import (
     IncomingMessage,
     MediaKind,
-    MessagePhoto,
     SharedMedia,
 )
 
@@ -51,9 +50,8 @@ def tool_call(name, tool_input, call_id="call_1"):
 
 
 def situation_text(claude):
-    """The words of scout's first prompt, without any attached photo."""
-    blocks = claude.requests[0]["messages"][0]["content"]
-    return next(block["text"] for block in blocks if block["type"] == "text")
+    """The words of scout's first prompt."""
+    return claude.requests[0]["messages"][0]["content"]
 
 
 def maya_says(store, words):
@@ -165,23 +163,26 @@ def test_tells_claude_whether_it_was_tagged(store):
     assert "[…0001] @scout hi" in situation
 
 
-def test_a_photo_is_shown_to_claude_before_the_situation(store):
-    trip, _ = maya_says(store, "casa brisa dinner")
-    receipt = MessagePhoto("image/jpeg", "cmVjZWlwdA==")
+def test_a_new_photo_reaches_claude_as_its_description_not_an_image(store):
+    trip, _ = maya_says(store, "")
+    receipt = SharedMedia(
+        "a1b2c3d4",
+        MediaKind.PHOTO,
+        Path("media/group-chat-1/a1b2c3d4.heic"),
+        Path("media/group-chat-1/a1b2c3d4.readable.jpg"),
+        "Receipt from Casa Brisa. Total $164.00",
+    )
     message = IncomingMessage(
-        SPACE, MAYA, "casa brisa dinner", datetime(2026, 10, 2, 9, 0), photo=receipt
+        SPACE, MAYA, "@scout split this", datetime(2026, 10, 2, 9, 0), media=receipt
     )
     claude = ScriptedClaude(response("end_turn", text("NO_REPLY")))
 
     ScoutAgent(claude, store).respond(trip, message)
 
-    photo, situation = claude.requests[0]["messages"][0]["content"]
-    assert photo["source"] == {
-        "type": "base64",
-        "media_type": "image/jpeg",
-        "data": "cmVjZWlwdA==",
-    }
-    assert "It comes with the photo above." in situation["text"]
+    assert situation_text(claude).endswith(
+        "[photo a1b2c3d4 (media/group-chat-1/a1b2c3d4.heic): "
+        "Receipt from Casa Brisa. Total $164.00] @scout split this"
+    )
 
 
 def test_a_photo_claude_asks_to_view_comes_back_as_an_image(store, tmp_path):

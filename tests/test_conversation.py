@@ -22,7 +22,6 @@ from scout.trip import (
     IncomingMessage,
     IncomingReaction,
     MediaKind,
-    MessagePhoto,
     SharedMedia,
     TripStage,
 )
@@ -39,7 +38,6 @@ MAYA = "+15550000001"
 LEO = "+15550000002"
 PRIYA = "+15550000003"
 EVERYONE = (MAYA, LEO, PRIYA)
-RECEIPT_PHOTO = MessagePhoto("image/jpeg", "cmVjZWlwdA==")
 RECEIPT_MEDIA = SharedMedia(
     id="a1b2c3d4",
     kind=MediaKind.PHOTO,
@@ -76,14 +74,13 @@ class BrokenAgent:
         raise ConnectionError("Claude is unreachable")
 
 
-def send(store, agent, sender, text, photo=None, media=None):
+def send(store, agent, sender, text, media=None):
     message = IncomingMessage(
         space_id=SPACE,
         sender_phone=sender,
         text=text,
         sent_at=datetime(2026, 10, 2, 9, 0),
         participant_phones=EVERYONE,
-        photo=photo,
         media=media,
     )
     return said(handle_message(message, store, agent))
@@ -276,7 +273,7 @@ def test_untagged_receipt_photos_wait_for_someone_to_tag_scout(store):
     choose_san_juan(store)
     agent = FakeAgent()
 
-    send(store, agent, PRIYA, "casa brisa dinner 👆", photo=RECEIPT_PHOTO)
+    send(store, agent, PRIYA, "casa brisa dinner 👆", media=RECEIPT_MEDIA)
 
     assert agent.messages_seen == []
 
@@ -284,7 +281,7 @@ def test_untagged_receipt_photos_wait_for_someone_to_tag_scout(store):
 def test_the_chat_log_holds_a_photos_description_and_where_its_kept(store):
     choose_san_juan(store)
 
-    send(store, FakeAgent(), PRIYA, "casa brisa dinner", RECEIPT_PHOTO, RECEIPT_MEDIA)
+    send(store, FakeAgent(), PRIYA, "casa brisa dinner", media=RECEIPT_MEDIA)
 
     assert store.recent_messages(SPACE, limit=1)[0].text == (
         "[photo a1b2c3d4 (media/group-chat-1/a1b2c3d4.heic): "
@@ -306,7 +303,7 @@ def test_the_chat_log_holds_a_voice_notes_words(store):
 def test_a_shared_photo_can_be_found_again_by_its_id(store):
     choose_san_juan(store)
 
-    send(store, FakeAgent(), PRIYA, "", RECEIPT_PHOTO, RECEIPT_MEDIA)
+    send(store, FakeAgent(), PRIYA, "", media=RECEIPT_MEDIA)
 
     assert store.find_media(SPACE, "a1b2c3d4") == RECEIPT_MEDIA
 

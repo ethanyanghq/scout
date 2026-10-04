@@ -51,7 +51,7 @@ class ScoutAgent:
             self._store, trip.space_id, message.sender_phone, self._services
         )
         conversation = [
-            {"role": "user", "content": self._show_situation(trip, message)}
+            {"role": "user", "content": describe_situation(self._store, trip, message)}
         ]
 
         response = self._ask_claude(conversation)
@@ -88,16 +88,6 @@ class ScoutAgent:
             fallbacks="default",
         )
 
-    def _show_situation(self, trip: Trip, message: IncomingMessage) -> list[dict]:
-        """The first prompt: the situation in words, plus any photo just sent."""
-        situation = {
-            "type": "text",
-            "text": describe_situation(self._store, trip, message),
-        }
-        if message.photo is None:
-            return [situation]
-        return [_image_block(message.photo), situation]
-
 
 def _image_block(photo: MessagePhoto) -> dict:
     return {
@@ -130,8 +120,6 @@ def describe_situation(store: TripStore, trip: Trip, message: IncomingMessage) -
         if message.mentions_scout
         else ("It does not tag you.")
     )
-    if message.photo is not None:
-        tagged += " It comes with the photo above."
     if message.reply_to_text is not None:
         tagged += f' It replies in a thread to: "{message.reply_to_text}".'
     if not store.has_scout_spoken(trip.space_id):

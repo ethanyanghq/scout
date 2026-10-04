@@ -14,10 +14,10 @@ from pydantic import BaseModel, Field
 from scout.ai_provider import connect_agent
 from scout.conversation import Agent, handle_message, handle_reaction
 from scout.dev_endpoints import create_dev_router
-from scout.media import Attachment, MediaLibrary, load_photo
+from scout.media import Attachment, MediaLibrary
 from scout.openai_transcriber import connect_transcriber
 from scout.outgoing import Card, Link, Outgoing, React, Say
-from scout.trip import IncomingMessage, IncomingReaction, MediaKind
+from scout.trip import IncomingMessage, IncomingReaction
 from scout.trip_store import TripStore
 
 logger = logging.getLogger(__name__)
@@ -85,13 +85,6 @@ def create_app(store: TripStore, agent: Agent, media: MediaLibrary) -> FastAPI:
             text=incoming.text,
             sent_at=incoming.sent_at,
             participant_phones=tuple(incoming.participant_phones),
-            # The newest photo goes to the AI as an image too, so it can read
-            # a receipt right away.
-            photo=(
-                load_photo(kept.readable_path)
-                if kept and kept.kind is MediaKind.PHOTO
-                else None
-            ),
             media=kept,
             message_id=incoming.message_id,
             reply_to_text=incoming.reply_to_text,

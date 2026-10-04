@@ -85,8 +85,6 @@ class IncomingMessage:
     # Everyone in the chat, including people who haven't spoken yet. Empty when
     # the messaging provider can't list participants (for example, in a DM).
     participant_phones: tuple[str, ...] = ()
-    # The photo, ready for the AI to look at, when the message is one.
-    photo: MessagePhoto | None = None
     # The photo or voice note the message carries, as scout kept it.
     media: SharedMedia | None = None
     # The line's ID for this message, so scout can react or reply to it. None

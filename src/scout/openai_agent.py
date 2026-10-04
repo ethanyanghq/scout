@@ -61,7 +61,7 @@ class OpenAIScoutAgent:
         )
         conversation = [
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": self._show_situation(trip, message)},
+            {"role": "user", "content": describe_situation(self._store, trip, message)},
         ]
 
         reply = self._ask_openai(conversation)
@@ -94,16 +94,6 @@ class OpenAIScoutAgent:
             max_completion_tokens=MAX_OUTPUT_TOKENS,
         )
         return response.choices[0].message
-
-    def _show_situation(self, trip: Trip, message: IncomingMessage) -> list[dict]:
-        """The first prompt: any photo just sent, then the situation in words."""
-        situation = {
-            "type": "text",
-            "text": describe_situation(self._store, trip, message),
-        }
-        if message.photo is None:
-            return [situation]
-        return [_image_part(message.photo), situation]
 
 
 def _image_part(photo: MessagePhoto) -> dict:
