@@ -79,6 +79,7 @@ def test_saves_preferences_and_confirms(store):
                     "budget_usd": 800,
                     "home_city": None,
                     "must_haves": None,
+                    "chronotype": None,
                 },
             ),
         ),

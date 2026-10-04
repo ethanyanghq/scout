@@ -2,10 +2,11 @@ from datetime import date
 
 from scout.group_summary import (
     DateWindow,
+    format_group_summary,
     format_window,
     summarize_group,
 )
-from scout.trip import Member
+from scout.trip import Chronotype, Member
 
 
 def member(name, start, end, budget, city, must_haves=()):
@@ -87,6 +88,39 @@ def test_must_haves_are_combined_without_repeats():
     ]
 
     assert summarize_group(members).must_haves == ["Beach", "food"]
+
+
+def with_chronotypes(*chronotypes):
+    return [
+        Member(phone=f"+155500000{i:02}", chronotype=chronotype)
+        for i, chronotype in enumerate(chronotypes)
+    ]
+
+
+def test_the_group_is_paced_for_how_most_members_start_the_day():
+    members = with_chronotypes(
+        Chronotype.EARLY_RISER, Chronotype.EARLY_RISER, Chronotype.NIGHT_OWL, None
+    )
+
+    assert summarize_group(members).pace == Chronotype.EARLY_RISER
+
+
+def test_a_pace_tie_goes_to_the_later_start():
+    members = with_chronotypes(Chronotype.EARLY_RISER, Chronotype.LATE_RISER)
+
+    assert summarize_group(members).pace == Chronotype.LATE_RISER
+
+
+def test_the_group_has_no_pace_until_someone_says():
+    assert summarize_group(with_chronotypes(None, None)).pace is None
+
+
+def test_the_summary_says_the_group_pace():
+    members = with_chronotypes(Chronotype.NIGHT_OWL)
+
+    summary_text = format_group_summary(summarize_group(members), members)
+
+    assert "pace: night owls" in summary_text.split("\n")
 
 
 def test_formats_windows_the_way_people_text_them():

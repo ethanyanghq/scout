@@ -8,6 +8,7 @@ from scout.best_flights import HomeAirport
 from scout.brochures import ActivityPitch, DestinationPitch
 from scout.money import CENTS_PER_DOLLAR
 from scout.trip import (
+    Chronotype,
     DestinationOption,
     ItineraryDay,
     MessagePhoto,
@@ -61,6 +62,13 @@ TOOL_DEFINITIONS = [
                         "list. Short phrases like 'beach' or 'good nightlife'."
                     ),
                 },
+                # A plain string rather than an enum: an enum makes the strict
+                # tool grammar too large for the API to compile.
+                "chronotype": _nullable(
+                    "string",
+                    "When they like to start the day: 'early riser', "
+                    "'late riser' or 'night owl'.",
+                ),
             },
             "required": [
                 "member",
@@ -70,6 +78,7 @@ TOOL_DEFINITIONS = [
                 "budget_usd",
                 "home_city",
                 "must_haves",
+                "chronotype",
             ],
             "additionalProperties": False,
         },
@@ -699,6 +708,7 @@ def _to_preference_update(tool_input: dict[str, Any]) -> PreferenceUpdate:
         budget_usd=tool_input["budget_usd"],
         home_city=tool_input["home_city"],
         must_haves=tool_input["must_haves"],
+        chronotype=_parse_chronotype(tool_input["chronotype"]),
     )
 
 
@@ -725,6 +735,16 @@ def _to_cents(amount_usd: float) -> int:
     if cents != cents.to_integral_value():
         raise TripActionError(f"{amount_usd} has fractions of a cent")
     return int(cents)
+
+
+def _parse_chronotype(value: str | None) -> Chronotype | None:
+    if value is None:
+        return None
+    try:
+        return Chronotype(value)
+    except ValueError as error:
+        choices = ", ".join(repr(pace.value) for pace in Chronotype)
+        raise TripActionError(f"{value!r} is not one of {choices}") from error
 
 
 def _parse_date(value: str | None) -> date | None:

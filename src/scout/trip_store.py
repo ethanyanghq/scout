@@ -10,6 +10,7 @@ from pathlib import Path
 
 from scout.places import Coordinates, Place
 from scout.trip import (
+    Chronotype,
     DateWindow,
     DestinationOption,
     Expense,
@@ -46,6 +47,7 @@ CREATE TABLE IF NOT EXISTS members (
     budget_usd     INTEGER,
     home_city      TEXT,
     must_haves     TEXT NOT NULL DEFAULT '[]',
+    chronotype     TEXT,
     PRIMARY KEY (space_id, phone)
 );
 
@@ -493,6 +495,7 @@ def _load_members(db: sqlite3.Connection, space_id: str) -> list[Member]:
             budget_usd=row["budget_usd"],
             home_city=row["home_city"],
             must_haves=json.loads(row["must_haves"]),
+            chronotype=_parse_chronotype(row["chronotype"]),
         )
         for row in rows
     ]
@@ -583,6 +586,10 @@ def _load_place_suggestions(db: sqlite3.Connection, space_id: str) -> list[Place
         )
         for row in rows
     ]
+
+
+def _parse_chronotype(value: str | None) -> Chronotype | None:
+    return Chronotype(value) if value else None
 
 
 def _parse_date(value: str | None) -> date | None:

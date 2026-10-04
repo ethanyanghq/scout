@@ -164,6 +164,8 @@ def _describe_trip(trip: Trip) -> str:
         )
     if summary.dates_conflict:
         lines.append("Dates that work for everyone: none, they conflict")
+    if summary.pace:
+        lines.append(f"Group pace: {summary.pace}s")
     waiting_on = ", ".join(m.label for m in summary.members_still_to_share)
     lines.append(f"Still waiting on: {waiting_on or 'nobody'}")
     if trip.open_poll:
@@ -225,6 +227,8 @@ def _describe_member(member: Member) -> str:
         details.append(f"from {member.home_city}")
     if member.must_haves:
         details.append(f"must-haves: {', '.join(member.must_haves)}")
+    if member.chronotype:
+        details.append(member.chronotype)
     if member.missing_preferences:
         details.append(f"missing: {', '.join(member.missing_preferences)}")
     return f"{member.label}: {'; '.join(details)}"

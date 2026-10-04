@@ -25,6 +25,14 @@ class TripStage(StrEnum):
     DESTINATION_CHOSEN = "destination_chosen"
 
 
+class Chronotype(StrEnum):
+    """When someone likes to get going, used only to pace the itinerary (PR-6)."""
+
+    EARLY_RISER = "early riser"
+    LATE_RISER = "late riser"
+    NIGHT_OWL = "night owl"
+
+
 @dataclass(frozen=True)
 class DateWindow:
     start: date
@@ -135,6 +143,7 @@ class PreferenceUpdate:
     budget_usd: int | None = None
     home_city: str | None = None
     must_haves: list[str] | None = None
+    chronotype: Chronotype | None = None
 
 
 @dataclass
@@ -146,6 +155,8 @@ class Member:
     budget_usd: int | None = None
     home_city: str | None = None
     must_haves: list[str] = field(default_factory=list)
+    # Optional, like must-haves: the plan goes ahead without it.
+    chronotype: Chronotype | None = None
 
     @property
     def label(self) -> str:

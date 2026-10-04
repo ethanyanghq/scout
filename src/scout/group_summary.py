@@ -1,8 +1,17 @@
 """Where the group landed: shared dates, budget range, and who's still missing."""
 
+from collections import Counter
 from dataclasses import dataclass
 
-from scout.trip import DateWindow, Member
+from scout.trip import Chronotype, DateWindow, Member
+
+# A tie goes to the later pace: early risers can head out on their own before
+# a late start, but night owls won't make a sunrise anchor.
+PACES_LATEST_FIRST = [
+    Chronotype.NIGHT_OWL,
+    Chronotype.LATE_RISER,
+    Chronotype.EARLY_RISER,
+]
 
 
 @dataclass(frozen=True)
@@ -13,6 +22,9 @@ class GroupSummary:
     budget_range: tuple[int, int] | None
     home_cities: list[str]
     must_haves: list[str]
+    # How most of the group likes to start the day, which paces the itinerary.
+    # None until someone says.
+    pace: Chronotype | None
     members_still_to_share: list[Member]
 
     @property
@@ -36,6 +48,7 @@ def summarize_group(members: list[Member]) -> GroupSummary:
         must_haves=_unique_in_order(
             must_have for member in members for must_have in member.must_haves
         ),
+        pace=_find_pace(members),
         members_still_to_share=[
             member for member in members if not member.has_shared_preferences
         ],
@@ -64,6 +77,8 @@ def format_group_summary(summary: GroupSummary, members: list[Member]) -> str:
         lines.append(f"coming from: {', '.join(summary.home_cities)}")
     if summary.must_haves:
         lines.append(f"must-haves: {', '.join(summary.must_haves)}")
+    if summary.pace:
+        lines.append(f"pace: {summary.pace}s")
     if summary.members_still_to_share:
         waiting_on = ", ".join(m.label for m in summary.members_still_to_share)
         lines.append(f"still waiting on: {waiting_on}")
@@ -86,6 +101,13 @@ def _find_shared_window(members: list[Member]) -> DateWindow | None:
     if latest_start > earliest_end:
         return None
     return DateWindow(latest_start, earliest_end)
+
+
+def _find_pace(members: list[Member]) -> Chronotype | None:
+    counts = Counter(member.chronotype for member in members if member.chronotype)
+    if not counts:
+        return None
+    return max(PACES_LATEST_FIRST, key=lambda pace: counts[pace])
 
 
 def _has_dates(member: Member) -> bool:

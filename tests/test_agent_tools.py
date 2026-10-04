@@ -1,7 +1,7 @@
 import pytest
 
 from scout.agent_tools import run_tool
-from scout.trip import DestinationOption
+from scout.trip import Chronotype, DestinationOption
 from scout.trip_actions import TripActionError, TripActions
 
 SPACE = "group-chat-1"
@@ -31,19 +31,33 @@ def test_agent_votes_use_the_numbers_shown_in_the_poll(maya_actions, store):
     assert store.get_trip(SPACE).open_poll.votes == {MAYA: 2}
 
 
-def test_agent_dates_must_be_real_calendar_dates(maya_actions):
-    tool_input = {
-        "member": "…0001",
+def preferences_input(**shared):
+    """A save_member_preferences call for Maya that mentions only `shared`."""
+    nothing_mentioned = {
         "display_name": None,
-        "available_from": "March 13",
+        "available_from": None,
         "available_to": None,
         "budget_usd": None,
         "home_city": None,
         "must_haves": None,
+        "chronotype": None,
     }
+    return {"member": "…0001", **nothing_mentioned, **shared}
+
+
+def test_agent_dates_must_be_real_calendar_dates(maya_actions):
+    tool_input = preferences_input(available_from="March 13")
 
     with pytest.raises(TripActionError, match="YYYY-MM-DD"):
         run_tool(maya_actions, "save_member_preferences", tool_input)
+
+
+def test_saves_when_a_member_likes_to_start_the_day(maya_actions, store):
+    tool_input = preferences_input(chronotype="night owl")
+
+    run_tool(maya_actions, "save_member_preferences", tool_input)
+
+    assert store.get_trip(SPACE).find_member(MAYA).chronotype == Chronotype.NIGHT_OWL
 
 
 @pytest.mark.parametrize(
@@ -64,3 +78,10 @@ def test_agent_amounts_cannot_split_a_cent(maya_actions):
 
     with pytest.raises(TripActionError, match="fractions of a cent"):
         run_tool(maya_actions, "log_sender_expense", tool_input)
+
+
+def test_agent_chronotypes_must_be_one_of_the_three(maya_actions):
+    tool_input = preferences_input(chronotype="morning person")
+
+    with pytest.raises(TripActionError, match="'early riser', 'late riser'"):
+        run_tool(maya_actions, "save_member_preferences", tool_input)
