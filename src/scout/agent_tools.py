@@ -162,6 +162,32 @@ TOOL_DEFINITIONS = [
         },
     },
     {
+        "name": "lock_in_group_choice",
+        "description": (
+            "Lock in the destination when someone speaks for the whole group: "
+            '"we\'ve chosen San Juan", "we\'re all going with 2", "talked '
+            "it over, it's Tulum\". One member saying it for everyone is "
+            "enough; don't wait for the others to vote or confirm. Closes any "
+            "open poll and sends the calendar link. For one person's own pick, "
+            "use record_member_vote instead."
+        ),
+        "strict": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "destination": {
+                    "type": "string",
+                    "description": (
+                        "The place the group chose: a poll option's name or "
+                        "number as shown, or any destination they named."
+                    ),
+                },
+            },
+            "required": ["destination"],
+            "additionalProperties": False,
+        },
+    },
+    {
         "name": "close_poll",
         "description": (
             "Close the open poll now and announce the winner. Ties go to the "
@@ -620,6 +646,8 @@ def run_tool(
             )
         case "close_poll":
             return actions.close_poll()
+        case "lock_in_group_choice":
+            return actions.lock_in_group_choice(tool_input["destination"])
         case "post_itinerary":
             return actions.post_itinerary(_to_itinerary(tool_input))
         case "send_booking_links":

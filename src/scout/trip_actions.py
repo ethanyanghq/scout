@@ -41,6 +41,7 @@ from scout.settle_up import (
     plan_payments,
 )
 from scout.trip import (
+    DateWindow,
     DestinationOption,
     ItineraryDay,
     MediaKind,
@@ -160,6 +161,24 @@ class TripActions:
         if trip.open_poll is None:
             raise TripActionError("there is no open poll")
         return self._close(trip)
+
+    def lock_in_group_choice(self, destination: str) -> str:
+        """Locks in the destination one member chose for the whole group ("we
+        picked San Juan"), closing any open poll without waiting for votes."""
+        if not destination.strip():
+            raise TripActionError("name the destination the group chose")
+        trip = self._load_trip()
+        if trip.open_poll is not None:
+            option_names = [option.name for option in trip.open_poll.options]
+            choice = polls.parse_vote(destination, option_names)
+            if choice is not None:
+                destination = option_names[choice]
+
+        dates = summarize_group(trip.members).shared_window
+        self._store.lock_in_destination(self._space_id, destination, dates)
+        self.outbox.append(Say(f"🎉 Locked in: {destination}, the group's pick."))
+        calendar = self._send_calendar(destination, dates)
+        return f"Destination is now {destination}. {calendar}"
 
     def post_itinerary(self, days: list[ItineraryDay]) -> str:
         trip = self._load_locked_in_trip()
@@ -414,18 +433,21 @@ class TripActions:
         dates = summarize_group(trip.members).shared_window
         self._store.close_poll(trip.open_poll.id, result.winner.name, dates)
         self.outbox.append(Say(polls.format_result(result, len(trip.open_poll.votes))))
+        calendar = self._send_calendar(result.winner.name, dates)
+        return f"Poll closed. Destination is now {result.winner.name}. {calendar}"
+
+    def _send_calendar(self, destination: str, dates: DateWindow | None) -> str:
+        """Sends the calendar link for the locked-in trip, if it has dates, and
+        says which happened."""
         if dates is None:
-            return (
-                f"Poll closed. Destination is now {result.winner.name}, "
-                "but no dates work for everyone, so the trip has no dates."
-            )
+            return "No dates work for everyone, so the trip has no dates."
         self.outbox.extend(
             [
-                Say(format_calendar_message(result.winner.name, dates)),
-                Link(google_calendar_link(result.winner.name, dates)),
+                Say(format_calendar_message(destination, dates)),
+                Link(google_calendar_link(destination, dates)),
             ]
         )
-        return f"Poll closed. Destination is now {result.winner.name}."
+        return "Sent the calendar link."
 
     def _load_locked_in_trip(self) -> Trip:
         """Loads a trip whose destination and dates are both settled."""

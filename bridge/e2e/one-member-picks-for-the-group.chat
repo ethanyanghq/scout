@@ -1,0 +1,11 @@
+# Journey: one member's own pick is just their vote, but one member saying
+# the group decided locks the destination in without everyone confirming.
+# Needs Claude (or OpenAI).
+members maya leo priya
+from poll-open
+
+leo: @scout put me down for tulum
+expect state destination = null
+maya: @scout we just talked it over irl and we're all going with san juan
+expect state destination = "San Juan, Puerto Rico"
+expect card url ~ "calendar.google.com"

@@ -277,6 +277,27 @@ class TripStore:
                 ),
             )
 
+    def lock_in_destination(
+        self, space_id: str, destination: str, dates: DateWindow | None
+    ) -> None:
+        """Sets the trip's destination and dates, closing any open poll."""
+        with self._transaction() as db:
+            db.execute(
+                "UPDATE polls SET is_open = 0 WHERE space_id = ? AND is_open = 1",
+                (space_id,),
+            )
+            db.execute(
+                "UPDATE trips SET stage = ?, destination = ?, starts_on = ?, "
+                "ends_on = ? WHERE space_id = ?",
+                (
+                    TripStage.DESTINATION_CHOSEN,
+                    destination,
+                    dates.start.isoformat() if dates else None,
+                    dates.end.isoformat() if dates else None,
+                    space_id,
+                ),
+            )
+
     def replace_itinerary(self, space_id: str, days: list[ItineraryDay]) -> None:
         with self._transaction() as db:
             db.execute("DELETE FROM itinerary_days WHERE space_id = ?", (space_id,))

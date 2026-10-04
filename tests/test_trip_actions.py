@@ -156,6 +156,27 @@ def test_closing_the_poll_locks_in_the_dates_everyone_shares(store):
     assert trip.dates == DateWindow(date(2027, 3, 14), date(2027, 3, 19))
 
 
+def test_one_member_choosing_for_the_group_closes_the_poll_without_votes(store):
+    store.create_trip(SPACE)
+    store.add_members(SPACE, [MAYA, LEO])
+    store.save_preferences(SPACE, MAYA, MAYA_PREFERENCES)
+    store.save_preferences(SPACE, LEO, LEO_PREFERENCES)
+    store.open_poll(SPACE, OPTIONS)
+
+    TripActions(store, SPACE, MAYA).lock_in_group_choice("san juan")
+
+    trip = store.get_trip(SPACE)
+    assert trip.open_poll is None
+    assert trip.destination == "San Juan, Puerto Rico"
+    assert trip.dates == DateWindow(date(2027, 3, 14), date(2027, 3, 19))
+
+
+def test_the_group_can_choose_a_destination_without_a_poll(maya_actions, store):
+    maya_actions.lock_in_group_choice("Lisbon, Portugal")
+
+    assert store.get_trip(SPACE).destination == "Lisbon, Portugal"
+
+
 def test_itinerary_is_posted_in_date_order(locked_in_actions):
     locked_in_actions.post_itinerary(
         [plan_day(15, "Beach day in Condado"), plan_day(14, "Land and check in")]
