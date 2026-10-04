@@ -83,7 +83,13 @@ export async function relaySpectrumMessages(
     }
 
     try {
-      const arrival = { ...outcome, senderPhone: readable.senderPhone, at: message.timestamp };
+      const arrival = {
+        ...outcome,
+        senderPhone: readable.senderPhone,
+        at: message.timestamp,
+        receivedAt: receivedAt(message),
+        startedAt: new Date(),
+      };
       let actions: ScoutAction[];
       if (readable.kind === "tapback") {
         const tappedText = await findText(space, readable.targetId, recent);
@@ -295,6 +301,12 @@ function readForScout(space: Space, message: Message): ScoutMessage | ScoutTapba
 export const threadedReplySchema = z.object({
   replyTo: z.object({ messageId: z.string() }).optional(),
 });
+
+// Linq stamps each message with when its webhook reached the bridge.
+function receivedAt(message: Message): Date | null {
+  const { receivedAt } = message as { receivedAt?: Date };
+  return receivedAt ?? null;
+}
 
 function repliedToId(message: Message): string | null {
   const { replyTo } = message as { replyTo?: { messageId?: string } };

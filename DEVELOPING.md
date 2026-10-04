@@ -200,10 +200,11 @@ This needs a Mac (the service converts iPhone photos and voice memos with macOS'
 
 ### When scout doesn't reply
 
-1. **Find the message in the log** (`[bridge]` in `bun run dev`). `skipped` says why: a private chat, scout's own message, nothing to read, or a repeat delivery. `✗` shows the error from Linq's API or the service. `· no reply` means the service chose not to reply, and the `[service]` line above it says why (step 3).
-2. **No line at all?** The message never reached the bridge. Is the relay running (`[relay]` in `bun run dev`)? Did the sender text scout privately first? The free line ignores anyone who hasn't.
-3. **Was scout tagged, or did the gate say SPEAK?** A tag (`@scout`, a threaded reply to scout, the message right after a question from scout, or a voice note that addresses scout: "hey scout", "at scout") always reaches the AI. Anything else goes to the gate first, and the `[service]` line says `Not tagged, and the gate says to stay quiet` when it said SILENT. If scout is too quiet or too chatty, change `speak_gate_prompt.md`; once the AI is running, its own `NO_REPLY` rules are in `system_prompt.md` ("When to speak").
-4. **Did the database layout change?** There are no migrations. Delete `scout.db`, and every group gets the introduction again.
+1. **Find the message in the log** (`[bridge]` in `bun run dev`). `skipped` says why: a private chat, scout's own message, nothing to read, or a repeat delivery. `✗` shows the error from Linq's API or the service. `· no reply` means the service chose not to reply, and the `[service]` line above it says why (step 4).
+2. **Did it arrive late?** `⚠ Linq delivered this 9m06s after it was sent` under a message means Linq's webhook was late, usually because of leftover relay webhooks (see step 3 of the setup above). `· waited 30s for scout to finish the messages before it` means it queued behind scout's earlier replies.
+3. **No line at all?** The message never reached the bridge. Is the relay running (`[relay]` in `bun run dev`)? Did the sender text scout privately first? The free line ignores anyone who hasn't.
+4. **Was scout tagged, or did the gate say SPEAK?** A tag (`@scout`, a threaded reply to scout, the message right after a question from scout, or a voice note that addresses scout: "hey scout", "at scout") always reaches the AI. Anything else goes to the gate first, and the `[service]` line says `Not tagged, and the gate says to stay quiet` when it said SILENT. If scout is too quiet or too chatty, change `speak_gate_prompt.md`; once the AI is running, its own `NO_REPLY` rules are in `system_prompt.md` ("When to speak").
+5. **Did the database layout change?** There are no migrations. Delete `scout.db`, and every group gets the introduction again.
 
 ## Add a group chat feature
 

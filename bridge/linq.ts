@@ -34,6 +34,10 @@ export type LinqEvent = {
   data: unknown;
 };
 
+// Each message also carries when its webhook reached this bridge, so the log
+// can show how late Linq delivered it.
+const linqMessageSchema = threadedReplySchema.extend({ receivedAt: z.date().optional() });
+
 // The real API and webhook port unless a test stands in for them.
 export type LinqConnection = { apiKey: string; apiUrl?: string; webhookPort?: number };
 
@@ -74,7 +78,7 @@ export function linqPlatform(connection: LinqConnection) {
   const rivalGuard = new RivalGuard();
   return definePlatform(PLATFORM, {
     config: z.object({}),
-    message: { schema: threadedReplySchema },
+    message: { schema: linqMessageSchema },
     user: { resolve: async ({ input }) => ({ id: input.userID }) },
     space: {
       create: async (): Promise<{ id: string }> => {
@@ -201,7 +205,8 @@ function receiveWebhookEvents(
         }
       } else {
         if (record.space && record.timestamp) rivalGuard.noteMemberMessage(record.space.id, record.timestamp);
-        delivered = delivered.then(() => emit(record));
+        const received = { ...record, receivedAt: new Date() };
+        delivered = delivered.then(() => emit(received));
       }
       return new Response(null, { status: 204 });
     },

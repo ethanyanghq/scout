@@ -4,7 +4,7 @@ import { linqPlatform, readLinqEvent, type LinqEvent } from "./linq";
 import { AnotherScoutAnsweredError } from "./rival-guard";
 import type { IncomingText } from "./scout";
 import { noTypingPause, relaySpectrumMessages, type TypingPause } from "./spectrum";
-import type { MessageOutcome } from "./trace";
+import type { Arrival, MessageOutcome } from "./trace";
 
 const SCOUT = { handle: "+12055550100", is_me: true, status: "active" };
 const MAYA = { handle: "+16075550123", is_me: false, status: "active" };
@@ -118,6 +118,7 @@ describe("a Linq group chat through Spectrum", () => {
   // What Linq lists as the chat's newest messages: another bridge's reply, say.
   let chatMessages: object[] = [];
   let scoutThinkingMs = 0;
+  let arrivals: Arrival[] = [];
   const stubScout = Bun.serve({
     hostname: "127.0.0.1",
     port: 0,
@@ -172,6 +173,7 @@ describe("a Linq group chat through Spectrum", () => {
     sendStatus = 200;
     chatMessages = [];
     scoutThinkingMs = 0;
+    arrivals = [];
   });
 
   // Sends one Linq event through Spectrum and the relay, and waits until scout
@@ -190,7 +192,7 @@ describe("a Linq group chat through Spectrum", () => {
     const app = await Spectrum({ providers: [platform.config({})] });
     const finished = new Promise<MessageOutcome>((resolve) => {
       // The relay stops itself when another bridge answered, which a test reads from the outcome.
-      relaySpectrumMessages(app, { arrived: () => {}, finished: resolve }, typingPause, showTypingAfterMs).catch(() => {});
+      relaySpectrumMessages(app, { arrived: (arrival) => arrivals.push(arrival), finished: resolve }, typingPause, showTypingAfterMs).catch(() => {});
     });
     await fetch(`http://127.0.0.1:${webhookPort}/linq-events`, {
       method: "POST",
@@ -220,6 +222,15 @@ describe("a Linq group chat through Spectrum", () => {
         body: { message: { parts: [{ type: "text", value: "hey Maya 👋" }] } },
       },
     ]);
+  });
+
+  test("notes when Linq's webhook reached the bridge, so the log can show how late it was", async () => {
+    const beforeDelivery = new Date();
+
+    await deliver(messageReceived({}));
+
+    expect(arrivals[0]?.at).toEqual(new Date("2026-10-03T20:37:25.714Z"));
+    expect(arrivals[0]?.receivedAt?.getTime()).toBeGreaterThanOrEqual(beforeDelivery.getTime());
   });
 
   test("stops this bridge when another bridge on the same line already answered", async () => {

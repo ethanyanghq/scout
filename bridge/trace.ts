@@ -13,6 +13,10 @@ export type Arrival = {
   // The words, or what was sent instead, like a tapback or a photo.
   said: string;
   at: Date;
+  // When the message reached this bridge, if its line says (Linq does).
+  receivedAt: Date | null;
+  // When the relay started on it, after any messages ahead of it.
+  startedAt: Date;
 };
 
 export type MessageOutcome = { id: string; chatId: string | null } & (
@@ -52,8 +56,39 @@ const SPEAKER_WIDTH = 6;
 // Everything after the time and chat lines up under the first speaker.
 const INDENT = " ".repeat("hh:mm:ss  ".length + SHORT_CHAT_ID_LENGTH + 2);
 
-export function formatArrival({ chatId, senderPhone, said, at }: Arrival): string {
-  return `${clockTime(at)}  ${shortChatId(chatId)}  ${speaker(shortPhone(senderPhone), said)}`;
+// Linq normally delivers a message within a second. Much later means its
+// webhooks are backed up (see shutdown.ts), which is a bug worth seeing.
+const LATE_DELIVERY_SECONDS = 10;
+// A long wait behind other messages is expected while scout is busy, but it
+// explains a slow reply.
+const NOTICEABLE_WAIT_SECONDS = 10;
+
+export function formatArrival(arrival: Arrival): string {
+  const { chatId, senderPhone, said, at } = arrival;
+  const line = `${clockTime(at)}  ${shortChatId(chatId)}  ${speaker(shortPhone(senderPhone), said)}`;
+  return [line, ...describeLateness(arrival)].join("\n");
+}
+
+// Only Linq says when a message reached the bridge, so other lines get no notes.
+function describeLateness({ at, receivedAt, startedAt }: Arrival): string[] {
+  if (!receivedAt) return [];
+  const notes: string[] = [];
+  const deliverySeconds = (receivedAt.getTime() - at.getTime()) / 1000;
+  if (deliverySeconds >= LATE_DELIVERY_SECONDS) {
+    notes.push(`${INDENT}⚠ Linq delivered this ${formatDuration(deliverySeconds)} after it was sent`);
+  }
+  const waitSeconds = (startedAt.getTime() - receivedAt.getTime()) / 1000;
+  if (waitSeconds >= NOTICEABLE_WAIT_SECONDS) {
+    notes.push(`${INDENT}· waited ${formatDuration(waitSeconds)} for scout to finish the messages before it`);
+  }
+  return notes;
+}
+
+// "45s", or "9m06s" past a minute.
+function formatDuration(seconds: number): string {
+  const whole = Math.round(seconds);
+  if (whole < 60) return `${whole}s`;
+  return `${Math.floor(whole / 60)}m${String(whole % 60).padStart(2, "0")}s`;
 }
 
 export function formatOutcome(outcome: MessageOutcome): string {
