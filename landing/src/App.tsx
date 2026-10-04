@@ -4,6 +4,7 @@ import { Hero } from "./Hero";
 import { HowItGoes } from "./HowItGoes";
 import "./App.css";
 
+const GITHUB_URL = "https://github.com/ethanyanghq/scout";
 const DEVPOST_URL = "https://devpost.com/software/scout-pifctu";
 
 export function App() {
@@ -30,6 +31,9 @@ export function App() {
           scout
         </a>
         <p className="site-footer-notes">
+          <a href={GITHUB_URL} target="_blank" rel="noreferrer">
+            github ↗
+          </a>
           <a href={DEVPOST_URL} target="_blank" rel="noreferrer">
             devpost ↗
           </a>
