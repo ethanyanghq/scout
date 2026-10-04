@@ -10,6 +10,7 @@ import { findSetupProblems, iMessageMode, isTunnelStatus, publicDomain, type Dev
 import { readEnvFile } from "./env-file";
 import { WEBHOOK_PORT, WEBHOOK_URL } from "./linq";
 import { isWorthShowing } from "./relay-log";
+import { stopAfterCtrlC, stopChildren } from "./shutdown";
 
 const BRIDGE_FOLDER = import.meta.dir;
 const REPO_ROOT = join(BRIDGE_FOLDER, "..");
@@ -47,7 +48,7 @@ if (calendarDomain) {
 console.log(`[dev] scout is starting in ${mode} mode. Ctrl-C stops everything.`);
 
 let isStopping = false;
-process.on("SIGINT", () => stopAll(0));
+process.on("SIGINT", () => stopAll(0, stopAfterCtrlC));
 process.on("SIGTERM", () => stopAll(0));
 for (const { label, subprocess } of running) {
   // One piece stopping (a crash, a bad key) takes the others down with it, so
@@ -117,10 +118,13 @@ async function printLines(stream: ReadableStream<Uint8Array>, print: (line: stri
   if (unfinishedLine) print(unfinishedLine);
 }
 
-async function stopAll(exitCode: number): Promise<void> {
+async function stopAll(exitCode: number, stop = stopChildren): Promise<void> {
   if (isStopping) return;
   isStopping = true;
-  for (const { subprocess } of running) subprocess.kill();
-  await Promise.all(running.map(({ subprocess }) => subprocess.exited));
+  if (mode === "linq") {
+    // A second Ctrl-C would leave the relay's webhook behind (see shutdown.ts).
+    console.log("[dev] stopping. The relay is deleting its Linq webhook, so don't press Ctrl-C again.");
+  }
+  await stop(running.map(({ subprocess }) => subprocess));
   process.exit(exitCode);
 }
