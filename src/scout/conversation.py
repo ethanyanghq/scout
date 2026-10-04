@@ -138,7 +138,16 @@ def _respond(
             logger.info("Activity picks %s, saved without the AI", picks)
             actions = TripActions(store, trip.space_id, message.sender_phone)
             actions.record_sender_picks(picks, confirm=_tapback_on(message))
-            return actions.outbox
+            trip = store.get_trip(trip.space_id)
+            if not trip.activity_deck.has_picks_from_everyone(trip.members):
+                return actions.outbox
+            # The last picks are in, so the AI posts the itinerary.
+            logger.info("Everyone has sent picks, so asking the AI for the plan")
+            is_addressed = is_addressed_to_scout(store, message)
+            return [
+                *actions.outbox,
+                *_ask_agent(trip, message, store, agent, is_addressed),
+            ]
 
     if trip.place_suggestions:
         place_names = [place.name for place in trip.place_suggestions]
@@ -160,6 +169,16 @@ def _respond(
         logger.info("Not tagged, and the gate says to stay quiet")
         return []
 
+    return _ask_agent(trip, message, store, agent, is_addressed)
+
+
+def _ask_agent(
+    trip: Trip,
+    message: IncomingMessage,
+    store: TripStore,
+    agent: Agent,
+    is_addressed: bool,
+) -> list[Outgoing]:
     is_trip_card_answer = message.text.startswith(INTERVIEW_ANSWER_LEAD)
     if is_trip_card_answer and _answered_trip_card_before(store, message):
         # The card is filled in once; a resend would only repeat the same answers.

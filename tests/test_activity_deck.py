@@ -1,5 +1,5 @@
-from scout.activity_deck import format_tally, parse_picks
-from scout.trip import ActivityDeck, DeckActivity, Member, Rating
+from scout.activity_deck import parse_picks
+from scout.trip import Member, Rating
 
 ACTIVITY_NAMES = [
     "Night kayak in the bio bay",
@@ -44,21 +44,3 @@ def test_a_message_that_isnt_picks_is_left_for_the_agent():
 
 def test_picks_naming_something_off_the_deck_are_left_for_the_agent():
     assert parse_picks("@scout my picks: 1, skydiving meh", ACTIVITY_NAMES) is None
-
-
-def test_the_tally_ranks_activities_by_score_and_names_who_swiped_what():
-    deck = ActivityDeck(
-        activities=[DeckActivity(name, "", 50) for name in ACTIVITY_NAMES],
-        picks={
-            MAYA.phone: {1: Rating.YEAH, 2: Rating.MEH},
-            LEO.phone: {1: Rating.MEH, 2: Rating.MEH},
-            PRIYA.phone: {2: Rating.YEAH},
-        },
-    )
-
-    assert format_tally(deck, [MAYA, LEO, PRIYA]) == (
-        "everyone's picks are in, best first:\n"
-        "El Yunque hike: yeah Priya · meh Maya, Leo\n"
-        "Old San Juan food tour: yeah Maya · meh Leo\n"
-        "Night kayak in the bio bay: nobody"
-    )

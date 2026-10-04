@@ -221,8 +221,7 @@ TOOL_DEFINITIONS = [
         "description": (
             "Record how one member rated the deck activities, from what they "
             "or a friend said in words. Replaces their earlier ratings; any "
-            "activity in neither list counts as nah. Posts the tally "
-            "automatically once everyone has sent picks."
+            "activity in neither list counts as nah."
         ),
         "strict": False,
         "input_schema": {

@@ -248,6 +248,9 @@ class ActivityDeck:
     # rated meh or yeah, so an empty dict means "sent, and nah to everything".
     picks: dict[str, dict[int, Rating]]
 
+    def has_picks_from_everyone(self, members: list[Member]) -> bool:
+        return all(member.phone in self.picks for member in members)
+
     def score(self, activity_index: int) -> int:
         return sum(
             ratings.get(activity_index, Rating.NAH) for ratings in self.picks.values()

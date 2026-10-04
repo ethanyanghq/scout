@@ -19,7 +19,6 @@ from scout.activity_deck import (
     RATING_WORDS,
     find_deck_photos,
     format_deck,
-    format_tally,
 )
 from scout.best_flights import (
     HomeAirport,
@@ -701,8 +700,10 @@ class TripActions:
         self._store.save_activity_picks(self._space_id, phone, picks)
         deck.picks[phone] = picks
         if len(deck.picks) == len(trip.members):
-            self.outbox.append(Say(format_tally(deck, trip.members)))
-            return "Picks recorded. Everyone has sent theirs, so the tally is posted."
+            return (
+                "Picks recorded. Everyone has sent theirs. Don't wait to be "
+                "asked: in this same turn, call post_itinerary as the next step."
+            )
 
         member = trip.find_member(phone)
         self.outbox.append(
@@ -854,14 +855,14 @@ class TripActions:
 
 def _describe_dates_and_next_step(dates: DateWindow | None) -> str:
     """What the agent is told once a destination is locked in: the dates, and
-    that booking is next. Flights need dates, so without them there's no next
-    step."""
-    if dates is None:
-        return "No dates work for everyone, so the trip has no dates."
-    return (
-        f"The trip is {format_window(dates)}. Don't wait to be asked: in this "
-        "same turn, call send_best_flights as the next step."
+    that picking activities is next."""
+    next_step = (
+        "Don't wait to be asked: in this same turn, call send_activity_deck as "
+        "the next step."
     )
+    if dates is None:
+        return f"No dates work for everyone, so the trip has no dates. {next_step}"
+    return f"The trip is {format_window(dates)}. {next_step}"
 
 
 def _describe_saved_details(member: Member) -> str:

@@ -468,6 +468,24 @@ def test_picks_sent_from_the_deck_are_saved_without_the_agent(store):
     assert store.get_trip(SPACE).activity_deck.picks == {LEO: {1: Rating.MEH}}
 
 
+def test_the_last_picks_from_the_deck_bring_the_agent_in_to_plan(store):
+    choose_san_juan(store)
+    store.replace_activity_deck(SPACE, [DeckActivity("Night kayak", "", 60)])
+    agent = FakeAgent(replies=["the plan: ..."])
+    for sender in (MAYA, LEO):
+        send_from_line(
+            store, agent, sender, "@scout my picks: Night kayak yeah", message_id="x"
+        )
+    assert agent.messages_seen == []
+
+    replies = send_from_line(
+        store, agent, PRIYA, "@scout my picks: Night kayak yeah", message_id="priya"
+    )
+
+    assert agent.messages_seen == ["@scout my picks: Night kayak yeah"]
+    assert replies == [Say("the plan: ...")]
+
+
 def tapback(store, sender, on_text, kind="like", on_id="option-message"):
     reaction = IncomingReaction(
         space_id=SPACE,

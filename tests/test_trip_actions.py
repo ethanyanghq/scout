@@ -253,7 +253,7 @@ def test_choosing_for_the_group_announces_the_lock_in_once(store):
     assert texts == ["locked in: san juan, Mar 14–19 🎉"]
 
 
-def test_locking_in_a_destination_with_dates_tells_the_agent_to_find_flights(store):
+def test_locking_in_a_destination_tells_the_agent_to_send_the_activity_deck(store):
     store.create_trip(SPACE)
     store.add_members(SPACE, [MAYA, LEO])
     store.save_preferences(SPACE, MAYA, MAYA_PREFERENCES)
@@ -261,7 +261,7 @@ def test_locking_in_a_destination_with_dates_tells_the_agent_to_find_flights(sto
 
     result = TripActions(store, SPACE, MAYA).lock_in_group_choice("san juan")
 
-    assert "call send_best_flights" in result
+    assert "call send_activity_deck" in result
 
 
 def test_the_group_can_choose_a_destination_without_a_poll(maya_actions, store):
@@ -789,22 +789,18 @@ def test_a_deck_activity_name_cant_end_in_a_rating(locked_in_actions):
         locked_in_actions.send_activity_deck([*DECK[:2], deck_activity("Hell Yeah")])
 
 
-def test_picks_are_confirmed_until_the_last_one_brings_the_tally(store):
+def test_picks_are_confirmed_until_the_last_one_asks_for_the_itinerary(store):
     everyone_votes_for_san_juan(store)
     TripActions(store, SPACE, MAYA).send_activity_deck(DECK)
 
     maya_actions = TripActions(store, SPACE, MAYA)
     maya_actions.record_sender_picks({0: Rating.YEAH, 1: Rating.MEH})
     leo_actions = TripActions(store, SPACE, LEO)
-    leo_actions.record_sender_picks({0: Rating.YEAH})
+    result = leo_actions.record_sender_picks({0: Rating.YEAH})
 
     assert said(maya_actions.outbox) == ["got Maya's picks (1 of 2 sent)"]
-    assert said(leo_actions.outbox) == [
-        "everyone's picks are in, best first:\n"
-        "Night kayak in the bio bay: yeah Maya, Leo\n"
-        "Old San Juan food tour: meh Maya\n"
-        "El Yunque hike: nobody"
-    ]
+    assert said(leo_actions.outbox) == []
+    assert "call post_itinerary" in result
 
 
 def test_sending_a_new_deck_forgets_the_old_picks(locked_in_actions, store):

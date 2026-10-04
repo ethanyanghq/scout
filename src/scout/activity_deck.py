@@ -66,19 +66,6 @@ def format_deck(destination: str, activities: list[DeckActivity]) -> str:
     return "\n".join(lines)
 
 
-def format_tally(deck: ActivityDeck, members: list[Member]) -> str:
-    """Everyone's swipes once all are in, best-liked activity first (a yeah
-    counts double a meh), naming who swiped what so one person's yeah doesn't
-    look like nobody's."""
-    by_score = sorted(range(len(deck.activities)), key=lambda index: -deck.score(index))
-    lines = ["everyone's picks are in, best first:"]
-    for index in by_score:
-        lines.append(
-            f"{deck.activities[index].name}: {describe_ratings(deck, members, index)}"
-        )
-    return "\n".join(lines)
-
-
 def describe_ratings(deck: ActivityDeck, members: list[Member], index: int) -> str:
     """Who said yeah and who said meh to one activity, or "nobody"."""
     parts = []
