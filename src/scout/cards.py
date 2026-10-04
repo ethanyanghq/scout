@@ -26,9 +26,11 @@ from scout.group_summary import format_window, summarize_group
 from scout.itinerary import format_day, format_start
 from scout.trip import DeckActivity, ItineraryAddOn, ItineraryDay, Trip
 
-# Destination articles are white text on near-black, with one muted sea-glass
-# accent and soft gray for the small print, so nothing fights the photos.
-SEA_GLASS_HEX = "#8FC1B5"
+# Every scout card is white text on HermesShare's near-black `atmosphere`
+# background, so it looks the same whatever mode the phone is in. Scout blue is
+# the one accent: buttons, icons, picks and the price tag. It is too dark to
+# read as small text on near-black, so headings and small print stay gray.
+SCOUT_BLUE_HEX = "#2B2EF3"
 SOFT_GRAY_HEX = "#A1A1AA"
 # Tints the atmosphere background's glow; this dark it reads as plain black.
 NIGHT_GLOW_HEX = "#1B2422"
@@ -70,9 +72,7 @@ TRIP_STYLES = [
     ("wellness", "Wellness and spa", "Massages, yoga, slow mornings", "leaf.fill"),
     ("shopping", "Shopping and markets", "Boutiques, crafts, souvenirs", "bag.fill"),
 ]
-# A departure-board blue, matching HermesShare's own flight cards.
-FLIGHT_ACCENT_HEX = "#0A84FF"
-NONSTOP_HEX = "#30D158"
+# A nonstop is the good case, so it wears scout blue; amber flags a layover.
 CONNECTING_HEX = "#FF9F0A"
 
 
@@ -120,32 +120,27 @@ class Brochure:
 
 
 def destination_article(brochure: Brochure, nights: int) -> dict:
-    """One destination as a short travel article: a hero photo, why it fits,
-    where to stay, things to do with photos, and what it all costs."""
+    """One destination as a short travel article: photos, what it costs, why it
+    fits, where to stay and things to do, then the full cost breakdown."""
     return {
         "version": 1,
         "title": brochure.place_name,
         "subtitle": brochure.region,
-        "accentColorHex": SEA_GLASS_HEX,
+        "accentColorHex": SCOUT_BLUE_HEX,
         # `atmosphere` draws a near-black card and switches its text to white.
         "background": {"kind": "atmosphere", "colorsHex": [NIGHT_GLOW_HEX]},
         "root": {
             "type": "vstack",
-            "spacing": 18,
+            "spacing": 16,
             "alignment": "leading",
             "children": [
                 *_photo_strip(brochure),
-                {
-                    "type": "statusBadge",
-                    "label": f"~${brochure.estimated_cost_per_person_usd:,} "
-                    "per person, all in",
-                    "colorHex": SEA_GLASS_HEX,
-                },
+                _price_per_person(brochure),
                 _text(brochure.detail, role="body"),
                 _section_heading("Where you'll stay"),
                 _text(brochure.hotel, role="headline"),
                 _section_heading("Things to do"),
-                *[_activity(activity) for activity in brochure.activities],
+                _activities(brochure.activities),
                 _section_heading("What it costs"),
                 _cost_breakdown(brochure),
                 _text(
@@ -175,20 +170,37 @@ def _photo_strip(brochure: Brochure) -> list[dict]:
     return [{"type": "gallery", "urls": photos, "heightPt": 230, "cornerRadius": 18}]
 
 
-def _activity(activity: Activity) -> dict:
+def _price_per_person(brochure: Brochure) -> dict:
+    # A blue icon beside white text: scout blue is too dark to read as text
+    # on the near-black card.
+    price = f"~${brochure.estimated_cost_per_person_usd:,} per person, all in"
     return {
-        "type": "vstack",
-        "spacing": 2,
-        "alignment": "leading",
+        "type": "hstack",
+        "spacing": 8,
+        "alignment": "center",
         "children": [
-            _text(activity.name, role="headline"),
-            _text(
-                f"~${activity.estimated_cost_usd:,} per person",
-                role="footnote",
-                color_hex=SOFT_GRAY_HEX,
-            ),
+            {
+                "type": "icon",
+                "systemName": "tag.fill",
+                "sizePt": 18,
+                "colorHex": SCOUT_BLUE_HEX,
+            },
+            _text(price, role="headline"),
         ],
     }
+
+
+def _activities(activities: list[Activity]) -> dict:
+    """Each activity and its price, in the same kind of panel as the costs."""
+    rows = [
+        {
+            "type": "keyValueRow",
+            "key": activity.name,
+            "value": f"~${activity.estimated_cost_usd:,}",
+        }
+        for activity in activities
+    ]
+    return {"type": "card", "child": {"type": "vstack", "spacing": 4, "children": rows}}
 
 
 def _cost_breakdown(brochure: Brochure) -> dict:
@@ -211,7 +223,7 @@ def _cost_breakdown(brochure: Brochure) -> dict:
 
 
 def _section_heading(title: str) -> dict:
-    heading = _text(title.upper(), role="subheadline", color_hex=SEA_GLASS_HEX)
+    heading = _text(title.upper(), role="subheadline", color_hex=SOFT_GRAY_HEX)
     heading["style"]["weight"] = "bold"
     return heading
 
@@ -234,7 +246,7 @@ def trip_interview(today: date) -> dict:
         "formId": "trip-interview",
         "title": "Let's plan your trip",
         "subtitle": "A few taps, then send",
-        "accentColorHex": SEA_GLASS_HEX,
+        "accentColorHex": SCOUT_BLUE_HEX,
         "background": {"kind": "atmosphere", "colorsHex": [NIGHT_GLOW_HEX]},
         "root": {
             "type": "vstack",
@@ -349,7 +361,7 @@ def activity_deck(
         "formId": "activity-deck",
         "title": "What are you up for?",
         "subtitle": destination,
-        "accentColorHex": SEA_GLASS_HEX,
+        "accentColorHex": SCOUT_BLUE_HEX,
         "background": {"kind": "atmosphere", "colorsHex": [NIGHT_GLOW_HEX]},
         "root": {
             "type": "vstack",
@@ -415,7 +427,7 @@ def itinerary(trip: Trip, destination_photo_url: str) -> dict:
         "version": 1,
         "title": trip.destination,
         "subtitle": subtitle,
-        "accentColorHex": SEA_GLASS_HEX,
+        "accentColorHex": SCOUT_BLUE_HEX,
         "background": {"kind": "atmosphere", "colorsHex": [NIGHT_GLOW_HEX]},
         "root": {
             "type": "vstack",
@@ -477,9 +489,9 @@ def best_flights(trip: Trip, home_city_flights: list[HomeCityFlight]) -> dict:
         "version": 1,
         "title": f"Flights to {trip.destination}",
         "subtitle": f"{format_window(trip.dates)} · round trip",
-        "accentColorHex": FLIGHT_ACCENT_HEX,
+        "accentColorHex": SCOUT_BLUE_HEX,
         # The board is drawn dark, so the card around it goes dark too.
-        "background": {"kind": "atmosphere"},
+        "background": {"kind": "atmosphere", "colorsHex": [NIGHT_GLOW_HEX]},
         "root": {
             "type": "vstack",
             "spacing": 16,
@@ -520,7 +532,7 @@ def _flight_nodes(trip: Trip, home_city_flight: HomeCityFlight) -> list[dict]:
             "arriveTime": format_clock(flight.arrives_at),
             "status": describe_stops(flight),
             "statusColorHex": (
-                CONNECTING_HEX if flight.layover_airports else NONSTOP_HEX
+                CONNECTING_HEX if flight.layover_airports else SCOUT_BLUE_HEX
             ),
         },
     }
