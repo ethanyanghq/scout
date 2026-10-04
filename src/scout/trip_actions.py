@@ -10,6 +10,12 @@ from collections.abc import Callable
 from datetime import date
 
 from scout import polls
+from scout.best_flights import (
+    HomeAirport,
+    NoFlightFound,
+    find_best_flights,
+    format_best_flights,
+)
 from scout.booking_links import format_booking_links
 from scout.brochures import (
     DestinationPitch,
@@ -18,7 +24,13 @@ from scout.brochures import (
     format_brochures,
 )
 from scout.calendar_link import format_calendar_message, google_calendar_link
-from scout.cards import brochure_thumbnail_url, destination_brochures
+from scout.cards import (
+    best_flights,
+    brochure_thumbnail_url,
+    destination_brochures,
+    flights_thumbnail_url,
+)
+from scout.flights import FlightsError
 from scout.group_summary import format_group_summary, summarize_group
 from scout.itinerary import format_itinerary
 from scout.money import format_usd
@@ -173,6 +185,40 @@ class TripActions:
     def send_booking_links(self) -> str:
         self.outbox.append(Say(format_booking_links(self._load_locked_in_trip())))
         return "Booking links posted."
+
+    def send_best_flights(
+        self, home_airports: list[HomeAirport], arrival_airport: str
+    ) -> str:
+        """Posts a card with the best round trip from each home city, live from
+        Google Flights, for the chosen destination and dates."""
+        trip = self._load_locked_in_trip()
+        flights = self._services.flights
+        if flights is None:
+            raise TripActionError(
+                "flight search isn't set up, so send booking links instead"
+            )
+        _check_every_home_city_has_an_airport(trip, home_airports)
+
+        try:
+            home_city_flights = find_best_flights(
+                flights, trip, home_airports, arrival_airport
+            )
+        except FlightsError as error:
+            raise TripActionError(f"flight search isn't working: {error}") from error
+        except NoFlightFound as error:
+            raise TripActionError(
+                f"{error}; try a nearby airport or send booking links"
+            ) from error
+
+        self.outbox.append(
+            Card(
+                layout=best_flights(trip, home_city_flights),
+                caption=f"Flights to {trip.destination}",
+                thumbnail_url=flights_thumbnail_url(home_city_flights),
+                fallback_text=format_best_flights(trip, home_city_flights),
+            )
+        )
+        return "Flights posted."
 
     def log_sender_expense(self, amount_cents: int, description: str) -> str:
         """Logs a shared cost the sender paid. Only payers log their own costs."""
@@ -415,6 +461,21 @@ def _find_sender_payment(trip: Trip, sender_phone: str, payee_label: str) -> Pay
         f"{sender.label} doesn't owe {payee_label} anything. "
         f"They owe: {payees or 'nobody'}"
     )
+
+
+def _check_every_home_city_has_an_airport(
+    trip: Trip, home_airports: list[HomeAirport]
+) -> None:
+    if not home_airports:
+        raise TripActionError("give an airport for at least one home city")
+    named = {home.home_city.casefold() for home in home_airports}
+    missing = [
+        city
+        for city in summarize_group(trip.members).home_cities
+        if city.casefold() not in named
+    ]
+    if missing:
+        raise TripActionError(f"no airport given for {', '.join(missing)}")
 
 
 def _locate(places: GooglePlaces, spot: str, destination: str) -> Coordinates:
