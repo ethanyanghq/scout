@@ -9,7 +9,9 @@ ingest flattens an inbound `imessage_app` part to a single replacement
 character before any webhook sees it, so the group still votes in text.
 """
 
+import urllib.parse
 from dataclasses import dataclass
+from datetime import date
 
 from scout.best_flights import (
     HomeCityFlight,
@@ -26,6 +28,30 @@ SEA_GLASS_HEX = "#8FC1B5"
 SOFT_GRAY_HEX = "#A1A1AA"
 # Tints the atmosphere background's glow; this dark it reads as plain black.
 NIGHT_GLOW_HEX = "#1B2422"
+# The trip interview's Send button fills in a text that tags scout, so the
+# answers arrive as an ordinary message: Linq can't carry a card reply back.
+INTERVIEW_ANSWER_LEAD = "@scout my trip:"
+UPCOMING_MONTH_COUNT = 6
+# (id, label, sublabel)
+TRIP_LENGTHS = [
+    ("weekend", "A weekend", "2–3 nights"),
+    ("long-weekend", "Long weekend", "4 nights"),
+    ("week", "About a week", "6–7 nights"),
+    ("longer", "10+ days", "The big one"),
+]
+BUDGETS_PER_PERSON = [
+    ("under-500", "Under $500", "All in"),
+    ("500-800", "$500–$800", "All in"),
+    ("800-1200", "$800–$1,200", "All in"),
+    ("1200-plus", "$1,200+", "All in"),
+]
+# (id, label, sublabel, SF Symbol)
+TRIP_VIBES = [
+    ("early-riser", "Early riser", "Sunrise hikes, morning dives", "sunrise.fill"),
+    ("beach", "Beach and chill", "Pool, sand, a good book", "beach.umbrella.fill"),
+    ("food", "Food and culture", "Markets, tours, long dinners", "fork.knife"),
+    ("late-nights", "Late nights", "Bars, clubs, parties", "moon.stars.fill"),
+]
 # A departure-board blue, matching HermesShare's own flight cards.
 FLIGHT_ACCENT_HEX = "#0A84FF"
 NONSTOP_HEX = "#30D158"
@@ -177,6 +203,80 @@ def _text(words: str, role: str, color_hex: str | None = None) -> dict:
     if color_hex:
         style["colorHex"] = color_hex
     return {"type": "text", "text": words, "style": style}
+
+
+def trip_interview(today: date) -> dict:
+    """A quick interview each member taps through: when, how long, budget and
+    the kind of trip they want. Send puts their picks in the chat as text."""
+    lead = urllib.parse.quote(INTERVIEW_ANSWER_LEAD)
+    return {
+        "version": 1,
+        # HermesShare requires one on any card with form inputs.
+        "formId": "trip-interview",
+        "title": "Let's plan your trip",
+        "subtitle": "A few taps, then send",
+        "accentColorHex": SEA_GLASS_HEX,
+        "background": {"kind": "atmosphere", "colorsHex": [NIGHT_GLOW_HEX]},
+        "root": {
+            "type": "vstack",
+            "spacing": 14,
+            "alignment": "leading",
+            "children": [
+                _text(
+                    "Pick what fits you. Your answers drop into the chat for me.",
+                    role="body",
+                    color_hex=SOFT_GRAY_HEX,
+                ),
+                _section_heading("When"),
+                _picker("month", "grid", _upcoming_months(today)),
+                _section_heading("How long"),
+                _picker("length", "grid", [_option(*o) for o in TRIP_LENGTHS]),
+                _section_heading("Budget per person"),
+                _picker("budget", "grid", [_option(*o) for o in BUDGETS_PER_PERSON]),
+                _section_heading("Your vibe"),
+                _picker("vibe", "list", [_option(*o) for o in TRIP_VIBES]),
+            ],
+        },
+        "actions": [
+            {
+                "id": "send-trip-answers",
+                "label": "Send my answers",
+                "systemImage": "paperplane.fill",
+                # A `text` action puts the picks in the message box as plain text.
+                "deepLinkURL": f"hermesshare://text?lead={lead}",
+            }
+        ],
+    }
+
+
+def _upcoming_months(today: date) -> list[dict]:
+    """The next few months, starting with next month."""
+    months = []
+    year, month = today.year, today.month
+    for _ in range(UPCOMING_MONTH_COUNT):
+        year, month = (year + 1, 1) if month == 12 else (year, month + 1)
+        first_day = date(year, month, 1)
+        months.append(_option(f"{first_day:%Y-%m}", f"{first_day:%B}", str(year)))
+    return months
+
+
+def _picker(field_id: str, style: str, options: list[dict]) -> dict:
+    # A `fieldId` makes the picker a form input that the Send button reads.
+    return {
+        "type": "optionPicker",
+        "fieldId": field_id,
+        "pickerStyle": style,
+        "options": options,
+    }
+
+
+def _option(
+    option_id: str, label: str, sublabel: str, sf_symbol: str | None = None
+) -> dict:
+    option = {"id": option_id, "label": label, "sublabel": sublabel}
+    if sf_symbol:
+        option["systemImage"] = sf_symbol
+    return option
 
 
 def best_flights(trip: Trip, home_city_flights: list[HomeCityFlight]) -> dict:

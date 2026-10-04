@@ -14,7 +14,7 @@ from scout.conversation import (
     handle_message,
     handle_reaction,
 )
-from scout.outgoing import Link, React, Say, Tapback
+from scout.outgoing import Card, Link, React, Say, Tapback
 from scout.places import Coordinates, Place
 from scout.polls import format_poll
 from scout.trip import (
@@ -117,13 +117,25 @@ def choose_san_juan(store):
     store.close_poll(poll_id, "San Juan, Puerto Rico", None)
 
 
-def test_scout_introduces_itself_in_one_message_written_by_the_agent(store):
+def test_scout_introduces_itself_then_sends_the_trip_interview_card(store):
     agent = FakeAgent(replies=["Hey all, I'm scout 👋 Yep, I'm here!"])
 
-    replies = send(store, agent, MAYA, "@scout you there?")
+    *introduction, card = send_from_line(store, agent, MAYA, "@scout you there?", None)
 
     assert agent.messages_seen == ["@scout you there?"]
-    assert replies == ["Hey all, I'm scout 👋 Yep, I'm here!"]
+    assert said(introduction) == ["Hey all, I'm scout 👋 Yep, I'm here!"]
+    assert isinstance(card, Card)
+    assert card.caption == "Plan your trip"
+
+
+def test_the_trip_interview_card_goes_out_only_with_the_introduction(store):
+    agent = FakeAgent(replies=["Hey all, I'm scout 👋"])
+    send_from_line(store, agent, MAYA, "@scout you there?", None)
+    agent.replies = ["Got it, Leo"]
+
+    replies = send(store, agent, LEO, "@scout leo here, march works")
+
+    assert replies == ["Got it, Leo"]
 
 
 def test_scout_says_it_hit_a_snag_when_it_cant_introduce_itself(store):
@@ -136,11 +148,11 @@ def test_scout_stays_silent_in_a_new_chat_until_someone_tags_it(store):
     agent = FakeAgent(replies=["Hey all, I'm scout 👋"])
 
     first = send(store, agent, MAYA, "hey everyone, someone added a bot?")
-    tagged = send(store, agent, LEO, "@scout you there?")
+    *introduction, _card = send_from_line(store, agent, LEO, "@scout you there?", None)
 
     assert first == []
     assert agent.messages_seen == ["@scout you there?"]
-    assert tagged == ["Hey all, I'm scout 👋"]
+    assert said(introduction) == ["Hey all, I'm scout 👋"]
 
 
 def test_everyone_in_the_chat_joins_the_trip_including_quiet_members(store):
@@ -260,12 +272,14 @@ def test_scout_stays_quiet_when_it_fails_on_a_message_not_addressed_to_it(store)
 
 
 def test_replies_are_saved_so_the_agent_sees_them_next_time(store):
-    send(store, FakeAgent(replies=["got it, Maya"]), MAYA, "@scout hey, I'm maya")
+    agent = FakeAgent(replies=["got it, Maya"])
+    send_from_line(store, agent, MAYA, "@scout hey, I'm maya", None)
 
     logged = [(m.sender_phone, m.text) for m in store.recent_messages(SPACE, 10)]
     assert logged == [
         (MAYA, "@scout hey, I'm maya"),
         (None, "got it, Maya"),
+        (None, "[card] Plan your trip"),
     ]
 
 

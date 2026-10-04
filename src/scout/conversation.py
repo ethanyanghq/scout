@@ -10,7 +10,7 @@ can't race to close the same poll.
 import logging
 import time
 from collections.abc import Callable
-from datetime import datetime
+from datetime import date, datetime
 from typing import Protocol
 
 from scout import polls
@@ -55,7 +55,13 @@ def handle_message(
     )
 
     trip = store.get_trip(message.space_id)
+    is_introduction = not store.has_scout_spoken(message.space_id)
     replies = _respond(trip, message, store, agent)
+    if is_introduction and replies and replies[0] != Say(INTRODUCTION_SNAG_REPLY):
+        # Sent in code, not left to the AI, so every group gets the interview.
+        actions = TripActions(store, message.space_id, message.sender_phone, services)
+        actions.send_trip_interview(date.today())
+        replies = [*replies, *actions.outbox]
     _log_sent(store, message.space_id, replies)
     return replies
 

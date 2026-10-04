@@ -6,6 +6,7 @@ chat messages it produces to `outbox`, and returns a short status for the
 agent to read.
 """
 
+import logging
 from collections.abc import Callable
 from datetime import date
 
@@ -24,7 +25,12 @@ from scout.brochures import (
     format_brochure,
 )
 from scout.calendar_link import format_calendar_message, google_calendar_link
-from scout.cards import best_flights, destination_article, flights_thumbnail_url
+from scout.cards import (
+    best_flights,
+    destination_article,
+    flights_thumbnail_url,
+    trip_interview,
+)
 from scout.flights import FlightsError
 from scout.group_summary import format_group_summary, summarize_group
 from scout.itinerary import format_itinerary
@@ -54,8 +60,17 @@ from scout.trip import (
 )
 from scout.trip_store import TripStore
 
+logger = logging.getLogger(__name__)
+
 DESTINATION_OPTION_COUNT = 3
 NEARBY_SUGGESTION_COUNT = 3
+# The trip interview card has no destination yet, so its bubble shows a beach.
+INTERVIEW_THUMBNAIL_PLACE = "Grace Bay Beach, Turks and Caicos"
+INTERVIEW_FALLBACK_TEXT = (
+    "tell me about your trip: when you're free, your budget per person, where "
+    "you're flying from, and your vibe (early riser, beach and chill, food and "
+    "culture, or late nights)."
+)
 
 
 class TripActionError(Exception):
@@ -387,6 +402,31 @@ class TripActions:
             [Say(format_directions(place)), Link(directions_link(place))]
         )
         return "Directions sent."
+
+    def send_trip_interview(self, today: date) -> str:
+        """Posts the card each member taps through to say what trip they want."""
+        self.outbox.append(
+            Card(
+                layout=trip_interview(today),
+                caption="Plan your trip",
+                thumbnail_url=self._interview_thumbnail_url(),
+                fallback_text=INTERVIEW_FALLBACK_TEXT,
+            )
+        )
+        return "Trip interview posted."
+
+    def _interview_thumbnail_url(self) -> str | None:
+        """A beach photo for the card's bubble. Without one, the bridge sends
+        the card's text instead, which still asks everything."""
+        places = self._services.places
+        if places is None:
+            return None
+        try:
+            beach = places.find_photographed(INTERVIEW_THUMBNAIL_PLACE, photo_count=1)
+        except PlacesError:
+            logger.warning("No beach photo for the trip interview", exc_info=True)
+            return None
+        return beach.photo_urls[0] if beach and beach.photo_urls else None
 
     def send_destination_brochures(
         self, pitches: list[DestinationPitch], nights: int
