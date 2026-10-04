@@ -63,8 +63,9 @@ SWIPE_CHOICES = [
 ]
 # One line above the stack that says which way each swipe goes.
 SWIPE_LEGEND = "←  Nah      ↑  Meh      Yeah  →"
-# The budget slider, per person in US dollars: $0 to $3,000 in $100 steps,
+# The budget slider, per person in US dollars: $500 to $3,000 in $100 steps,
 # labeled every $500 and starting at $1,000.
+BUDGET_SLIDER_MIN_USD = 500
 BUDGET_SLIDER_MAX_USD = 3_000
 BUDGET_SLIDER_STEP_USD = 100
 BUDGET_SLIDER_LABEL_EVERY_USD = 500
@@ -331,7 +332,7 @@ def trip_interview(today: date) -> dict:
                 {
                     "type": "slider",
                     "fieldId": "budget",
-                    "minValue": 0,
+                    "minValue": BUDGET_SLIDER_MIN_USD,
                     "maxValue": BUDGET_SLIDER_MAX_USD,
                     "step": BUDGET_SLIDER_STEP_USD,
                     "value": BUDGET_SLIDER_START_USD,

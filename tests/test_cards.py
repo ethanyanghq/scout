@@ -14,12 +14,12 @@ def test_the_interview_picks_real_dates_from_today_on():
     assert calendar["earliestDate"] == "2026-11-15"
 
 
-def test_the_budget_is_a_slider_from_0_to_3000_labeled_every_500():
+def test_the_budget_is_a_slider_from_500_to_3000_labeled_every_500():
     card = trip_interview(date(2026, 10, 3))
 
     slider = _input(card, "budget")
     assert slider["type"] == "slider"
-    assert (slider["minValue"], slider["maxValue"]) == (0, 3000)
+    assert (slider["minValue"], slider["maxValue"]) == (500, 3000)
     assert (slider["tickStep"], slider["value"]) == (500, 1000)
 
 
