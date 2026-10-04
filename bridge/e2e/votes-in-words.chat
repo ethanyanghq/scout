@@ -1,0 +1,10 @@
+# Journey: a member tags scout to vote in words, and scout confirms the vote
+# once, through the vote's own confirmation, not a second message saying it.
+# Needs Claude.
+members maya leo priya
+from poll-open
+
+maya: @scout put me down for the beach one with cenotes
+expect scout ~ "1 of 3 voted"
+expect scout !~ "recorded your vote"
+expect state open_poll.votes.+15550000001 = 0
