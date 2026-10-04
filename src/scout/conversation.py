@@ -20,6 +20,7 @@ from scout.activity_deck import parse_picks
 from scout.cards import INTERVIEW_ANSWER_LEAD
 from scout.outgoing import Outgoing, React, Say, Tapback, as_plain_text
 from scout.outside_services import NO_OUTSIDE_SERVICES, OutsideServices
+from scout.private_chat import handle_private_message, is_private_chat
 from scout.speak_gate import is_addressed_to_scout
 from scout.trip import IncomingMessage, IncomingReaction, Trip
 from scout.trip_actions import TripActions
@@ -57,6 +58,9 @@ def handle_message(
     services: OutsideServices = NO_OUTSIDE_SERVICES,
 ) -> list[Outgoing]:
     """Records the message and returns what scout should send back."""
+    if is_private_chat(message):
+        return handle_private_message(message, store)
+
     if store.get_trip(message.space_id) is None:
         store.create_trip(message.space_id)
 

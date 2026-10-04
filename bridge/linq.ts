@@ -114,9 +114,8 @@ export function readLinqEvent(event: LinqEvent): ProviderMessageRecord | Skipped
     return { skipReason: "scout's own message" };
   }
   // Linq's free line only answers people who texted it privately first, so
-  // every member says hi to scout one-on-one. Those hellos mustn't start trips.
-  if (!message.chat.is_group) return { skipReason: "a private chat, not a group" };
-
+  // every member says hi to scout one-on-one. scout uses that chat to learn
+  // their name (private_chat.py) and never starts a trip in it.
   const content = readParts(message);
   if (!content) return { skipReason: "nothing in it" };
   return {

@@ -196,7 +196,7 @@ This needs a Mac (the service converts iPhone photos and voice memos with macOS'
 1. Get a line once: `npm i -g @linqapp/cli && linq signup`. `linq whoami` shows scout's number.
 2. In `bridge/.env`, set `IMESSAGE_MODE=linq` and `LINQ_API_KEY` (copy `bridge/.env.example`).
 3. Start everything with `cd bridge && bun run dev`. It checks your settings, the Linq login and free ports first, then runs the service, the bridge and the Linq relay in one terminal with labeled logs. Ctrl-C stops them all.
-4. Add each tester with `linq contacts add` (the free line allows up to 20). Each tester texts scout's number privately once, because the free line only answers people who texted it first. scout ignores those private texts.
+4. Add each tester with `linq contacts add` (the free line allows up to 20). Each tester texts scout's number privately once, because the free line only answers people who texted it first. scout answers that text by asking what to call them, and uses the name in every group they join.
 5. From an iPhone in the group, tap the group's name, then **Add Member**, and enter scout's number. Everyone must be on iMessage, and Apple may require at least three other members.
 
 ### When scout doesn't reply

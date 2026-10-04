@@ -58,6 +58,13 @@ CREATE TABLE IF NOT EXISTS members (
     PRIMARY KEY (space_id, phone)
 );
 
+-- What each person told scout in a private chat, across every group they are
+-- in. A row with no name means scout has asked and is waiting for the answer.
+CREATE TABLE IF NOT EXISTS people (
+    phone        TEXT PRIMARY KEY,
+    display_name TEXT
+);
+
 CREATE TABLE IF NOT EXISTS polls (
     id       INTEGER PRIMARY KEY AUTOINCREMENT,
     space_id TEXT NOT NULL REFERENCES trips (space_id),
@@ -271,11 +278,47 @@ class TripStore:
                 db.execute(f"DELETE FROM {table} WHERE space_id = ?", (space_id,))
 
     def add_members(self, space_id: str, phones: list[str]) -> None:
-        """Adds anyone not already on the trip. Existing members are untouched."""
+        """Adds anyone not already on the trip, under the name they gave scout in
+        private if they did. Existing members are untouched."""
         with self._transaction() as db:
             db.executemany(
-                "INSERT OR IGNORE INTO members (space_id, phone) VALUES (?, ?)",
-                [(space_id, phone) for phone in phones],
+                "INSERT OR IGNORE INTO members (space_id, phone, display_name) "
+                "VALUES (?, ?, (SELECT display_name FROM people WHERE phone = ?))",
+                [(space_id, phone, phone) for phone in phones],
+            )
+
+    def has_asked_for_name(self, phone: str) -> bool:
+        with self._transaction() as db:
+            row = db.execute(
+                "SELECT 1 FROM people WHERE phone = ?", (phone,)
+            ).fetchone()
+        return row is not None
+
+    def note_name_asked(self, phone: str) -> None:
+        with self._transaction() as db:
+            db.execute("INSERT OR IGNORE INTO people (phone) VALUES (?)", (phone,))
+
+    def has_name(self, phone: str) -> bool:
+        with self._transaction() as db:
+            row = db.execute(
+                "SELECT 1 FROM people WHERE phone = ? AND display_name IS NOT NULL",
+                (phone,),
+            ).fetchone()
+        return row is not None
+
+    def save_name(self, phone: str, name: str) -> None:
+        """Remembers the name and gives it to the person in groups that lack one."""
+        with self._transaction() as db:
+            db.execute(
+                "INSERT INTO people (phone, display_name) VALUES (?, ?) "
+                "ON CONFLICT (phone) DO UPDATE SET "
+                "display_name = excluded.display_name",
+                (phone, name),
+            )
+            db.execute(
+                "UPDATE members SET display_name = ? "
+                "WHERE phone = ? AND display_name IS NULL",
+                (name, phone),
             )
 
     def save_preferences(

@@ -84,9 +84,9 @@ describe("reading a Linq event", () => {
     expect(readLinqEvent(threaded)).toMatchObject({ replyTo: { messageId: "poll-option-2" } });
   });
 
-  test("skips private chats with scout", () => {
-    expect(readLinqEvent(messageReceived({ isGroup: false }))).toEqual({
-      skipReason: "a private chat, not a group",
+  test("passes on private chats with scout, where it learns names", () => {
+    expect(readLinqEvent(messageReceived({ isGroup: false }))).toMatchObject({
+      sender: { id: MAYA.handle },
     });
   });
 
