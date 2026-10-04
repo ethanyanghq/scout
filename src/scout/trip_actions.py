@@ -392,11 +392,6 @@ class TripActions:
                 fallback_text=format_best_flights(trip, home_city_flights),
             )
         )
-        # A card's buttons don't open links inside iMessage, so each booking
-        # link goes out as a message of its own, which does.
-        for home_city_flight in home_city_flights:
-            self.outbox.append(Say(f"book from {home_city_flight.home_city}:"))
-            self.outbox.append(Link(home_city_flight.flight.booking_url))
         self.outbox.append(Say(HOTEL_OFFER))
         return "Flights posted."
 
@@ -426,8 +421,6 @@ class TripActions:
                 fallback_text=format_best_hotel(trip, hotel),
             )
         )
-        # Sent on its own for the same reason as the flight links.
-        self.outbox.append(Link(hotel.booking_url))
         return "Hotel posted."
 
     def log_sender_expense(self, draft: ExpenseDraft) -> str:

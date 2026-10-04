@@ -885,7 +885,7 @@ def test_flights_are_one_card_with_both_ways_from_each_home_city(
 
     actions.send_best_flights(HOME_AIRPORTS, "SJU")
 
-    intro, card, *booking_links, offer = actions.outbox
+    intro, card, offer = actions.outbox
     assert intro == Say("these flights seem like the best deals")
     assert offer == Say("want me to find a hotel too?")
     assert isinstance(card, Card)
@@ -900,25 +900,6 @@ def test_flights_are_one_card_with_both_ways_from_each_home_city(
     assert {"$312 per person", "$1,240 per person"} <= words
 
 
-def test_each_home_city_gets_a_link_to_book_its_flight_under_the_card(
-    locked_in_actions, store
-):
-    """The card's own buttons don't open links in iMessage, so the links go
-    out as messages of their own, which do."""
-    actions = flights_actions(store, FakeFlights(ROUTES))
-
-    actions.send_best_flights(HOME_AIRPORTS, "SJU")
-
-    _, card, *booking_links, _ = actions.outbox
-    assert "actions" not in card.layout
-    assert booking_links == [
-        Say("book from Boston:"),
-        Link("https://www.google.com/travel/flights?from=BOS"),
-        Say("book from new york:"),
-        Link("https://www.google.com/travel/flights?from=NYC"),
-    ]
-
-
 def test_the_flight_card_shows_where_each_layover_is_and_how_long(
     locked_in_actions, store
 ):
@@ -926,7 +907,7 @@ def test_the_flight_card_shows_where_each_layover_is_and_how_long(
 
     actions.send_best_flights(HOME_AIRPORTS, "SJU")
 
-    card = actions.outbox[1]
+    _, card, _ = actions.outbox
     words = card_words(card.layout)
     assert {"1 stop · FLL", "Nonstop"} <= words
     assert {"Change planes in FLL", "1h 25m wait"} <= words
@@ -939,7 +920,7 @@ def test_the_flight_card_bubble_shows_a_plane_not_the_destination(
 
     actions.send_best_flights(HOME_AIRPORTS, "SJU")
 
-    card = actions.outbox[1]
+    _, card, _ = actions.outbox
     assert card.thumbnail_url == FLIGHTS_THUMBNAIL_URL
 
 
@@ -948,7 +929,7 @@ def test_the_flights_text_has_the_way_out_and_the_way_back(locked_in_actions, st
 
     actions.send_best_flights(HOME_AIRPORTS, "SJU")
 
-    card = actions.outbox[1]
+    _, card, _ = actions.outbox
     assert (
         "   out Sun, Mar 14, BOS 6:15 AM → SJU 2:20 PM · JetBlue B6 101 · "
         "1 stop · FLL · 8h 5m" in card.fallback_text.splitlines()
@@ -1018,7 +999,7 @@ def test_the_hotel_is_one_card_with_its_photo_rate_and_rating(locked_in_actions,
 
     actions.send_best_hotel()
 
-    intro, card, _ = actions.outbox
+    intro, card = actions.outbox
     assert intro == Say("this seems like the best place to stay")
     assert isinstance(card, Card)
     assert card.layout["title"] == "Where to stay in San Juan, Puerto Rico"
@@ -1026,20 +1007,11 @@ def test_the_hotel_is_one_card_with_its_photo_rate_and_rating(locked_in_actions,
     words = card_words(card.layout)
     assert {"Condado Vista", "4-star hotel", "4.5 ★ · 1,203 reviews"} <= words
     assert {"$189", "$945", "All 5 nights"} <= words
+    assert [a["deepLinkURL"] for a in card.layout["actions"]] == [
+        CONDADO_VISTA.booking_url
+    ]
     assert card.thumbnail_url == CONDADO_VISTA.photo_url
     assert "Condado Vista · 4.5 ★" in card.fallback_text
-
-
-def test_the_link_to_book_the_hotel_goes_out_under_its_card(locked_in_actions, store):
-    """The card's own button doesn't open links in iMessage, so the link goes
-    out as a message of its own, which does."""
-    actions = hotels_actions(store, FakeHotels(CONDADO_VISTA))
-
-    actions.send_best_hotel()
-
-    _, card, booking_link = actions.outbox
-    assert "actions" not in card.layout
-    assert booking_link == Link(CONDADO_VISTA.booking_url)
 
 
 def test_the_hotel_card_compares_the_rate_with_whats_typical(locked_in_actions, store):
@@ -1047,7 +1019,7 @@ def test_the_hotel_card_compares_the_rate_with_whats_typical(locked_in_actions, 
 
     actions.send_best_hotel()
 
-    card = actions.outbox[1]
+    _, card = actions.outbox
     words = card_words(card.layout)
     assert {"Typical here", "$230 a night", "Deal · 21% less than usual"} <= words
     assert (
@@ -1061,7 +1033,7 @@ def test_the_hotel_card_shows_where_it_is_and_whats_there(locked_in_actions, sto
 
     actions.send_best_hotel()
 
-    card = actions.outbox[1]
+    _, card = actions.outbox
     words = card_words(card.layout)
     assert {"Location", "4.8 out of 5", "Condado Beach", "2 min walk"} <= words
     assert {"3:00 PM", "11:00 AM"} <= words
@@ -1079,7 +1051,7 @@ def test_a_hotel_rating_is_rounded_to_one_decimal(locked_in_actions, store):
 
     actions.send_best_hotel()
 
-    card = actions.outbox[1]
+    _, card = actions.outbox
     assert "4.4 ★ · 33 reviews" in card_words(card.layout)
 
 
@@ -1093,7 +1065,7 @@ def test_a_rental_card_says_what_the_place_is(locked_in_actions, store):
 
     actions.send_best_hotel()
 
-    card = actions.outbox[1]
+    _, card = actions.outbox
     assert "Vacation rental · Entire apartment · Sleeps 6 · 1 bedroom" in card_words(
         card.layout
     )
@@ -1105,7 +1077,7 @@ def test_an_unrated_hotel_card_leaves_out_the_rating(locked_in_actions, store):
 
     actions.send_best_hotel()
 
-    card = actions.outbox[1]
+    _, card = actions.outbox
     assert "Guests say" not in card_words(card.layout)
     assert "★" not in card.fallback_text
 

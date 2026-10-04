@@ -243,7 +243,7 @@ them directly:
 > brochure.
 
 A **booking card** carries the hotel, the dates, the guest count, the estimated
-total, with a link to the booking site sent right under it. scout does not book it. Once
+total and a button that opens the booking site. scout does not book it. Once
 Maya has, she confirms on the card and the amount goes into the ledger as an
 expense she paid, split evenly — the same path as any other shared cost
 (`log_sender_expense`), so settle-up already understands it.
@@ -284,15 +284,9 @@ with its status color. Google Flights lists only the ways out at first, so
 │ └──────────────────────────────────┘ │
 │ Round trip          $312 per person  │
 │ For                 Maya, Leo        │
+│ [       Book from Boston        ]    │
 └──────────────────────────────────────┘
-book from Boston:
-https://www.google.com/travel/flights?…
 ```
-
-The booking links go out as messages of their own under the card, not as
-buttons on it: HermesShare's extension can't open a web link from inside
-iMessage (it reaches for an `openURL:` that iOS ignores), so a Book button did
-nothing when tapped.
 
 The fare is live, not an estimate, but it can change before anyone books, and
 the card says so. Taps don't reach scout yet, so the booker texts what they
@@ -308,7 +302,7 @@ in the same style with what the group needs to judge it: a photo, the name and
 what kind of place it is (star class, or a rental's size and beds), the nightly
 rate and stay total for 2 guests next to the typical rate of every place Google
 priced and Google's deal flag, the guest and location ratings, check-in and out
-times, top amenities, nearby places with travel times and a map. A link sent right under the card
+times, top amenities, nearby places with travel times, a map, and a button that
 opens that hotel on Google Hotels for the trip dates (a rental opens its own
 listing, since Google Hotels can't find a rental by name). The hotel is Google Hotels' top-ranked pick that has a room on the
 trip dates (`hotels.py`, `best_hotel.py`, `cards.best_hotel`), so it may not be the
