@@ -143,3 +143,17 @@ def test_brochure_tool_input_reaches_the_action(maya_actions):
             "send_destination_brochures",
             {"nights": 5, "destinations": [destination] * 3},
         )
+
+
+def test_flight_tool_input_reaches_the_action(maya_actions):
+    # Before a destination is picked the action refuses, which shows the
+    # input parsed.
+    with pytest.raises(TripActionError, match="destination"):
+        run_tool(
+            maya_actions,
+            "send_best_flights",
+            {
+                "home_airports": [{"home_city": "Boston", "airport_code": "BOS"}],
+                "arrival_airport_code": "SJU",
+            },
+        )

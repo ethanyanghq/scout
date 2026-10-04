@@ -4,6 +4,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Any
 
+from scout.best_flights import HomeAirport
 from scout.brochures import ActivityPitch, DestinationPitch
 from scout.money import CENTS_PER_DOLLAR
 from scout.trip import DestinationOption, ItineraryDay, PreferenceUpdate
@@ -202,6 +203,52 @@ TOOL_DEFINITIONS = [
             "type": "object",
             "properties": {},
             "required": [],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "send_best_flights",
+        "description": (
+            "Post a card with the best round-trip flight from each member's home "
+            "city to the chosen destination on the trip dates, with live Google "
+            "Flights fares and a link to book each one."
+        ),
+        "strict": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "home_airports": {
+                    "type": "array",
+                    "description": "One entry for every home city in the trip.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "home_city": {
+                                "type": "string",
+                                "description": "As shown in the trip state.",
+                            },
+                            "airport_code": {
+                                "type": "string",
+                                "description": (
+                                    "The IATA code of its main airport, e.g. "
+                                    "'BOS', or a city code like 'NYC' where a "
+                                    "city has several."
+                                ),
+                            },
+                        },
+                        "required": ["home_city", "airport_code"],
+                        "additionalProperties": False,
+                    },
+                },
+                "arrival_airport_code": {
+                    "type": "string",
+                    "description": (
+                        "The IATA code of the destination's main airport, e.g. "
+                        "'SJU' for San Juan."
+                    ),
+                },
+            },
+            "required": ["home_airports", "arrival_airport_code"],
             "additionalProperties": False,
         },
     },
@@ -500,6 +547,11 @@ def run_tool(actions: TripActions, name: str, tool_input: dict[str, Any]) -> str
             return actions.post_itinerary(_to_itinerary(tool_input))
         case "send_booking_links":
             return actions.send_booking_links()
+        case "send_best_flights":
+            return actions.send_best_flights(
+                [HomeAirport(**home) for home in tool_input["home_airports"]],
+                tool_input["arrival_airport_code"],
+            )
         case "suggest_nearby_places":
             return actions.suggest_nearby_places(
                 tool_input["request"], tool_input["near"]

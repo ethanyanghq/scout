@@ -1,8 +1,10 @@
-from datetime import date
+from datetime import date, datetime
 
 import pytest
 
+from scout.best_flights import HomeAirport
 from scout.brochures import ActivityPitch, DestinationPitch
+from scout.flights import Flight, FlightsError
 from scout.outgoing import Card, Link, Say
 from scout.outside_services import OutsideServices
 from scout.places import Coordinates, PhotographedPlace, Place, PlacesError
@@ -626,3 +628,157 @@ def test_brochures_need_place_search_set_up(maya_actions):
 @pytest.fixture
 def maya_actions_with_photos(store, maya_actions):
     return actions_with(store, FakeBrochurePhotos())
+
+
+class FakeFlights:
+    """Stands in for Google Flights. Each airport in `routes` has one flight
+    to wherever's asked; any other airport has none."""
+
+    def __init__(self, routes, is_down=False):
+        self.routes = routes
+        self.is_down = is_down
+
+    def find_best_flight(self, departure_airport, arrival_airport, dates):
+        if self.is_down:
+            raise FlightsError("search didn't connect: timed out")
+        return self.routes.get(departure_airport)
+
+
+def flight_from(airport, price_usd, layovers=()):
+    return Flight(
+        departure_airport=airport,
+        arrival_airport="SJU",
+        departs_at=datetime(2027, 3, 14, 6, 15),
+        arrives_at=datetime(2027, 3, 14, 14, 20),
+        flight_numbers=["B6 101"],
+        airlines=["JetBlue"],
+        layover_airports=list(layovers),
+        duration_minutes=485,
+        price_usd=price_usd,
+        booking_url=f"https://www.google.com/travel/flights?from={airport}",
+        destination_photo_url="https://lh5.googleusercontent.com/san-juan",
+    )
+
+
+ROUTES = {
+    "BOS": flight_from("BOS", 312, layovers=["FLL"]),
+    "NYC": flight_from("NYC", 1240),
+}
+HOME_AIRPORTS = [HomeAirport("Boston", "BOS"), HomeAirport("new york", "NYC")]
+
+
+def flights_actions(store, flights):
+    return TripActions(store, SPACE, MAYA, OutsideServices(flights=flights))
+
+
+def test_flights_are_one_card_with_a_departure_board_per_home_city(
+    locked_in_actions, store
+):
+    actions = flights_actions(store, FakeFlights(ROUTES))
+
+    actions.send_best_flights(HOME_AIRPORTS, "SJU")
+
+    [card] = actions.outbox
+    assert isinstance(card, Card)
+    assert card.layout["title"] == "Flights to San Juan, Puerto Rico"
+    assert card.layout["subtitle"] == "Mar 14–19 · round trip"
+    boards = [
+        node["board"]
+        for node in card.layout["root"]["children"]
+        if node["type"] == "flightBoard"
+    ]
+    assert [(b["origin"], b["destination"]) for b in boards] == [
+        ("BOS", "SJU"),
+        ("NYC", "SJU"),
+    ]
+    assert boards[0]["departTime"] == "6:15 AM"
+    assert boards[0]["status"] == "1 stop · FLL"
+    assert boards[1]["status"] == "Nonstop"
+    assert card.thumbnail_url == "https://lh5.googleusercontent.com/san-juan"
+
+
+def test_each_flight_shows_its_fare_and_who_flies_it(locked_in_actions, store):
+    actions = flights_actions(store, FakeFlights(ROUTES))
+
+    actions.send_best_flights(HOME_AIRPORTS, "SJU")
+
+    [card] = actions.outbox
+    boston_details = card.layout["root"]["children"][1]["child"]["children"]
+    rows = {row["key"]: row["value"] for row in boston_details}
+    assert rows["Fare"] == "$312 per person"
+    assert rows["For"] == "Maya"
+    assert rows["Flying time"] == "8h 5m"
+
+
+def test_each_flight_has_a_button_that_opens_it_on_google_flights(
+    locked_in_actions, store
+):
+    actions = flights_actions(store, FakeFlights(ROUTES))
+
+    actions.send_best_flights(HOME_AIRPORTS, "SJU")
+
+    [card] = actions.outbox
+    assert [(a["label"], a["deepLinkURL"]) for a in card.layout["actions"]] == [
+        ("Book from Boston", "https://www.google.com/travel/flights?from=BOS"),
+        ("Book from new york", "https://www.google.com/travel/flights?from=NYC"),
+    ]
+
+
+def test_flights_read_the_same_as_text_on_phones_without_the_card_app(
+    locked_in_actions, store
+):
+    actions = flights_actions(store, FakeFlights(ROUTES))
+
+    actions.send_best_flights(HOME_AIRPORTS, "SJU")
+
+    [card] = actions.outbox
+    assert card.fallback_text.startswith(
+        "✈️ Best flights to San Juan, Puerto Rico, Mar 14–19\n"
+        "Boston (BOS → SJU): JetBlue B6 101 · 1 stop · FLL · 8h 5m\n"
+        "   $312 round trip per person, for Maya\n"
+        "   https://www.google.com/travel/flights?from=BOS\n"
+        "new york (NYC → SJU): JetBlue B6 101 · Nonstop · 8h 5m\n"
+        "   $1,240 round trip per person, for Leo\n"
+    )
+    assert "tell me what you paid" in card.fallback_text
+
+
+def test_every_home_city_needs_an_airport(locked_in_actions, store):
+    actions = flights_actions(store, FakeFlights(ROUTES))
+
+    with pytest.raises(TripActionError, match="no airport given for New York"):
+        actions.send_best_flights([HomeAirport("Boston", "BOS")], "SJU")
+
+
+def test_flights_need_at_least_one_airport(locked_in_actions, store):
+    actions = flights_actions(store, FakeFlights(ROUTES))
+
+    with pytest.raises(TripActionError, match="at least one home city"):
+        actions.send_best_flights([], "SJU")
+
+
+def test_a_home_city_with_no_flights_asks_for_another_airport(locked_in_actions, store):
+    actions = flights_actions(store, FakeFlights({"BOS": ROUTES["BOS"]}))
+
+    with pytest.raises(TripActionError, match="no flights from NYC to SJU"):
+        actions.send_best_flights(HOME_AIRPORTS, "SJU")
+    assert actions.outbox == []
+
+
+def test_flights_say_so_when_flight_search_is_down(locked_in_actions, store):
+    actions = flights_actions(store, FakeFlights(ROUTES, is_down=True))
+
+    with pytest.raises(TripActionError, match="flight search isn't working"):
+        actions.send_best_flights(HOME_AIRPORTS, "SJU")
+
+
+def test_without_flight_search_scout_sends_booking_links_instead(locked_in_actions):
+    with pytest.raises(TripActionError, match="send booking links instead"):
+        locked_in_actions.send_best_flights(HOME_AIRPORTS, "SJU")
+
+
+def test_no_flights_before_a_destination_is_chosen(store, maya_actions):
+    actions = flights_actions(store, FakeFlights(ROUTES))
+
+    with pytest.raises(TripActionError, match="destination"):
+        actions.send_best_flights(HOME_AIRPORTS, "SJU")
