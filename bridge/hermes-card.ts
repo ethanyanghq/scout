@@ -10,10 +10,13 @@ export type HermesCard = {
   fallback_text: string;
 };
 
+// A card opens only in this exact build of the extension: the team's own
+// HermesShare build, signed by Andrew Visconti's personal team. Every phone
+// that should open cards needs this build installed.
 const HERMES_APP = {
   name: "HermesShare",
-  team_id: "6PPS68Y9RP",
-  bundle_id: "com.hermesshare.app.MessagesExtension",
+  team_id: "XKX94F4LDN",
+  bundle_id: "com.visconti.hermesshare.app.MessagesExtension",
 } as const;
 // Linq refuses a longer data: URL, so an over-stuffed card has to be trimmed
 // rather than silently truncated.
