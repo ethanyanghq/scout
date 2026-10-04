@@ -95,6 +95,7 @@ NEARBY_SUGGESTION_COUNT = 3
 FINAL_DECISION_PROMPT = "once you're ready, let me know your final decision with @scout"
 # The trip interview card has no destination yet, so its bubble shows a beach.
 INTERVIEW_THUMBNAIL_PLACE = "Grace Bay Beach, Turks and Caicos"
+TRIP_CARD_NUDGE = "just fill this out real quick so i could get a better idea"
 INTERVIEW_FALLBACK_TEXT = (
     "tell me about your trip: the kind of trip (resort, lakeside, city break or "
     "something else), when you're free, your budget per person, where you're "
@@ -663,6 +664,7 @@ class TripActions:
                 fallback_text=INTERVIEW_FALLBACK_TEXT,
             )
         )
+        self.outbox.append(Say(TRIP_CARD_NUDGE))
         return "Trip interview posted."
 
     def _interview_thumbnail_url(self) -> str | None:

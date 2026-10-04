@@ -17,6 +17,7 @@ from typing import Protocol
 
 from scout import polls
 from scout.activity_deck import parse_picks
+from scout.cards import INTERVIEW_ANSWER_LEAD
 from scout.outgoing import Outgoing, React, Say, Tapback, as_plain_text
 from scout.outside_services import NO_OUTSIDE_SERVICES, OutsideServices
 from scout.speak_gate import is_addressed_to_scout
@@ -29,6 +30,11 @@ logger = logging.getLogger(__name__)
 INTRODUCTION_SNAG_REPLY = (
     "hey all, i'm scout. hit a snag on my end so i can't help just yet, "
     "tag @scout in a minute to try again"
+)
+# Sent before the AI's reply to someone's trip card answers, instead of the AI
+# reading their answers back to them.
+TRIP_CARD_RECEIVED_REPLY = (
+    "okay, got it. let me find a location that fits your interests"
 )
 SNAG_REPLY = "ugh, hit a snag on my end. mind trying that again in a minute?"
 # Tapbacks that mean "this one" on a poll option. A 😂 on Miami isn't a vote.
@@ -148,12 +154,21 @@ def _respond(
     else:
         logger.info("Not tagged, and the gate says to stay quiet")
         return []
+
+    is_trip_card_answer = message.text.startswith(INTERVIEW_ANSWER_LEAD)
+    if is_trip_card_answer and _answered_trip_card_before(store, message):
+        # The card is filled in once; a resend would only repeat the same answers.
+        logger.info("Already has this member's trip card answers, so no reply")
+        return []
+
     started = time.monotonic()
     try:
         replies = agent.respond(trip, message)
         took = time.monotonic() - started
         outcome = "replied" if replies else "chose not to reply"
         logger.info("The AI %s after %.1fs", outcome, took)
+        if is_trip_card_answer:
+            replies = [Say(TRIP_CARD_RECEIVED_REPLY), *replies]
         return replies
     except Exception:
         logger.exception("Agent failed on message in %s", message.space_id)
@@ -164,6 +179,18 @@ def _respond(
             return [Say(SNAG_REPLY)]
         # Joining with a canned greeting would hide that scout is broken.
         return [Say(INTRODUCTION_SNAG_REPLY)]
+
+
+def _answered_trip_card_before(store: TripStore, message: IncomingMessage) -> bool:
+    """Whether the sender sent trip card answers before this message, which is
+    already in the log."""
+    answers = [
+        logged
+        for logged in store.chat_history(message.space_id)
+        if logged.sender_phone == message.sender_phone
+        and logged.text.startswith(INTERVIEW_ANSWER_LEAD)
+    ]
+    return len(answers) > 1
 
 
 def _tapback_on(message: IncomingMessage) -> Callable[[str], Outgoing]:

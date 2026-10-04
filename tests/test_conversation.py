@@ -129,12 +129,15 @@ def choose_san_juan(store):
 def test_scout_introduces_itself_then_sends_the_trip_interview_card(store):
     agent = FakeAgent(replies=["Hey all, I'm scout 👋 Yep, I'm here!"])
 
-    *introduction, card = send_from_line(store, agent, MAYA, "@scout you there?", None)
+    *introduction, card, nudge = send_from_line(
+        store, agent, MAYA, "@scout you there?", None
+    )
 
     assert agent.messages_seen == ["@scout you there?"]
     assert said(introduction) == ["Hey all, I'm scout 👋 Yep, I'm here!"]
     assert isinstance(card, Card)
     assert card.caption == "Plan your trip"
+    assert nudge == Say("just fill this out real quick so i could get a better idea")
 
 
 def test_the_trip_interview_card_goes_out_only_with_the_introduction(store):
@@ -165,7 +168,9 @@ def test_scout_stays_silent_in_a_new_chat_when_the_gate_says_silent(store):
     agent = FakeAgent(replies=["Hey all, I'm scout 👋"])
 
     first = send(store, agent, MAYA, "hey everyone, someone added a bot?")
-    *introduction, _card = send_from_line(store, agent, LEO, "@scout you there?", None)
+    *introduction, _card, _nudge = send_from_line(
+        store, agent, LEO, "@scout you there?", None
+    )
 
     assert first == []
     assert agent.messages_seen == ["@scout you there?"]
@@ -376,6 +381,7 @@ def test_replies_are_saved_so_the_agent_sees_them_next_time(store):
         (MAYA, "@scout hey, I'm maya"),
         (None, "got it, Maya"),
         (None, "[card] Plan your trip"),
+        (None, "just fill this out real quick so i could get a better idea"),
     ]
 
 
@@ -526,3 +532,36 @@ def test_the_chat_log_shows_what_a_threaded_reply_answers(store):
 
     logged = store.recent_messages(SPACE, limit=1)[0]
     assert logged.text == f'(replying to "{SAN_JUAN_OPTION}") this one!'
+
+
+def test_trip_card_answers_get_a_short_got_it_instead_of_a_read_back(store):
+    scout_joins(store)
+    agent = FakeAgent(replies=[])
+
+    replies = send(
+        store, agent, MAYA, "@scout my trip: Lakeside · $1,200 · from Boston"
+    )
+
+    assert replies == ["okay, got it. let me find a location that fits your interests"]
+    assert agent.messages_seen == ["@scout my trip: Lakeside · $1,200 · from Boston"]
+
+
+def test_sending_the_trip_card_again_gets_no_reply(store):
+    scout_joins(store)
+    agent = FakeAgent(replies=[])
+    send(store, agent, MAYA, "@scout my trip: Lakeside · $1,200 · from Boston")
+
+    again = send(store, agent, MAYA, "@scout my trip: Lakeside · $1,200 · from Boston")
+
+    assert again == []
+    assert len(agent.messages_seen) == 1
+
+
+def test_each_member_can_send_the_trip_card_once(store):
+    scout_joins(store)
+    agent = FakeAgent(replies=[])
+    send(store, agent, MAYA, "@scout my trip: Lakeside · $1,200 · from Boston")
+
+    leos = send(store, agent, LEO, "@scout my trip: City break · $900 · from NYC")
+
+    assert leos == ["okay, got it. let me find a location that fits your interests"]
