@@ -54,10 +54,12 @@ MAX_CARD_URL_CHARS = 16_384
 CARD_URL_PREFIX = "data:application/json;base64,"
 # The activity deck's swipes. (rating, label, swipe direction, SF Symbol)
 SWIPE_CHOICES = [
-    (Rating.NAH, "Nah", "left", "xmark"),
-    (Rating.MEH, "Meh", "up", "minus"),
-    (Rating.YEAH, "Yeah", "right", "heart.fill"),
+    (Rating.NAH, "Nah", "left", "arrow.left"),
+    (Rating.MEH, "Meh", "up", "arrow.up"),
+    (Rating.YEAH, "Yeah", "right", "arrow.right"),
 ]
+# One line above the stack that says which way each swipe goes.
+SWIPE_LEGEND = "←  Nah      ↑  Meh      Yeah  →"
 # The budget slider, per person in US dollars: $0 to $3,000 in $100 steps,
 # labeled every $500 and starting at $1,000.
 BUDGET_SLIDER_MAX_USD = 3_000
@@ -362,24 +364,11 @@ def fits_in_one_message(layout: dict) -> bool:
     return len(CARD_URL_PREFIX) + len(encoded) <= MAX_CARD_URL_CHARS
 
 
-def activity_deck(
-    destination: str, activities: list[DeckActivity], destination_photo_url: str | None
-) -> dict:
+def activity_deck(destination: str, activities: list[DeckActivity]) -> dict:
     """A stack of things to do to swipe through: left is nah, up is meh, right
-    is yeah. Send puts the swipes in the chat as text."""
+    is yeah. Send puts the swipes in the chat as text. It has no photo of its
+    own, so the stack gets the whole screen without scrolling."""
     lead = urllib.parse.quote(PICKS_LEAD)
-    photo = (
-        [
-            {
-                "type": "gallery",
-                "urls": [destination_photo_url],
-                "heightPt": 180,
-                "cornerRadius": 18,
-            }
-        ]
-        if destination_photo_url
-        else []
-    )
     return {
         "version": 1,
         # HermesShare requires one on any card with form inputs.
@@ -393,19 +382,8 @@ def activity_deck(
             "spacing": 14,
             "alignment": "leading",
             "children": [
-                *photo,
-                _text(
-                    "Swipe left for nah, up for meh, right for yeah. "
-                    "Then send, and your picks drop into the chat.",
-                    role="body",
-                    color_hex=SOFT_GRAY_HEX,
-                ),
+                _text(SWIPE_LEGEND, role="callout", color_hex=SOFT_GRAY_HEX),
                 _swipe_deck(activities),
-                _text(
-                    "Prices are estimates per person. Nothing is booked.",
-                    role="footnote",
-                    color_hex=SOFT_GRAY_HEX,
-                ),
             ],
         },
         "actions": [
@@ -445,7 +423,9 @@ def _swipe_card(position: int, activity: DeckActivity) -> dict:
     card = {
         "id": f"activity-{position}",
         "title": activity.name,
-        "subtitle": f"~${activity.estimated_cost_usd:,} · {activity.description}",
+        "subtitle": (
+            f"~${activity.estimated_cost_usd:,} per person · {activity.description}"
+        ),
     }
     if activity.photo_url:
         card["imageUrl"] = activity.photo_url

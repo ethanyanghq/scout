@@ -200,7 +200,11 @@ TOOL_DEFINITIONS = [
                             },
                             "description": {
                                 "type": "string",
-                                "description": "One short line on what it is.",
+                                "description": (
+                                    "Two short sentences, under 200 characters: "
+                                    "what you actually do, then how long it takes, "
+                                    "what's included and who it suits."
+                                ),
                             },
                             "estimated_cost_usd": {
                                 "type": "integer",

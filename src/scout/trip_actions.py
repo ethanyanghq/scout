@@ -648,11 +648,11 @@ class TripActions:
                 missing_photo = f"place search isn't working: {error}"
 
         self._store.replace_activity_deck(self._space_id, activities)
-        layout = activity_deck(trip.destination, activities, destination_photo)
+        layout = activity_deck(trip.destination, activities)
         if not fits_in_one_message(layout):
             # Photo links are most of a deck, and some of Google's are long.
             without_photos = [replace(a, photo_url=None) for a in activities]
-            layout = activity_deck(trip.destination, without_photos, destination_photo)
+            layout = activity_deck(trip.destination, without_photos)
         # Without a thumbnail, the bridge sends the deck's text instead.
         self.outbox.append(
             Card(

@@ -713,7 +713,7 @@ DECK = [
 ]
 
 
-def test_the_deck_is_one_card_with_a_photo_and_a_swipe_stack_of_the_activities(
+def test_the_deck_is_one_card_of_a_swipe_legend_and_a_stack_of_the_activities(
     locked_in_actions, store
 ):
     actions = actions_with(store, FakeBrochurePhotos())
@@ -724,14 +724,17 @@ def test_the_deck_is_one_card_with_a_photo_and_a_swipe_stack_of_the_activities(
     assert card.thumbnail_url == (
         "https://lh3.googleusercontent.com/San-Juan,-Puerto-Rico"
     )
-    [swipe_deck] = [
-        node for node in card.layout["root"]["children"] if node["type"] == "swipeDeck"
-    ]
+    nodes = card.layout["root"]["children"]
+    # Nothing but the legend and the stack, so the card fits without scrolling.
+    assert [node["type"] for node in nodes] == ["text", "swipeDeck"]
+    assert nodes[0]["text"] == "←  Nah      ↑  Meh      Yeah  →"
+    [swipe_deck] = [node for node in nodes if node["type"] == "swipeDeck"]
     assert [c["title"] for c in swipe_deck["cards"]] == [a.name for a in DECK]
     assert swipe_deck["cards"][0]["imageUrl"] == (
         "https://lh3.googleusercontent.com/"
         "Night-kayak-in-the-bio-bay-in-San-Juan,-Puerto-Rico"
     )
+    assert swipe_deck["cards"][0]["subtitle"] == ("~$60 per person · A local favorite.")
     assert [(c["id"], c["swipeDirection"]) for c in swipe_deck["choices"]] == [
         ("nah", "left"),
         ("meh", "up"),
@@ -746,7 +749,7 @@ class FakeLongPhotoLinks(FakeBrochurePhotos):
 
     def find_photographed(self, text_query, photo_count):
         place = super().find_photographed(text_query, photo_count)
-        return replace(place, photo_urls=[url + "x" * 3000 for url in place.photo_urls])
+        return replace(place, photo_urls=[url + "x" * 6000 for url in place.photo_urls])
 
 
 def test_a_deck_too_big_for_one_message_drops_the_activity_photos(
