@@ -72,6 +72,31 @@ def test_lists_members_who_have_not_shared_yet():
     assert not summary.is_complete
 
 
+def test_details_count_from_members_who_skipped_others():
+    no_home_city = member("Maya", date(2027, 3, 13), date(2027, 3, 16), 800, None)
+    members = [
+        no_home_city,
+        member("Leo", date(2027, 3, 14), date(2027, 3, 22), 600, "NYC"),
+    ]
+
+    summary = summarize_group(members)
+
+    assert summary.shared_window == DateWindow(date(2027, 3, 14), date(2027, 3, 16))
+    assert summary.budget_range == (600, 800)
+    assert summary.home_cities == ["NYC"]
+
+
+def test_summary_says_the_dates_work_for_everyone_once_everyone_shared_them():
+    members = [
+        member("Maya", date(2027, 3, 13), date(2027, 3, 20), 800, "Boston"),
+        member("Leo", date(2027, 3, 14), date(2027, 3, 20), 600, None),
+    ]
+
+    text = format_group_summary(summarize_group(members), members)
+
+    assert "📅 Mar 14–20 works for everyone\n" in text
+
+
 def test_nobody_sharing_is_not_a_date_conflict():
     summary = summarize_group([Member(phone="+15550000001")])
 
@@ -108,7 +133,7 @@ def test_summary_message_shows_dates_budget_and_who_is_missing():
 
     text = format_group_summary(summarize_group(members), members)
 
-    assert "Mar 14–20 works for everyone" in text
+    assert "Mar 14–20 works for everyone who shared dates" in text
     assert "$600–$800 per person" in text
     assert "Boston, NYC" in text
     assert "Still waiting on: Jordan" in text

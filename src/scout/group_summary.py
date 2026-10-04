@@ -21,16 +21,20 @@ class GroupSummary:
 
 
 def summarize_group(members: list[Member]) -> GroupSummary:
-    shared = [member for member in members if member.has_shared_preferences]
-    shared_window = _find_shared_window(shared)
-    budgets = [member.budget_usd for member in shared]
+    # Each detail counts from everyone who shared it, so a group that moves on
+    # without someone's home city still plans around that person's dates.
+    with_dates = [member for member in members if _has_dates(member)]
+    shared_window = _find_shared_window(with_dates)
+    budgets = [member.budget_usd for member in members if member.budget_usd]
     return GroupSummary(
         shared_window=shared_window,
-        dates_conflict=bool(shared) and shared_window is None,
+        dates_conflict=bool(with_dates) and shared_window is None,
         budget_range=(min(budgets), max(budgets)) if budgets else None,
-        home_cities=_unique_in_order(member.home_city for member in shared),
+        home_cities=_unique_in_order(
+            member.home_city for member in members if member.home_city
+        ),
         must_haves=_unique_in_order(
-            must_have for member in shared for must_have in member.must_haves
+            must_have for member in members for must_have in member.must_haves
         ),
         members_still_to_share=[
             member for member in members if not member.has_shared_preferences
@@ -41,13 +45,16 @@ def summarize_group(members: list[Member]) -> GroupSummary:
 def format_group_summary(summary: GroupSummary, members: list[Member]) -> str:
     lines = ["Here's where everyone landed:"]
     if summary.shared_window:
-        lines.append(f"📅 {format_window(summary.shared_window)} works for everyone")
+        who = (
+            "everyone" if all(map(_has_dates, members)) else "everyone who shared dates"
+        )
+        lines.append(f"📅 {format_window(summary.shared_window)} works for {who}")
     elif summary.dates_conflict:
         lines.append("📅 No dates work for everyone yet:")
         lines.extend(
             f"   {member.label}: {_format_member_dates(member)}"
             for member in members
-            if member.has_shared_preferences
+            if _has_dates(member)
         )
     if summary.budget_range:
         lowest, highest = summary.budget_range
@@ -79,6 +86,10 @@ def _find_shared_window(members: list[Member]) -> DateWindow | None:
     if latest_start > earliest_end:
         return None
     return DateWindow(latest_start, earliest_end)
+
+
+def _has_dates(member: Member) -> bool:
+    return member.available_from is not None and member.available_to is not None
 
 
 def _format_member_dates(member: Member) -> str:
