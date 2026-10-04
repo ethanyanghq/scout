@@ -291,7 +291,9 @@ class TripActions:
             self.outbox.append(
                 Say(f"locked in: {destination}, {format_window(dates)} 🎉")
             )
-        return f"Destination is now {destination}. {_describe_dates(dates)}"
+        return (
+            f"Destination is now {destination}. {_describe_dates_and_next_step(dates)}"
+        )
 
     def post_itinerary(
         self, days: list[ItineraryDay], add_ons: list[ItineraryAddOn]
@@ -778,7 +780,7 @@ class TripActions:
         self.outbox.append(Say(polls.format_result(result, len(trip.open_poll.votes))))
         return (
             f"Poll closed. Destination is now {result.winner.name}. "
-            f"{_describe_dates(dates)}"
+            f"{_describe_dates_and_next_step(dates)}"
         )
 
     def _send_calendar(self, trip: Trip) -> str:
@@ -844,10 +846,16 @@ class TripActions:
         return trip
 
 
-def _describe_dates(dates: DateWindow | None) -> str:
+def _describe_dates_and_next_step(dates: DateWindow | None) -> str:
+    """What the agent is told once a destination is locked in: the dates, and
+    that booking is next. Flights need dates, so without them there's no next
+    step."""
     if dates is None:
         return "No dates work for everyone, so the trip has no dates."
-    return f"The trip is {format_window(dates)}."
+    return (
+        f"The trip is {format_window(dates)}. Don't wait to be asked: in this "
+        "same turn, call send_best_flights as the next step."
+    )
 
 
 def _describe_saved_details(member: Member) -> str:

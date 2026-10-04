@@ -253,6 +253,17 @@ def test_choosing_for_the_group_announces_the_lock_in_once(store):
     assert texts == ["locked in: san juan, Mar 14–19 🎉"]
 
 
+def test_locking_in_a_destination_with_dates_tells_the_agent_to_find_flights(store):
+    store.create_trip(SPACE)
+    store.add_members(SPACE, [MAYA, LEO])
+    store.save_preferences(SPACE, MAYA, MAYA_PREFERENCES)
+    store.save_preferences(SPACE, LEO, LEO_PREFERENCES)
+
+    result = TripActions(store, SPACE, MAYA).lock_in_group_choice("san juan")
+
+    assert "call send_best_flights" in result
+
+
 def test_the_group_can_choose_a_destination_without_a_poll(maya_actions, store):
     maya_actions.lock_in_group_choice("Lisbon, Portugal")
 
