@@ -2,7 +2,7 @@ from datetime import date
 
 import pytest
 
-from scout.agent_tools import run_tool
+from scout.agent_tools import TOOL_DEFINITIONS, run_tool
 from scout.trip import Chronotype, DateWindow, DestinationOption
 from scout.trip_actions import TripActionError, TripActions
 
@@ -102,3 +102,28 @@ def test_agent_start_times_must_be_clock_times(store):
 
     with pytest.raises(TripActionError, match="HH:MM"):
         run_tool(TripActions(store, SPACE, MAYA), "post_itinerary", tool_input)
+
+
+def _arrays_without_items(schema, path="schema"):
+    """The paths of every array in a JSON schema that doesn't say what it holds."""
+    if isinstance(schema, list):
+        return [
+            found
+            for number, part in enumerate(schema)
+            for found in _arrays_without_items(part, f"{path}[{number}]")
+        ]
+    if not isinstance(schema, dict):
+        return []
+    missing = []
+    is_array = schema.get("type") == "array" or "array" in (schema.get("type") or ())
+    if is_array and "items" not in schema:
+        missing.append(path)
+    for key, part in schema.items():
+        missing += _arrays_without_items(part, f"{path}.{key}")
+    return missing
+
+
+def test_every_array_a_tool_takes_says_what_it_holds():
+    # OpenAI rejects the whole tool list over a single array with no items.
+    for tool in TOOL_DEFINITIONS:
+        assert _arrays_without_items(tool["input_schema"], tool["name"]) == []

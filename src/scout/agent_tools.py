@@ -605,17 +605,31 @@ TOOL_DEFINITIONS = [
                 "paid_on": _nullable(
                     "string", "The date it was paid as YYYY-MM-DD, if known."
                 ),
-                "split_among": _nullable(
-                    "array",
-                    "Names of the only people who share it, or null for everyone.",
-                ),
-                "items": _nullable(
-                    "array",
-                    "The receipt's lines, each with who shared it, or null to "
-                    "split the whole amount evenly. Each is "
-                    "{name, amount_usd, shared_by: [names]}; an empty "
-                    "shared_by means everyone in split_among.",
-                ),
+                "split_among": {
+                    "type": ["array", "null"],
+                    "items": {"type": "string"},
+                    "description": (
+                        "Names of the only people who share it, or null for everyone."
+                    ),
+                },
+                "items": {
+                    "type": ["array", "null"],
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string"},
+                            "amount_usd": {"type": "number"},
+                            "shared_by": {"type": "array", "items": {"type": "string"}},
+                        },
+                        "required": ["name", "amount_usd", "shared_by"],
+                        "additionalProperties": False,
+                    },
+                    "description": (
+                        "The receipt's lines, each with who shared it, or null "
+                        "to split the whole amount evenly. An empty shared_by "
+                        "means everyone in split_among."
+                    ),
+                },
             },
             "required": [
                 "amount_usd",
