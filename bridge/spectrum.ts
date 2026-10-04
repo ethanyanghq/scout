@@ -16,6 +16,7 @@ import {
 import { imessage } from "spectrum-ts/providers/imessage";
 import z from "zod";
 import { localIMessage } from "@spectrum-ts/imessage-local";
+import { AnotherScoutAnsweredError } from "./rival-guard";
 import { askScout, tellScoutAboutTapback, type IncomingAttachment, type ScoutAction } from "./scout";
 import { tapbackEmoji, tapbackNamed } from "./tapbacks";
 import { secondsSince, type RelayReport, type Skipped } from "./trace";
@@ -109,8 +110,11 @@ export async function relaySpectrumMessages(
       }
       report.finished({ ...outcome, kind: "handled", sent: actions, seconds: secondsSince(startedAt) });
     } catch (error) {
-      // Keep listening: one failed message shouldn't take scout offline.
       report.finished({ ...outcome, kind: "failed", error });
+      // Unlike other failures, this bridge must not keep listening: it would
+      // answer the next message too.
+      if (error instanceof AnotherScoutAnsweredError) throw error;
+      // Keep listening: one failed message shouldn't take scout offline.
     }
   }
 }

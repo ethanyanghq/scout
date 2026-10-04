@@ -19,6 +19,7 @@ import { imessage } from "spectrum-ts/providers/imessage";
 import { localIMessage } from "@spectrum-ts/imessage-local";
 import { WEBHOOK_URL, linqPlatform } from "./linq";
 import { scoutUrl } from "./scout";
+import { AnotherScoutAnsweredError } from "./rival-guard";
 import { relaySpectrumMessages, typingPauseFor } from "./spectrum";
 import { consoleReport } from "./trace";
 
@@ -31,7 +32,14 @@ if (mode === "linq") {
   console.log(`Linq's events come in at ${WEBHOOK_URL}. Relay them with`);
   console.log(`\`linq webhooks listen --forward-to ${WEBHOOK_URL}\`, which \`bun run dev\` starts for you.`);
 }
-await relaySpectrumMessages(app, consoleReport, typingPauseFor);
+try {
+  await relaySpectrumMessages(app, consoleReport, typingPauseFor);
+} catch (error) {
+  if (!(error instanceof AnotherScoutAnsweredError)) throw error;
+  console.error("✗ Another scout bridge is running on this Linq line and answered first.");
+  console.error("  Stopping this one so scout doesn't reply twice. Ask who else is running `bun run dev`.");
+  process.exit(1);
+}
 
 async function connectToIMessage(mode: string) {
   if (mode === "local") {

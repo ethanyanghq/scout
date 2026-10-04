@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { Spectrum } from "spectrum-ts";
 import { linqPlatform, readLinqEvent, type LinqEvent } from "./linq";
+import { AnotherScoutAnsweredError } from "./rival-guard";
 import type { IncomingText } from "./scout";
 import { noTypingPause, relaySpectrumMessages, type TypingPause } from "./spectrum";
 import type { MessageOutcome } from "./trace";
@@ -114,6 +115,8 @@ describe("a Linq group chat through Spectrum", () => {
   // Linq answers 403 to typing in a group chat, so tests choose its answer.
   let typingStatus = 204;
   let sendStatus = 200;
+  // What Linq lists as the chat's newest messages: another bridge's reply, say.
+  let chatMessages: object[] = [];
   const stubScout = Bun.serve({
     hostname: "127.0.0.1",
     port: 0,
@@ -135,6 +138,9 @@ describe("a Linq group chat through Spectrum", () => {
           created_at: "2026-10-03T20:30:00.000Z",
           parts: [{ type: "text", value: SAN_JUAN_OPTION }],
         });
+      }
+      if (request.method === "GET" && path === "/chats/group-chat-1/messages") {
+        return Response.json({ messages: chatMessages });
       }
       if (request.method === "GET") return Response.json({ handles: [SCOUT, MAYA, LEO] });
       if (path.endsWith("/typing")) {
@@ -162,6 +168,7 @@ describe("a Linq group chat through Spectrum", () => {
     linqReceived = [];
     typingStatus = 204;
     sendStatus = 200;
+    chatMessages = [];
   });
 
   // Sends one Linq event through Spectrum and the relay, and waits until scout
@@ -178,7 +185,8 @@ describe("a Linq group chat through Spectrum", () => {
     });
     const app = await Spectrum({ providers: [platform.config({})] });
     const finished = new Promise<MessageOutcome>((resolve) => {
-      relaySpectrumMessages(app, { arrived: () => {}, finished: resolve }, typingPause);
+      // The relay stops itself when another bridge answered, which a test reads from the outcome.
+      relaySpectrumMessages(app, { arrived: () => {}, finished: resolve }, typingPause).catch(() => {});
     });
     await fetch(`http://127.0.0.1:${webhookPort}/linq-events`, {
       method: "POST",
@@ -208,6 +216,26 @@ describe("a Linq group chat through Spectrum", () => {
         body: { message: { parts: [{ type: "text", value: "hey Maya 👋" }] } },
       },
     ]);
+  });
+
+  test("stops this bridge when another bridge on the same line already answered", async () => {
+    scoutActions = [{ type: "say", text: "hey Maya 👋" }];
+    chatMessages = [{ id: "rival-reply", is_from_me: true, created_at: "2026-10-03T20:37:30.000Z" }];
+
+    const outcome = await deliver(messageReceived({}));
+
+    expect(outcome).toMatchObject({ kind: "failed", error: expect.any(AnotherScoutAnsweredError) });
+    expect(linqReceived).toEqual([]);
+  });
+
+  test("still answers when scout's last message came before the member spoke", async () => {
+    scoutActions = [{ type: "say", text: "hey Maya 👋" }];
+    chatMessages = [{ id: "earlier-reply", is_from_me: true, created_at: "2026-10-03T20:30:00.000Z" }];
+
+    const outcome = await deliver(messageReceived({}));
+
+    expect(outcome).toMatchObject({ kind: "handled" });
+    expect(linqReceived).toHaveLength(1);
   });
 
   test("sends scout's link to Linq as a link part, so iMessage shows a card", async () => {

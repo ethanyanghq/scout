@@ -17,6 +17,7 @@ import {
 import z from "zod";
 import { cardPart, cardProblems, type HermesCard } from "./hermes-card";
 import { LINQ_API_URL, LinqApiError, callLinq, type LinqApi, type LinqHandle } from "./linq-api";
+import { RivalGuard } from "./rival-guard";
 import { threadedReplySchema } from "./spectrum";
 import { isTapback, tapbackEmoji, tapbackNamed } from "./tapbacks";
 import { consoleReport, isSkipped, type Skipped } from "./trace";
@@ -70,6 +71,7 @@ type ReceivedMessage = {
 export function linqPlatform(connection: LinqConnection) {
   const api = { apiKey: connection.apiKey, apiUrl: connection.apiUrl ?? LINQ_API_URL };
   const chatsWithoutTyping = new Set<string>();
+  const rivalGuard = new RivalGuard();
   return definePlatform(PLATFORM, {
     config: z.object({}),
     message: { schema: threadedReplySchema },
@@ -82,16 +84,19 @@ export function linqPlatform(connection: LinqConnection) {
     lifecycle: { createClient: async () => api },
     messages: () =>
       stream<ProviderMessageRecord>((emit) =>
-        receiveWebhookEvents(connection.webhookPort ?? WEBHOOK_PORT, emit),
+        receiveWebhookEvents(connection.webhookPort ?? WEBHOOK_PORT, emit, rivalGuard),
       ),
     actions: {
       getMembers: async (_, space) => listMembers(api, space.id),
       getMessage: async (_, __, messageId) => fetchMessage(api, messageId),
     },
-    send: async ({ space, content }) =>
-      content.type === "typing"
-        ? setTyping(api, space.id, content.state, chatsWithoutTyping)
-        : sendContent(api, space.id, content),
+    send: async ({ space, content }) => {
+      if (content.type === "typing") return setTyping(api, space.id, content.state, chatsWithoutTyping);
+      await rivalGuard.assertNobodyElseAnswered(api, space.id);
+      const sent = await sendContent(api, space.id, content);
+      rivalGuard.noteOwnMessage(sent.id);
+      return sent;
+    },
   });
 }
 
@@ -172,6 +177,7 @@ function readParts(message: LinqMessageParts): Content | null {
 function receiveWebhookEvents(
   port: number,
   emit: (record: ProviderMessageRecord) => Promise<void>,
+  rivalGuard: RivalGuard,
 ): () => void {
   // Linq delivers each event at least once, so a retry can repeat one.
   const seenEventIds = new Set<string>();
@@ -195,6 +201,7 @@ function receiveWebhookEvents(
           consoleReport.finished({ id: event.event_id, chatId: null, kind: "skipped", reason: record.skipReason });
         }
       } else {
+        if (record.space && record.timestamp) rivalGuard.noteMemberMessage(record.space.id, record.timestamp);
         delivered = delivered.then(() => emit(record));
       }
       return new Response(null, { status: 204 });
