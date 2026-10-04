@@ -1019,10 +1019,7 @@ def test_the_hotel_is_one_card_with_its_photo_rate_and_rating(locked_in_actions,
     actions.send_best_hotel()
 
     intro, card, _ = actions.outbox
-    assert intro == Say(
-        "Maya, are you making the booking for the group? "
-        "i'll help figure out the accounting later. book this hotel:"
-    )
+    assert intro == Say("this seems like the best place to stay")
     assert isinstance(card, Card)
     assert card.layout["title"] == "Where to stay in San Juan, Puerto Rico"
     assert card.layout["subtitle"] == "Mar 14–19 · 5 nights"

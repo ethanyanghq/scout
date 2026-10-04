@@ -345,12 +345,6 @@ class Trip:
     # The latest nearby places scout suggested, in the order it numbered them.
     place_suggestions: list[Place]
 
-    @property
-    def initiator(self) -> Member:
-        """Whoever first spoke to scout, who started the trip. Members are kept
-        in the order they first appeared."""
-        return self.members[0]
-
     def find_member(self, phone: str) -> Member:
         for member in self.members:
             if member.phone == phone:

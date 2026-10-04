@@ -105,6 +105,7 @@ FINAL_DECISION_PROMPT = "once you're ready, let me know your final decision with
 INTERVIEW_THUMBNAIL_PLACE = "Grace Bay Beach, Turks and Caicos"
 # Sent after the flight card, since flights come first and the stay is next.
 HOTEL_OFFER = "want me to find a hotel too?"
+HOTEL_INTRO = "this seems like the best place to stay"
 TRIP_CARD_NUDGE = (
     "fill this out, takes like 30 sec. i'll come back with options once everyone's in"
 )
@@ -416,7 +417,7 @@ class TripActions:
         except NoHotelAvailable as error:
             raise TripActionError(f"{error}; send booking links instead") from error
 
-        self.outbox.append(Say(_introduce_hotel(trip)))
+        self.outbox.append(Say(HOTEL_INTRO))
         self.outbox.append(
             Card(
                 layout=best_hotel(trip, hotel),
@@ -946,14 +947,6 @@ def _introduce_flights(home_city_flights: list[HomeCityFlight]) -> str:
     if len(home_city_flights) == 1:
         return "this flight seems like the best deal"
     return "these flights seem like the best deals"
-
-
-def _introduce_hotel(trip: Trip) -> str:
-    # The first person to talk to scout is the likeliest to book for everyone.
-    return (
-        f"{trip.initiator.label}, are you making the booking for the group? "
-        "i'll help figure out the accounting later. book this hotel:"
-    )
 
 
 def _check_every_home_city_has_an_airport(
