@@ -117,11 +117,13 @@ describe("a Linq group chat through Spectrum", () => {
   let sendStatus = 200;
   // What Linq lists as the chat's newest messages: another bridge's reply, say.
   let chatMessages: object[] = [];
+  let scoutThinkingMs = 0;
   const stubScout = Bun.serve({
     hostname: "127.0.0.1",
     port: 0,
     async fetch(request) {
       scoutReceived.push((await request.json()) as IncomingText);
+      await Bun.sleep(scoutThinkingMs);
       return Response.json({ actions: scoutActions });
     },
   });
@@ -169,6 +171,7 @@ describe("a Linq group chat through Spectrum", () => {
     typingStatus = 204;
     sendStatus = 200;
     chatMessages = [];
+    scoutThinkingMs = 0;
   });
 
   // Sends one Linq event through Spectrum and the relay, and waits until scout
@@ -236,6 +239,15 @@ describe("a Linq group chat through Spectrum", () => {
 
     expect(outcome).toMatchObject({ kind: "handled" });
     expect(linqReceived).toHaveLength(1);
+  });
+
+  test("doesn't pause to type when scout already took longer than the pause to answer", async () => {
+    scoutActions = [{ type: "say", text: "hey Maya 👋" }];
+    scoutThinkingMs = 150;
+
+    await deliver(messageReceived({}), () => 100);
+
+    expect(linqReceived.map(({ path }) => path)).toEqual(["/chats/group-chat-1/messages"]);
   });
 
   test("sends scout's link to Linq as a link part, so iMessage shows a card", async () => {

@@ -68,6 +68,7 @@ export async function relaySpectrumMessages(
   for await (const [space, message] of app.messages) {
     recent.remember(message);
     const startedAt = performance.now();
+    typing.startWaiting();
     const outcome = { id: message.id, chatId: space.id };
     const readable = readForScout(space, message);
     if ("skipReason" in readable) {
@@ -189,21 +190,37 @@ async function sendOrFallBack(
 // Shows the typing bubble for as long as a text would take to type, then
 // sends it. Tapbacks skip the bubble, as a person's would. Lines that can't
 // show the bubble skip it, and scout still pauses.
+//
+// Time already spent counts: while scout was thinking, it was "typing" too, so
+// a reply that took 20 seconds to work out doesn't also wait to type.
 class TypingIndicator {
+  private idleSince = performance.now();
+
   constructor(private readonly pause: TypingPause) {}
 
+  // Call when a member's message arrives: scout's thinking starts counting.
+  startWaiting(): void {
+    this.idleSince = performance.now();
+  }
+
   async typeOut(space: Space, text: string, send: () => Promise<void>): Promise<void> {
-    const milliseconds = this.pause(text);
-    if (milliseconds <= 0) return send();
+    const alreadyWaited = performance.now() - this.idleSince;
+    const milliseconds = this.pause(text) - alreadyWaited;
+    if (milliseconds <= 0) return this.sendAndStartWaiting(send);
     await space.startTyping();
     await Bun.sleep(milliseconds);
     // A plain text clears the bubble when it lands, but a card or link may
     // not, and a failed send never does, so scout stops it explicitly.
     try {
-      await send();
+      await this.sendAndStartWaiting(send);
     } finally {
       await space.stopTyping();
     }
+  }
+
+  private async sendAndStartWaiting(send: () => Promise<void>): Promise<void> {
+    await send();
+    this.startWaiting();
   }
 }
 
