@@ -37,6 +37,7 @@ def test_the_interview_starts_with_four_kinds_of_trip_and_other_takes_text():
     ]
     assert other["label"] == "Other"
     assert other["textEntryPlaceholder"]
+    assert all("sublabel" not in option for option in first_question["options"])
 
 
 def test_the_interview_asks_where_each_person_flies_from():

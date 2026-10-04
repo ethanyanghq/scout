@@ -46,14 +46,14 @@ BUDGET_SLIDER_MAX_USD = 3_000
 BUDGET_SLIDER_STEP_USD = 100
 BUDGET_SLIDER_LABEL_EVERY_USD = 500
 BUDGET_SLIDER_START_USD = 1_000
-# The kind of trip, a 2x2 grid; "Other" opens a text field. (id, label,
-# sublabel, SF Symbol)
+# The kind of trip, a 2x2 grid of names alone; "Other" turns into a text
+# field. (id, label, SF Symbol)
 TRIP_KINDS = [
-    ("resort", "All-inclusive resort", "Pools, beach, all included", "sparkles"),
-    ("lakeside", "Lakeside", "Cabins, kayaks, campfires", "water.waves"),
-    ("city", "City break", "Food, nightlife, sights", "building.2.fill"),
+    ("resort", "All-inclusive resort", "sparkles"),
+    ("lakeside", "Lakeside", "water.waves"),
+    ("city", "City break", "building.2.fill"),
+    ("other", "Other", "pencil"),
 ]
-OTHER_TRIP_KIND = ("other", "Other", "Tell me", "pencil")
 OTHER_TRIP_KIND_PLACEHOLDER = "Describe your trip"
 # What each person is into; they can tick any number. (id, label, sublabel,
 # SF Symbol)
@@ -305,9 +305,12 @@ def trip_interview(today: date) -> dict:
 
 
 def _trip_kind_options() -> list[dict]:
-    other = _option(*OTHER_TRIP_KIND)
-    other["textEntryPlaceholder"] = OTHER_TRIP_KIND_PLACEHOLDER
-    return [*(_option(*kind) for kind in TRIP_KINDS), other]
+    options = [
+        {"id": kind_id, "label": label, "systemImage": symbol}
+        for kind_id, label, symbol in TRIP_KINDS
+    ]
+    options[-1]["textEntryPlaceholder"] = OTHER_TRIP_KIND_PLACEHOLDER
+    return options
 
 
 def _picker(field_id: str, style: str, options: list[dict]) -> dict:
