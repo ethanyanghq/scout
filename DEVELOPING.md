@@ -137,6 +137,8 @@ Lines starting with `#` are comments. Check the trip's state, or a word a reply 
 
 Most journeys go through the AI. Without `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`, only the vote passes.
 
+`posts-best-flights.chat` also needs `SERPAPI_API_KEY`, and each run spends three SerpApi searches, one per home city.
+
 ### Without the bridge: scout-simulate and curl
 
 These skip the bridge and talk to the Python service directly.

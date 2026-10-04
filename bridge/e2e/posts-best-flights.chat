@@ -1,0 +1,15 @@
+# Journey: once the destination is picked, someone asks for flights, and scout
+# posts one card with the best round trip from each home city, live from
+# Google Flights.
+# Needs Claude, and SERPAPI_API_KEY in .env: each run spends one SerpApi
+# search per home city, three here.
+members maya leo priya
+from destination-chosen
+
+maya: @scout find us flights
+expect scout ~ "Best flights to San Juan"
+expect scout ~ "Boston (BOS"
+expect scout ~ "Chicago ("
+expect scout ~ "→ SJU"
+expect scout ~ "round trip per person"
+expect scout !~ "⚠"
