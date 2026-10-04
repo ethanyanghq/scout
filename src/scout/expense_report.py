@@ -24,18 +24,6 @@ class MemberTotals:
         return self.paid_cents - self.share_cents
 
 
-def format_expense_report(trip: Trip) -> str:
-    """Expects a trip with at least one expense. Each section is a paragraph,
-    so each arrives as its own bubble."""
-    sections = [
-        _describe_totals(trip),
-        _describe_who_paid_what(trip),
-        _describe_ledger(trip, trip.expenses),
-        _describe_settle_up(trip),
-    ]
-    return "\n\n".join(sections)
-
-
 def format_expense_summary(trip: Trip) -> str:
     """The report without its ledger, for the card that only summarizes."""
     return "\n\n".join(

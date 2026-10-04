@@ -41,6 +41,7 @@ from scout.calendar_feed import (
     format_plan_set_message,
 )
 from scout.cards import (
+    EXPENSES_THUMBNAIL_URL,
     FLIGHTS_THUMBNAIL_URL,
     activity_deck,
     best_flights,
@@ -55,7 +56,6 @@ from scout.expense_report import (
     describe_items,
     describe_split,
     format_expense_ledger,
-    format_expense_report,
     format_expense_summary,
 )
 from scout.expense_split import split_by_items, split_evenly
@@ -536,24 +536,18 @@ class TripActions:
         return "Settle-up posted."
 
     def post_expense_report(self) -> str:
-        """Posts the whole trip's spending: every expense and its split, who
-        paid what, and who owes whom. Cards, or text without a destination photo."""
+        """Posts the whole trip's spending as cards: every expense and its
+        split, who paid what, and who owes whom."""
         trip = self._load_trip()
         if not trip.expenses:
             raise TripActionError("nobody has logged an expense yet")
-        text = format_expense_report(trip)
-        try:
-            photo_url = self._destination_photo_url(trip)
-        except _NoDestinationPhoto as no_photo:
-            self.outbox.append(Say(text))
-            return f"Expense report posted as text: {no_photo}"
-        pages = expense_report(trip, photo_url)
+        pages = expense_report(trip)
         for page in pages:
             self.outbox.append(
                 Card(
                     layout=page.layout,
                     caption=page.caption,
-                    thumbnail_url=photo_url,
+                    thumbnail_url=EXPENSES_THUMBNAIL_URL,
                     fallback_text=(
                         format_expense_ledger(trip, page.expenses)
                         if page.expenses

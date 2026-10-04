@@ -5,7 +5,11 @@ import pytest
 
 from scout.best_flights import HomeAirport
 from scout.brochures import ActivityPitch, DestinationPitch
-from scout.cards import FLIGHTS_THUMBNAIL_URL, fits_in_one_message
+from scout.cards import (
+    EXPENSES_THUMBNAIL_URL,
+    FLIGHTS_THUMBNAIL_URL,
+    fits_in_one_message,
+)
 from scout.flights import Flight, FlightsError, Layover, OneWay
 from scout.hotels import Hotel, HotelsError, NearbyPlace
 from scout.outgoing import Card, Link, React, Say, Tapback
@@ -1215,9 +1219,7 @@ def test_an_unknown_name_stops_the_expense_from_being_logged(trio_actions, store
     assert store.get_trip(SPACE).expenses == []
 
 
-def test_the_expense_report_is_posted_as_text_without_a_destination_photo(
-    trio_actions,
-):
+def test_the_expense_report_needs_no_destination_photo(trio_actions):
     maya_actions = trio_actions(MAYA)
     maya_actions.log_sender_expense(
         ExpenseDraft(19_600, "Kayaks", split_among=("Maya", "Leo"))
@@ -1226,12 +1228,39 @@ def test_the_expense_report_is_posted_as_text_without_a_destination_photo(
 
     maya_actions.post_expense_report()
 
-    [report] = said(maya_actions.outbox)
-    assert "$196 across 1 expense" in report
-    assert "Maya: paid $196, owes $98 · is owed $98" in report
-    assert "Priya: paid $0, owes $0 · even" in report
-    assert "#1 Kayaks · $196 · paid by Maya" in report
-    assert "Leo → Maya $98" in report
+    summary, ledger = maya_actions.outbox
+    assert "$196 across 1 expense" in summary.fallback_text
+    assert "Maya: paid $196, owes $98 · is owed $98" in summary.fallback_text
+    assert "Priya: paid $0, owes $0 · even" in summary.fallback_text
+    assert "Leo → Maya $98" in summary.fallback_text
+    assert "#1 Kayaks · $196 · paid by Maya" in ledger.fallback_text
+
+
+def test_the_expense_report_bubble_shows_money_not_the_destination(trio_actions):
+    maya_actions = trio_actions(MAYA)
+    maya_actions.log_sender_expense(ExpenseDraft(19_600, "Kayaks"))
+    maya_actions.outbox.clear()
+
+    maya_actions.post_expense_report()
+
+    assert all(
+        card.thumbnail_url == EXPENSES_THUMBNAIL_URL for card in maya_actions.outbox
+    )
+
+
+def test_the_expense_summary_leads_with_the_total(trio_actions):
+    maya_actions = trio_actions(MAYA)
+    maya_actions.log_sender_expense(ExpenseDraft(19_600, "Kayaks"))
+    maya_actions.outbox.clear()
+
+    maya_actions.post_expense_report()
+
+    summary, _ = maya_actions.outbox
+    total, *_ = summary.layout["root"]["children"]
+    assert [t["text"] for t in total["children"]] == [
+        "$196",
+        "spent across 1 expense",
+    ]
 
 
 def photo_actions(store, phone=MAYA):
