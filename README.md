@@ -18,7 +18,7 @@ here's how it goes:
 4. **you tell me what you'd actually do.** i send a deck of things to do at that hotel and that town, each with a picture and a price. tick what you're up for, send once, and i'll tell you what the group agreed on.
 5. **i plan the days.** a day-by-day plan built from what you actually picked, paced for whether you're up at six or noon. then one room and one flight for everyone — you book, i put what it cost in the ledger.
 6. **i put it on your calendar.** the whole trip in one tap, then a shared album link for the photos.
-7. **we settle up.** tell me what you paid ("i got the airbnb, $1,240") or text me a photo of the receipt. i split it, work out the fewest payments to square everyone up, and pay people back in sandbox money, so nothing real moves.
+7. **we settle up.** tell me what you paid ("i got the airbnb, $1,240") or text me a photo of the receipt. i split it, work out the fewest payments to square everyone up, and check each one off when you tell me you've paid ("i paid leo").
 
 i never book anything or touch real money. i find the links, you book. and i stay quiet unless you tag me or tell me something about the trip, because a scout that talks too much gets kicked out of the chat.
 
@@ -29,7 +29,6 @@ i never book anything or touch real money. i find the links, you book. and i sta
 ```
 iMessage ⇄ Linq line (groups) ⇄ bridge/: Photon's spectrum-ts ──HTTP──▶ src/scout/ ⇄ Claude API
                                  TypeScript                             Python      + SQLite
-                                                                                    + Nessie
 ```
 
 My number is a [Linq](https://linqapp.com) line, a real iMessage number you can add to a group. Photon's cheaper plans can't join groups, so Linq gets me in, as a custom platform in Photon's Spectrum SDK, so every message goes through Photon ([scout-imessage-groups.md](scout-imessage-groups.md)). Photon only sends messages from TypeScript, so `bridge/` is a thin relay. Everything I know and decide lives in the Python service:
@@ -48,7 +47,6 @@ My number is a [Linq](https://linqapp.com) line, a real iMessage number you can 
 | `calendar_link.py` | The "Add to Google Calendar" link sent once the trip is locked in. |
 | `money.py` | How amounts of money read in the chat. |
 | `settle_up.py` | Who owes whom: each person's share and the fewest payments to settle up. |
-| `nessie.py` | Paying members back with sandbox money over Capital One's Nessie API. |
 | `trip_store.py` | Saving everything to SQLite. |
 | `simulate.py` | A fake group chat in your terminal for testing without phones. |
 
@@ -60,10 +58,7 @@ You need [uv](https://docs.astral.sh/uv/), [Bun](https://bun.sh), and an Anthrop
 uv sync
 cd bridge && bun install && cd ..
 export ANTHROPIC_API_KEY=sk-ant-...
-export NESSIE_API_KEY=...   # optional; without it, payments are simulated
 ```
-
-Settling up pays members back over [Nessie](https://api.nessieisreal.com), Capital One's sandbox bank, so no real money moves. I open a Nessie account for each member on their first payment. If `NESSIE_API_KEY` isn't set, or Nessie is down, I still record the payment and say in the chat that it was simulated.
 
 There are no database migrations yet. After pulling a change to the database layout, delete your local `scout.db`.
 
@@ -80,7 +75,7 @@ uv run scout-simulate maya leo jordan priya
 > leo: 2
 > leo: fyi I paid the airbnb, $1,240
 > jordan: @scout who owes what
-> jordan: @scout pay leo
+> jordan: @scout I paid leo
 ```
 
 Add `--verbose` to see each tool I call.
