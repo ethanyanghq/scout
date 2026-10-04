@@ -18,7 +18,7 @@ Several tools are planned but not built yet. **If a tool is marked planned, it d
 | Linq group chats (`IMESSAGE_MODE=linq`), as a Spectrum platform | Built | |
 | Scripted chats with `scout-simulate` | Built | |
 | Calling the service with `curl` | Built | |
-| `bun run dev`: one command for everything | Built | |
+| `bun run dev`: one command for everything | Built. With `SCOUT_PUBLIC_URL` set in `.env` it also starts an ngrok tunnel to that domain (needs `ngrok` installed and its authtoken added). The service refuses every request that comes through the tunnel except `/calendars/*`. | |
 | Event trace: one bridge log line per message | Built | |
 | Developer console (`devchat`), scripts and `bun run e2e` | Built. Photos and voice notes convert only on a Mac, and a photo can't have a caption yet. | |
 | Photos and voice notes: kept in `media/`, put into words by OpenAI, and photos viewable again by the AI (`view_photo`) | Built. Needs `OPENAI_API_KEY` to transcribe and a Mac to convert. Videos are dropped. | |

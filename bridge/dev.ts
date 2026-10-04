@@ -1,11 +1,12 @@
 // Starts everything scout needs in one terminal, with each line labeled: the
-// Python service, the bridge, and in Linq mode the relay that brings Linq's
-// events to this Mac. It checks the settings first, and Ctrl-C stops them all.
+// Python service, the bridge, in Linq mode the relay that brings Linq's events
+// to this Mac, and the ngrok tunnel that serves calendar links when
+// SCOUT_PUBLIC_URL is set. It checks the settings first, and Ctrl-C stops them all.
 //
 //   cd bridge && bun run dev
 
 import { join } from "node:path";
-import { findSetupProblems, iMessageMode, type DevSetup } from "./dev-setup";
+import { findSetupProblems, iMessageMode, isTunnelStatus, publicDomain, type DevSetup } from "./dev-setup";
 import { readEnvFile } from "./env-file";
 import { WEBHOOK_PORT, WEBHOOK_URL } from "./linq";
 import { isWorthShowing } from "./relay-log";
@@ -36,6 +37,13 @@ if (mode === "linq") {
     start("relay", ["linq", "webhooks", "listen", "--forward-to", WEBHOOK_URL], BRIDGE_FOLDER, isWorthShowing),
   );
 }
+const calendarDomain = publicDomain(setup.serviceSettings);
+if (calendarDomain) {
+  // Only /calendars/* gets through the tunnel; the service refuses the rest.
+  running.push(
+    start("tunnel", ["ngrok", "http", `--url=${calendarDomain}`, String(servicePort(setup.serviceSettings)), "--log=stdout"], BRIDGE_FOLDER, isTunnelStatus),
+  );
+}
 console.log(`[dev] scout is starting in ${mode} mode. Ctrl-C stops everything.`);
 
 let isStopping = false;
@@ -55,10 +63,10 @@ async function describeSetup(): Promise<DevSetup> {
   const bridgeSettings = process.env;
   const serviceSettings = await readEnvFile(join(REPO_ROOT, ".env"));
   const isLinq = iMessageMode({ bridgeSettings }) === "linq";
-  const installed = { uv: Bun.which("uv") !== null, linq: Bun.which("linq") !== null };
+  const installed = { uv: Bun.which("uv") !== null, linq: Bun.which("linq") !== null, ngrok: Bun.which("ngrok") !== null };
 
   const ports = [
-    { port: Number(serviceSettings?.SCOUT_PORT || DEFAULT_SERVICE_PORT), usedBy: "the scout service" },
+    { port: servicePort(serviceSettings), usedBy: "the scout service" },
     ...(isLinq ? [{ port: WEBHOOK_PORT, usedBy: "the bridge's Linq webhook" }] : []),
   ];
   return {
@@ -69,6 +77,10 @@ async function describeSetup(): Promise<DevSetup> {
     linqLoggedIn: isLinq && installed.linq ? await isLinqLoggedIn() : null,
     busyPorts: ports.filter(({ port }) => isPortBusy(port)),
   };
+}
+
+function servicePort(serviceSettings: DevSetup["serviceSettings"]): number {
+  return Number(serviceSettings?.SCOUT_PORT || DEFAULT_SERVICE_PORT);
 }
 
 async function isLinqLoggedIn(): Promise<boolean> {

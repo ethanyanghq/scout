@@ -120,5 +120,31 @@ def test_a_chat_with_a_plan_serves_it_as_a_calendar_feed(client, store):
     assert "SUMMARY:Land and check in" in response.text
 
 
+def test_requests_through_the_tunnel_reach_only_calendar_feeds(client):
+    through_tunnel = {"X-Forwarded-For": "203.0.113.9"}
+
+    assert client.get(f"/dev/trips/{SPACE}", headers=through_tunnel).status_code == 404
+    assert (
+        client.delete(f"/dev/trips/{SPACE}", headers=through_tunnel).status_code == 404
+    )
+    assert (
+        client.get(f"/calendars/{SPACE}.ics", headers=through_tunnel).status_code == 404
+    )
+    assert client.get(f"/dev/trips/{SPACE}").status_code == 200
+
+
+def test_a_chat_with_a_plan_serves_its_feed_through_the_tunnel(client, store):
+    store.lock_in_destination(
+        SPACE, "San Juan, Puerto Rico", DateWindow(date(2027, 3, 14), date(2027, 3, 19))
+    )
+    store.replace_itinerary(SPACE, [ItineraryDay(date(2027, 3, 14), "Land")], [])
+
+    response = client.get(
+        f"/calendars/{SPACE}.ics", headers={"X-Forwarded-For": "203.0.113.9"}
+    )
+
+    assert response.status_code == 200
+
+
 def test_a_chat_without_a_plan_has_no_calendar_feed(client):
     assert client.get(f"/calendars/{SPACE}.ics").status_code == 404

@@ -8,7 +8,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from scout.ai_provider import connect_agent, connect_speak_gate
@@ -33,6 +34,10 @@ HOST = "127.0.0.1"
 DEFAULT_PORT = 8787
 DEFAULT_DB_PATH = "scout.db"
 DEFAULT_MEDIA_DIR = "media"
+# The tunnel that makes calendar feeds public adds this header, and the bridge
+# on this machine never does.
+TUNNEL_HEADER = "x-forwarded-for"
+PUBLIC_PATH_PREFIX = "/calendars/"
 ACTION_TYPES = {Say: "say", React: "react", Link: "link", Card: "card"}
 
 
@@ -81,6 +86,15 @@ def create_app(
     services: OutsideServices = NO_OUTSIDE_SERVICES,
 ) -> FastAPI:
     app = FastAPI(title="scout")
+
+    @app.middleware("http")
+    async def keep_the_tunnel_to_calendars(request: Request, call_next):
+        # /messages and /dev are for this machine only, so a request that came
+        # through the tunnel gets nothing but calendar feeds.
+        came_through_tunnel = TUNNEL_HEADER in request.headers
+        if came_through_tunnel and not request.url.path.startswith(PUBLIC_PATH_PREFIX):
+            return JSONResponse({"detail": "Not Found"}, status_code=404)
+        return await call_next(request)
 
     # A plain `def` (not `async def`) makes FastAPI run this in a worker
     # thread, so the slow AI and transcription calls don't freeze the server.
