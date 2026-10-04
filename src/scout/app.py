@@ -7,16 +7,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
-import anthropic
 import uvicorn
 from fastapi import FastAPI
 from pydantic import BaseModel
 
-from scout.agent import ScoutAgent
-from scout.conversation import handle_message, handle_reaction
+from scout.ai_provider import connect_agent
+from scout.conversation import Agent, handle_message, handle_reaction
 from scout.dev_endpoints import create_dev_router
 from scout.outgoing import Link, Outgoing, React, Say
-from scout.outside_services import connect_outside_services
 from scout.trip import IncomingMessage, IncomingReaction, MessagePhoto
 from scout.trip_store import TripStore
 
@@ -64,11 +62,11 @@ class Actions(BaseModel):
     actions: list[dict]
 
 
-def create_app(store: TripStore, agent: ScoutAgent) -> FastAPI:
+def create_app(store: TripStore, agent: Agent) -> FastAPI:
     app = FastAPI(title="scout")
 
     # A plain `def` (not `async def`) makes FastAPI run this in a worker
-    # thread, so the slow Claude call doesn't freeze the server.
+    # thread, so the slow AI call doesn't freeze the server.
     @app.post("/messages")
     def receive_message(incoming: IncomingText) -> Actions:
         message = IncomingMessage(
@@ -107,6 +105,6 @@ def _as_actions(outgoing: list[Outgoing]) -> Actions:
 def main() -> None:
     logging.basicConfig(level=logging.INFO)
     store = TripStore(Path(os.environ.get("SCOUT_DB_PATH", DEFAULT_DB_PATH)))
-    agent = ScoutAgent(anthropic.Anthropic(), store, connect_outside_services())
+    agent = connect_agent(store)
     port = int(os.environ.get("SCOUT_PORT", DEFAULT_PORT))
     uvicorn.run(create_app(store, agent), host=HOST, port=port)

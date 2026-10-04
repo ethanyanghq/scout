@@ -3,7 +3,8 @@
     uv run scout-simulate maya leo jordan priya
 
 Then type messages as "name: text", for example "leo: mar 14-20, $600, nyc".
-Uses the real agent (and your Anthropic API key) with a throwaway database.
+Uses the real agent (and your Anthropic or OpenAI API key) with a throwaway
+database.
 """
 
 import argparse
@@ -12,12 +13,9 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 
-import anthropic
-
-from scout.agent import ScoutAgent
-from scout.conversation import handle_message
+from scout.ai_provider import connect_agent
+from scout.conversation import Agent, handle_message
 from scout.outgoing import as_plain_text
-from scout.outside_services import connect_outside_services
 from scout.trip import IncomingMessage
 from scout.trip_store import TripStore
 
@@ -39,12 +37,12 @@ def main() -> None:
     }
     with tempfile.TemporaryDirectory() as scratch:
         store = TripStore(Path(scratch) / "simulated.db")
-        agent = ScoutAgent(anthropic.Anthropic(), store, connect_outside_services())
+        agent = connect_agent(store)
         print(f"Group chat with {', '.join(args.people)}. Ctrl-D to quit.")
         _chat(phones, store, agent)
 
 
-def _chat(phones: dict[str, str], store: TripStore, agent: ScoutAgent) -> None:
+def _chat(phones: dict[str, str], store: TripStore, agent: Agent) -> None:
     while True:
         try:
             line = input("> ")
