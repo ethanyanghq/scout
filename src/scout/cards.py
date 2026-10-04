@@ -24,7 +24,7 @@ from scout.best_flights import (
     format_duration,
     format_landing,
 )
-from scout.best_hotel import describe_rates, describe_rating
+from scout.best_hotel import describe_rating
 from scout.expense_report import describe_items, describe_split, member_totals
 from scout.flights import Layover, OneWay
 from scout.group_summary import format_window, summarize_group
@@ -103,6 +103,24 @@ TRIP_STYLES = [
 # Apple's dark-mode system colors, bright enough to read on near-black.
 NONSTOP_HEX = "#30D158"
 CONNECTING_HEX = "#FF9F0A"
+# The hotel card's amenity tags: light gray, since the scout blue accent is
+# too dark to read as small text on near-black.
+AMENITY_TAG_HEX = "#E4E4E7"
+MAX_AMENITIES = 6
+MAX_NEARBY_PLACES = 3
+# Amenities shown ahead of the rest, as Google Hotels names them.
+DECIDING_AMENITIES = [
+    "Free breakfast",
+    "Beach access",
+    "Outdoor pool",
+    "Pool",
+    "Kitchen",
+    "Free parking",
+    "Free Wi-Fi",
+    "Air conditioning",
+    "Hot tub",
+    "Fitness center",
+]
 # The flight card's bubble: a plane's wing above the clouds, so it reads as
 # flights at a glance. Public domain, on Wikimedia Commons.
 FLIGHTS_THUMBNAIL_URL = (
@@ -621,16 +639,12 @@ def _layover_wait(layover: Layover) -> str:
 
 
 def best_hotel(trip: Trip, hotel: Hotel) -> dict:
-    """The recommended hotel, with its photo, rate and rating, and a button that
-    opens the search on Google Hotels.
+    """The recommended hotel with what the group needs to judge it: what kind
+    of place it is, its price against the typical one, what guests think,
+    what's there and nearby, and a button that opens it on Google Hotels.
 
     Expects a trip whose destination and dates are locked in.
     """
-    rating = describe_rating(hotel)
-    rows = [
-        _row("Rate", describe_rates(hotel), "dollarsign.circle"),
-        *([_row("Guests say", rating, "star.fill")] if rating else []),
-    ]
     photo = (
         [
             {
@@ -651,25 +665,117 @@ def best_hotel(trip: Trip, hotel: Hotel) -> dict:
         "background": {"kind": "atmosphere", "colorsHex": [NIGHT_GLOW_HEX]},
         "root": {
             "type": "vstack",
-            "spacing": 16,
+            "spacing": 14,
             "alignment": "leading",
             "children": [
                 *photo,
-                _section_heading("Recommended hotel"),
-                _text(hotel.name, role="headline"),
-                _card_of_rows(rows),
+                *_hotel_heading(hotel),
+                _hotel_price(hotel),
+                *_hotel_reviews(hotel),
+                *_hotel_surroundings(hotel),
             ],
         },
         "actions": [
             {
                 "id": "book-hotel",
-                "label": "Book this hotel",
+                "label": "Book on Google Hotels",
                 "systemImage": "bed.double.fill",
                 # An https link opens Google Hotels rather than posting a reply.
                 "deepLinkURL": hotel.booking_url,
             }
         ],
     }
+
+
+def _hotel_heading(hotel: Hotel) -> list[dict]:
+    """The name, what kind of place it is, and Google's deal flag if it has one."""
+    kind = " · ".join(filter(None, [hotel.kind, *hotel.room_details]))
+    return [
+        _text(hotel.name, role="title3"),
+        *([_text(kind, role="subheadline", color_hex=SOFT_GRAY_HEX)] if kind else []),
+        *(
+            [
+                {
+                    "type": "statusBadge",
+                    "label": f"Deal · {hotel.deal}",
+                    "colorHex": NONSTOP_HEX,
+                }
+            ]
+            if hotel.deal
+            else []
+        ),
+    ]
+
+
+def _hotel_price(hotel: Hotel) -> dict:
+    typical = hotel.typical_nightly_rate_usd
+    rows = [
+        _row("Per night", f"${hotel.nightly_rate_usd:,}"),
+        _row(f"All {hotel.nights} nights", f"${hotel.stay_total_usd:,}"),
+        *([_row("Typical here", f"${typical:,} a night")] if typical else []),
+    ]
+    note = _text(
+        "With taxes and fees, for 2 guests. Rates can change until you book.",
+        role="footnote",
+        color_hex=SOFT_GRAY_HEX,
+    )
+    return {
+        "type": "card",
+        "child": {
+            "type": "vstack",
+            "spacing": 8,
+            "alignment": "leading",
+            "children": [*rows, note],
+        },
+    }
+
+
+def _hotel_reviews(hotel: Hotel) -> list[dict]:
+    """What guests think and when the stay starts and ends, if Google says."""
+    rating = describe_rating(hotel)
+    location = hotel.location_rating
+    rows = [
+        *([_row("Guests say", rating)] if rating else []),
+        *([_row("Location", f"{location:g} out of 5")] if location else []),
+        *([_row("Check-in", hotel.check_in_time)] if hotel.check_in_time else []),
+        *([_row("Check-out", hotel.check_out_time)] if hotel.check_out_time else []),
+    ]
+    return [_card_of_rows(rows)] if rows else []
+
+
+def _hotel_surroundings(hotel: Hotel) -> list[dict]:
+    """What's at the hotel and what's a short trip away, then a map."""
+    nodes = []
+    amenities = pick_amenities(hotel.amenities)
+    if amenities:
+        nodes += [
+            _section_heading("What's there"),
+            {"type": "tagRow", "labels": amenities, "colorHex": AMENITY_TAG_HEX},
+        ]
+    nearby = hotel.nearby_places[:MAX_NEARBY_PLACES]
+    if nearby:
+        nodes += [
+            _section_heading("Nearby"),
+            _card_of_rows([_row(place.name, place.trip) for place in nearby]),
+        ]
+    if hotel.coordinates:
+        nodes.append(
+            {
+                "type": "mapPreview",
+                "latitude": hotel.coordinates.latitude,
+                "longitude": hotel.coordinates.longitude,
+                "label": hotel.name,
+            }
+        )
+    return nodes
+
+
+def pick_amenities(amenities: list[str]) -> list[str]:
+    """The amenities a group most often decides on first, then the rest, up to
+    a row or two of tags."""
+    wanted_first = [a for a in DECIDING_AMENITIES if a in amenities]
+    rest = [a for a in amenities if a not in DECIDING_AMENITIES]
+    return (wanted_first + rest)[:MAX_AMENITIES]
 
 
 def _row(key: str, value: str, sf_symbol: str | None = None) -> dict:

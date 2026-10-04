@@ -4,6 +4,7 @@ scout never books anything. These links open Google Flights and Airbnb with
 the trip already filled in, and the group books there themselves.
 """
 
+from datetime import date
 from urllib.parse import quote, urlencode
 
 from scout.group_summary import format_window, summarize_group
@@ -40,14 +41,20 @@ def flight_search_link(home_city: str, destination: str, dates: DateWindow) -> s
     return f"{GOOGLE_FLIGHTS_URL}?{urlencode({'q': search}, quote_via=quote)}"
 
 
-def hotel_search_link(destination: str, dates: DateWindow) -> str:
+def hotel_link(hotel_name: str, destination: str, dates: DateWindow) -> str:
+    """Opens Google Hotels on this hotel for the stay, with every site's price."""
     # Like the flight link, a plain-English search saves building Google's own
-    # encoding of the place and dates.
+    # encoding of the place and dates. Google Hotels ignores ISO dates in a
+    # search but reads "October 7 2026".
     search = (
-        f"Hotels in {destination} "
-        f"from {dates.start.isoformat()} through {dates.end.isoformat()}"
+        f"{hotel_name} {destination} "
+        f"{_spell_out(dates.start)} to {_spell_out(dates.end)}"
     )
     return f"{GOOGLE_HOTELS_URL}?{urlencode({'q': search}, quote_via=quote)}"
+
+
+def _spell_out(day: date) -> str:
+    return f"{day:%B} {day.day} {day.year}"
 
 
 def stay_search_link(destination: str, dates: DateWindow, guest_count: int) -> str:

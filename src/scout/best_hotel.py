@@ -28,10 +28,13 @@ def find_best_hotel(hotels: GoogleHotels, trip: Trip) -> Hotel:
 def format_best_hotel(trip: Trip, hotel: Hotel) -> str:
     """The hotel as text, for the chat log and phones that can't open the card."""
     rating = describe_rating(hotel)
+    typical_rate = describe_typical_rate(hotel)
     lines = [
         f"recommended hotel in {trip.destination}, {format_window(trip.dates)}",
         f"{hotel.name} · {rating}" if rating else hotel.name,
+        *([f"   {hotel.kind}"] if hotel.kind else []),
         f"   {describe_rates(hotel)}",
+        *([f"   {typical_rate}"] if typical_rate else []),
         f"   {hotel.booking_url}",
         "google hotels' top pick for your dates, so it may not be the cheapest. "
         "rates can change until you book. "
@@ -44,14 +47,27 @@ def describe_rating(hotel: Hotel) -> str | None:
     """ "4.5 ★ · 1,203 reviews", or None for a hotel nobody has rated."""
     if hotel.guest_rating is None:
         return None
+    # Google averages rentals' reviews to six places, e.g. 4.427273.
+    stars = f"{hotel.guest_rating:.1f} ★"
     if hotel.review_count is None:
-        return f"{hotel.guest_rating} ★"
-    return f"{hotel.guest_rating} ★ · {hotel.review_count:,} reviews"
+        return stars
+    return f"{stars} · {hotel.review_count:,} reviews"
 
 
 def describe_rates(hotel: Hotel) -> str:
-    """ "$189 a night · $945 for 5 nights, for one room of two"."""
+    """ "$189 a night · $945 for 5 nights, for 2 guests"."""
     return (
         f"${hotel.nightly_rate_usd:,} a night · "
-        f"${hotel.stay_total_usd:,} for {hotel.nights} nights, for one room of two"
+        f"${hotel.stay_total_usd:,} for {hotel.nights} nights, for 2 guests"
     )
+
+
+def describe_typical_rate(hotel: Hotel) -> str | None:
+    """ "34% less than usual · typical here is $230 a night", or None when
+    Google gives neither."""
+    typical = hotel.typical_nightly_rate_usd
+    parts = [
+        hotel.deal,
+        f"typical here is ${typical:,} a night" if typical else None,
+    ]
+    return " · ".join(filter(None, parts)) or None

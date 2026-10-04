@@ -7,7 +7,7 @@ from scout.best_flights import HomeAirport
 from scout.brochures import ActivityPitch, DestinationPitch
 from scout.cards import FLIGHTS_THUMBNAIL_URL, fits_in_one_message
 from scout.flights import Flight, FlightsError, Layover, OneWay
-from scout.hotels import Hotel, HotelsError
+from scout.hotels import Hotel, HotelsError, NearbyPlace
 from scout.outgoing import Card, Link, React, Say, Tapback
 from scout.outside_services import OutsideServices
 from scout.places import Coordinates, PhotographedPlace, Place, PlacesError
@@ -956,13 +956,23 @@ class FakeHotels:
 
 CONDADO_VISTA = Hotel(
     name="Condado Vista",
+    kind="4-star hotel",
+    room_details=[],
     guest_rating=4.5,
     review_count=1203,
+    location_rating=4.8,
     nights=5,
     nightly_rate_usd=189,
     stay_total_usd=945,
+    typical_nightly_rate_usd=230,
+    deal="21% less than usual",
+    amenities=["Spa", "Free Wi-Fi", "Outdoor pool", "Beach access"],
+    nearby_places=[NearbyPlace("Condado Beach", "2 min walk")],
+    check_in_time="3:00 PM",
+    check_out_time="11:00 AM",
+    coordinates=Coordinates(18.4583, -66.0745),
     photo_url="https://lh5.googleusercontent.com/hotel-front",
-    booking_url="https://www.google.com/travel/hotels/San%20Juan",
+    booking_url="https://www.google.com/travel/hotels?q=Condado%20Vista",
 )
 
 
@@ -994,13 +1004,70 @@ def test_the_hotel_is_one_card_with_its_photo_rate_and_rating(locked_in_actions,
     assert card.layout["title"] == "Where to stay in San Juan, Puerto Rico"
     assert card.layout["subtitle"] == "Mar 14–19 · 5 nights"
     words = card_words(card.layout)
-    assert {"Condado Vista", "4.5 ★ · 1,203 reviews"} <= words
-    assert "$189 a night · $945 for 5 nights, for one room of two" in words
+    assert {"Condado Vista", "4-star hotel", "4.5 ★ · 1,203 reviews"} <= words
+    assert {"$189", "$945", "All 5 nights"} <= words
     assert [a["deepLinkURL"] for a in card.layout["actions"]] == [
         CONDADO_VISTA.booking_url
     ]
     assert card.thumbnail_url == CONDADO_VISTA.photo_url
     assert "Condado Vista · 4.5 ★" in card.fallback_text
+
+
+def test_the_hotel_card_compares_the_rate_with_whats_typical(locked_in_actions, store):
+    actions = hotels_actions(store, FakeHotels(CONDADO_VISTA))
+
+    actions.send_best_hotel()
+
+    _, card = actions.outbox
+    words = card_words(card.layout)
+    assert {"Typical here", "$230 a night", "Deal · 21% less than usual"} <= words
+    assert (
+        "   21% less than usual · typical here is $230 a night"
+        in card.fallback_text.splitlines()
+    )
+
+
+def test_the_hotel_card_shows_where_it_is_and_whats_there(locked_in_actions, store):
+    actions = hotels_actions(store, FakeHotels(CONDADO_VISTA))
+
+    actions.send_best_hotel()
+
+    _, card = actions.outbox
+    words = card_words(card.layout)
+    assert {"Location", "4.8 out of 5", "Condado Beach", "2 min walk"} <= words
+    assert {"3:00 PM", "11:00 AM"} <= words
+    [tags] = [n for n in card.layout["root"]["children"] if n["type"] == "tagRow"]
+    assert tags["labels"] == ["Beach access", "Outdoor pool", "Free Wi-Fi", "Spa"]
+    [hotel_map] = [
+        n for n in card.layout["root"]["children"] if n["type"] == "mapPreview"
+    ]
+    assert (hotel_map["latitude"], hotel_map["longitude"]) == (18.4583, -66.0745)
+
+
+def test_a_hotel_rating_is_rounded_to_one_decimal(locked_in_actions, store):
+    rental = replace(CONDADO_VISTA, guest_rating=4.427273, review_count=33)
+    actions = hotels_actions(store, FakeHotels(rental))
+
+    actions.send_best_hotel()
+
+    _, card = actions.outbox
+    assert "4.4 ★ · 33 reviews" in card_words(card.layout)
+
+
+def test_a_rental_card_says_what_the_place_is(locked_in_actions, store):
+    rental = replace(
+        CONDADO_VISTA,
+        kind="Vacation rental",
+        room_details=["Entire apartment", "Sleeps 6", "1 bedroom"],
+    )
+    actions = hotels_actions(store, FakeHotels(rental))
+
+    actions.send_best_hotel()
+
+    _, card = actions.outbox
+    assert "Vacation rental · Entire apartment · Sleeps 6 · 1 bedroom" in card_words(
+        card.layout
+    )
 
 
 def test_an_unrated_hotel_card_leaves_out_the_rating(locked_in_actions, store):

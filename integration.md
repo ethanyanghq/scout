@@ -298,9 +298,13 @@ for the layout. It needs `SERPAPI_API_KEY`; without it scout sends flight search
 links instead.
 
 Right after the flights, scout offers a hotel. `send_best_hotel` posts one card
-in the same style: a photo, the hotel's name, its nightly rate and the stay total
-for one room of two, its guest rating, and a button that opens the search on
-Google Hotels. The hotel is Google Hotels' top-ranked pick that has a room on the
+in the same style with what the group needs to judge it: a photo, the name and
+what kind of place it is (star class, or a rental's size and beds), the nightly
+rate and stay total for 2 guests next to the typical rate of every place Google
+priced and Google's deal flag, the guest and location ratings, check-in and out
+times, top amenities, nearby places with travel times, a map, and a button that
+opens that hotel on Google Hotels for the trip dates (a rental opens its own
+listing, since Google Hotels can't find a rental by name). The hotel is Google Hotels' top-ranked pick that has a room on the
 trip dates (`hotels.py`, `best_hotel.py`, `cards.best_hotel`), so it may not be the
 cheapest. Without `SERPAPI_API_KEY`, scout sends stay search links instead.
 
