@@ -569,7 +569,6 @@ def best_flights(trip: Trip, home_city_flights: list[HomeCityFlight]) -> dict:
                 for node in _flight_nodes(trip, home_city_flight)
             ],
         },
-        "actions": [_booking_action(f) for f in home_city_flights],
     }
 
 
@@ -683,15 +682,6 @@ def best_hotel(trip: Trip, hotel: Hotel) -> dict:
                 *_hotel_surroundings(hotel),
             ],
         },
-        "actions": [
-            {
-                "id": "book-hotel",
-                "label": "Book on Google Hotels",
-                "systemImage": "bed.double.fill",
-                # An https link opens Google Hotels rather than posting a reply.
-                "deepLinkURL": hotel.booking_url,
-            }
-        ],
     }
 
 
@@ -791,21 +781,6 @@ def _row(key: str, value: str, sf_symbol: str | None = None) -> dict:
     if sf_symbol:
         row["iconSystemName"] = sf_symbol
     return row
-
-
-def _booking_action(home_city_flight: HomeCityFlight) -> dict:
-    # An https link opens Google Flights rather than posting a reply in the chat.
-    return {
-        "id": f"book-{_slug(home_city_flight.home_city)}",
-        "label": f"Book from {home_city_flight.home_city}",
-        "systemImage": "airplane.departure",
-        "deepLinkURL": home_city_flight.flight.booking_url,
-    }
-
-
-def _slug(text: str) -> str:
-    kept = [c.lower() if c.isalnum() else "-" for c in text]
-    return "".join(kept).strip("-").replace("--", "-")
 
 
 @dataclass(frozen=True)
