@@ -63,8 +63,20 @@ describe("the developer console's group chat", () => {
       sender_phone: MAYA.phone,
       text: "hey @scout",
       participant_phones: [MAYA.phone, LEO.phone, PRIYA.phone],
-      photo: null,
+      attachment: null,
       message_id: "m1",
+    });
+  });
+
+  test("sends a voice note to scout exactly as it was recorded", async () => {
+    const memo = { fileName: "boston.caf", mimeType: "audio/x-caf", bytes: Buffer.from("opus") };
+
+    const exchange = await inChat([MAYA, LEO], (chat) => chat.sendMediaFile("maya", memo));
+
+    expect(exchange.sent.text).toBe("[voice note] boston.caf");
+    expect(received[0]).toMatchObject({
+      text: "",
+      attachment: { media_type: "audio/x-caf", base64_data: Buffer.from("opus").toString("base64") },
     });
   });
 

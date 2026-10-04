@@ -20,7 +20,8 @@ Several tools are planned but not built yet. **If a tool is marked planned, it d
 | Calling the service with `curl` | Built | |
 | `bun run dev`: one command for everything | Built | |
 | Event trace: one bridge log line per message | Built | |
-| Developer console (`devchat`), scripts and `bun run e2e` | Built. Photos convert only on a Mac and can't have a caption yet. | |
+| Developer console (`devchat`), scripts and `bun run e2e` | Built. Photos and voice notes convert only on a Mac, and a photo can't have a caption yet. | |
+| Photos and voice notes: kept in `media/`, put into words by OpenAI, and photos viewable again by the AI (`view_photo`) | Built. Needs `OPENAI_API_KEY` to transcribe and a Mac to convert. Videos are dropped. | |
 | Seeded stages and resetting one chat | Built | |
 | Tapbacks, threaded replies and link cards, with console previews | Built, but only tested against a stand-in for Linq's API | |
 | Message effects (confetti) | Planned (design doc, events in, actions out) | Plain text |
@@ -47,7 +48,8 @@ iPhone in the group
 - **One message at a time.** The bridge waits for scout's actions before reading the next message, so two votes can't race.
 - **scout types before it texts.** Before each text, link or card, the relay shows the typing bubble and waits about as long as the text would take to type (0.8 to 5 seconds, `typingPauseFor` in `spectrum.ts`). Linq can't show the bubble in group chats, so there scout only pauses. The developer console and the tests skip the wait.
 - **Actions fall back to text.** If a line can't send a tapback, a threaded reply or a link card, or the bridge can't find the message it targets, the plain-text version goes instead.
-- **The bridge drops** private chats (in Linq mode), scout's own messages, messages with nothing to read (stickers, voice memos) and repeat deliveries.
+- **The bridge drops** private chats (in Linq mode), scout's own messages, messages with nothing to read (stickers, videos) and repeat deliveries.
+- **Photos and voice notes become words.** The bridge sends the file as it arrived. The service keeps it in `media/<chat>/` (`SCOUT_MEDIA_DIR`), makes a copy the AI can read (a JPEG through macOS's `sips`, or m4a audio through `afconvert`), and asks OpenAI for a photo's description or a voice note's words (`media.py`, `openai_transcriber.py`). The chat log holds `[photo <id> (<file>): description]` or `[voice note <id> (<file>): "words"]`, so later turns cost no image or audio. The AI sees the newest photo itself, and can look at an earlier one again with `view_photo`. It never hears audio, only reads the words. Every photo and voice note is transcribed when it arrives, tagged or not, so each costs an OpenAI call.
 - **The log reads like the chat.** `bun run dev` shows each message as it arrives (time, the chat's first 8 characters, the sender's last 4 digits, their words), then the service's decision in plain words (`Not tagged, so no AI call`, a counted vote, or the AI's tool calls and timing), then what scout sent and how long it took, `· no reply`, `· skipped:` with the reason, or `✗` with the error. Request lines, scout's own sends, delivery and read receipts, and the relay's setup details (including its signing secret) are hidden.
 - **The service decides whether to speak** (`conversation.py`). A plain vote ("2"), a 👍 or ❤️ on a poll option, and a pick of a nearby place are handled in code. Only a message that tags `@scout` goes to the AI, which reads the whole chat to catch up: it introduces itself the first time, and saves the trip details and votes in it, including ones a friend gave for someone else. If that AI call fails, scout says it hit a snag. Everything else gets no reply and costs no AI call.
 - **Votes stay quiet.** A vote by number gets a 👍 tapback, and a tapback vote gets a reply threaded under the option, instead of a new line in the chat.
@@ -76,6 +78,7 @@ bun run devchat say leo "@scout is tulum too far?"
 bun run devchat react priya like "2. San Juan"          # a tapback on scout's message with those words
 bun run devchat reply maya "2. San Juan" this one!      # a reply threaded under it
 bun run devchat photo leo receipt.jpg                   # Mac only
+bun run devchat voice maya memo.caf                     # a voice note, Mac only
 bun run devchat transcript
 bun run devchat state                                   # the trip, as JSON
 bun run devchat reset                                   # clears this chat's trip and transcript
@@ -119,6 +122,7 @@ expect state destination = "San Juan, Puerto Rico"
 | `maya react like "2. San Juan"` | Maya adds a tapback (love, like, dislike, laugh, emphasize or question) to scout's latest message containing the words, or to `scout.last`. |
 | `maya reply "2. San Juan": text` | Maya replies in a thread under that message. |
 | `maya photo receipt.jpg` | Maya sends a photo. The path is relative to the script (Mac only). |
+| `maya voice memo.caf` | Maya sends a voice note. The path is relative to the script (Mac only). |
 | `expect scout ~ "words"` | A reply to the latest message contains the words, ignoring case. |
 | `expect scout !~ "words"` | No reply to the latest message contains the words, ignoring case. Staying quiet passes. |
 | `expect scout quiet` | scout didn't reply to the latest message. |
@@ -135,7 +139,7 @@ Lines starting with `#` are comments. Check the trip's state, or a word a reply 
 
 `bridge/e2e/` holds a script for each critical user journey in AGENTS.md. `cd bridge && bun run e2e` starts a throwaway service on a free port, plays every script, and stops the service. `bun run e2e votes-and-winner.chat` runs one script. The service's log and database stay in `bridge/.devchat/e2e/` so you can look into failures.
 
-Most journeys go through the AI. Without `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`, only the vote passes.
+Most journeys go through the AI. Without `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`, only the vote passes. `shares-preferences-by-voice-note.chat` also needs `OPENAI_API_KEY` to transcribe, and a Mac.
 
 ### Without the bridge: scout-simulate and curl
 
@@ -178,13 +182,13 @@ curl -s http://127.0.0.1:8787/messages -H 'Content-Type: application/json' -d '{
 ```
 
 - `participant_phones` is everyone in the group, including people who haven't texted yet.
-- To send a photo, add `"photo": {"media_type": "image/jpeg", "base64_data": "..."}`. `text` can be empty.
+- To send a photo or voice note, add `"attachment": {"media_type": "image/heic", "base64_data": "..."}` with the file as it was sent (`image/...` or `audio/...`, like `audio/x-caf`). `text` can be empty.
 - `GET /dev/trips/<space_id>` shows the trip, and `DELETE /dev/trips/<space_id>` resets it.
 - To start over, use a new `space_id`, or stop the service and delete `/tmp/scout-test.db`.
 
 ## Run scout in a real group
 
-This needs a Mac (the bridge converts iPhone photos with macOS's `sips`) and your own Linq line.
+This needs a Mac (the service converts iPhone photos and voice memos with macOS's `sips` and `afconvert`) and your own Linq line.
 
 1. Get a line once: `npm i -g @linqapp/cli && linq signup`. `linq whoami` shows scout's number.
 2. In `bridge/.env`, set `IMESSAGE_MODE=linq` and `LINQ_API_KEY` (copy `bridge/.env.example`).

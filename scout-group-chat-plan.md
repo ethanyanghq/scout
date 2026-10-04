@@ -15,7 +15,7 @@ Check items off in the pull request that finishes them. When a pull request ship
 - **Groups run on a Linq line.** Photon's Pro plan can't join groups, Business costs $250 per number per month, and scout can't get an Apple ID. A Linq line is a real iMessage number that members add to their group.
 - **Linq runs inside Photon.** The hackathon requires Photon in the message path, which we read as Photon's Spectrum SDK carrying the messages. Linq becomes a custom Spectrum platform (`definePlatform`), so the bridge has one message loop for every line.
 - **Each teammate develops on their own Linq line**, so nobody receives anyone else's webhooks.
-- **The bridge runs on a Mac only.** It converts iPhone photos with macOS's `sips`.
+- **scout runs on a Mac only.** The service converts iPhone photos and voice memos with macOS's `sips` and `afconvert`.
 - **The developer console is a second custom Spectrum platform.** A fake group goes through the real bridge and service. People and AI agents script it, agents run it one shell command at a time, and it previews link cards the way iMessage will show them.
 - **Scripts read like the chat.** They check the trip's state, words a reply must contain and link card fields, never whole replies, because Claude's wording changes between runs.
 - **iMessage never runs HTML or JavaScript.** Apple forbids runtime code in an iMessage extension, so a web app can't live in a bubble. Anything genuinely web-shaped, like the photo album, is a page scout hosts, sent as a link card.
@@ -39,7 +39,7 @@ Shipped when a teammate can start everything with one command and script a group
 - [x] Event trace: the bridge logs one line per event, either handled (with how long scout took) or skipped and why (private chat, scout's own message, a sticker, a repeat delivery).
 - [x] Dev-only service endpoints: start a chat at a seeded stage (`poll-open`, `destination-chosen`), read a chat's trip, and reset one chat's trip.
 - [x] The developer console (`devchat`): a fake group, as a Spectrum platform, that goes through the real bridge and service.
-- [x] Console commands an agent can run from a shell: `start`, `say`, `photo`, `state`, `transcript` and `reset`. Each waits until scout has finished replying, then prints the replies with their message IDs.
+- [x] Console commands an agent can run from a shell: `start`, `say`, `photo`, `voice`, `state`, `transcript` and `reset`. Each waits until scout has finished replying, then prints the replies with their message IDs.
 - [x] Console scripts: `devchat run <script>` replays one, and `bun run e2e` runs every script in `bridge/e2e/`. It's separate from `bun test`, so the fast tests stay fast and free.
 - [x] A script for each critical user journey in `AGENTS.md`, and AGENTS.md's "E2E tests" line pointing at them.
 - [ ] Run `bun run e2e` with a real `ANTHROPIC_API_KEY`, and adjust the two scripts that need Claude (`shares-preferences.chat`, `posts-summary-and-poll.chat`) until they pass reliably. The other two pass without Claude.

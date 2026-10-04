@@ -42,7 +42,7 @@ The code for all three milestones is built. What's left waits on section 1: a re
 
 ## 4. Fixes that protect the demo
 
-- [ ] When a photo can't be converted, still forward its caption instead of dropping the whole message (`bridge/index.ts`, `bridge/linq.ts`).
+- [ ] When a photo or voice note can't be converted, still keep its caption instead of failing the whole message (`src/scout/media.py`, `src/scout/app.py`).
 
 ## 5. Decide
 

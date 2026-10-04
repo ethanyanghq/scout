@@ -16,14 +16,15 @@ import {
 import { imessage } from "spectrum-ts/providers/imessage";
 import z from "zod";
 import { localIMessage } from "@spectrum-ts/imessage-local";
-import { askScout, tellScoutAboutTapback, toJpeg, type ScoutAction } from "./scout";
+import { askScout, tellScoutAboutTapback, type IncomingAttachment, type ScoutAction } from "./scout";
 import { tapbackEmoji, tapbackNamed } from "./tapbacks";
 import { secondsSince, type RelayReport, type Skipped } from "./trace";
 
-type PhotoAttachment = Extract<Content, { type: "attachment" }>;
+type Attachment = Extract<Content, { type: "attachment" }>;
 
-// What scout can use from one message: its words and its first photo.
-type ReadableParts = { text: string; photo: PhotoAttachment | null };
+// What scout can use from one message: its words and its first photo or
+// voice note.
+type ReadableParts = { text: string; attachment: Attachment | null };
 type ScoutMessage = ReadableParts & {
   kind: "message";
   senderPhone: string;
@@ -98,7 +99,7 @@ export async function relaySpectrumMessages(
           text: readable.text,
           sent_at: message.timestamp.toISOString(),
           participant_phones: await listParticipants(space, message),
-          photo: readable.photo ? await toJpeg(await readable.photo.read()) : null,
+          attachment: readable.attachment ? await asIncoming(readable.attachment) : null,
           message_id: message.id,
           reply_to_text: repliedToText,
         });
@@ -114,9 +115,15 @@ export async function relaySpectrumMessages(
   }
 }
 
+// The file as it was sent: scout keeps the original and converts it itself.
+async function asIncoming(attachment: Attachment): Promise<IncomingAttachment> {
+  const bytes = await attachment.read();
+  return { media_type: attachment.mimeType, base64_data: bytes.toString("base64") };
+}
+
 // How a member's message reads in the bridge's log.
-function describeMessage({ text, photo }: ReadableParts, repliedToText: string | null): string {
-  const words = photo ? `[photo] ${text}`.trim() : text;
+function describeMessage({ text, attachment }: ReadableParts, repliedToText: string | null): string {
+  const words = attachment ? `[${attachmentKind(attachment)}] ${text}`.trim() : text;
   return repliedToText === null ? words : `(replying to "${repliedToText}") ${words}`;
 }
 
@@ -216,7 +223,7 @@ function readForScout(space: Space, message: Message): ScoutMessage | ScoutTapba
     const { emoji, target } = message.content;
     return { kind: "tapback", senderPhone, tapback: tapbackNamed(emoji) ?? emoji, targetId: target.id };
   }
-  // Typing indicators, voice memos and the like aren't for scout.
+  // Typing indicators, videos and the like aren't for scout.
   const parts = readableParts(message.content);
   if (!parts) return { skipReason: `nothing scout can read (${message.content.type})` };
   return { kind: "message", ...parts, senderPhone, replyToId: repliedToId(message) };
@@ -266,22 +273,28 @@ function isLocalDirectMessage(space: Space): boolean {
 
 // A photo sent with a caption arrives as a group of a text and an attachment.
 function readableParts(content: Content): ReadableParts | null {
-  if (content.type === "text") return { text: content.text, photo: null };
-  if (isPhoto(content)) return { text: "", photo: content };
+  if (content.type === "text") return { text: content.text, attachment: null };
+  if (isPhotoOrVoiceNote(content)) return { text: "", attachment: content };
   if (content.type !== "group") return null;
 
   const items = content.items.map((item) => item.content);
   const text = items.find((item) => item.type === "text");
-  const photo = items.find(isPhoto);
-  if (!text && !photo) return null;
+  const attachment = items.find(isPhotoOrVoiceNote);
+  if (!text && !attachment) return null;
   return {
     text: text?.type === "text" ? text.text : "",
-    photo: photo ?? null,
+    attachment: attachment ?? null,
   };
 }
 
-function isPhoto(content: Content): content is PhotoAttachment {
-  return content.type === "attachment" && content.mimeType.startsWith("image/");
+function isPhotoOrVoiceNote(content: Content): content is Attachment {
+  return content.type === "attachment" && attachmentKind(content) !== null;
+}
+
+function attachmentKind(attachment: Attachment): "photo" | "voice note" | null {
+  if (attachment.mimeType.startsWith("image/")) return "photo";
+  if (attachment.mimeType.startsWith("audio/")) return "voice note";
+  return null;
 }
 
 // Lets scout count group members who haven't texted yet. Cloud group chats and

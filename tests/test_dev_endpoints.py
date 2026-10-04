@@ -4,6 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from scout.app import create_app
+from scout.media import MediaLibrary
 
 MAYA = {"phone": "+15550000001", "name": "Maya"}
 LEO = {"phone": "+15550000002", "name": "Leo"}
@@ -17,8 +18,10 @@ class UnusedAgent:
 
 
 @pytest.fixture
-def client(store):
-    return TestClient(create_app(store, UnusedAgent()))
+def client(store, tmp_path):
+    return TestClient(
+        create_app(store, UnusedAgent(), MediaLibrary(tmp_path / "media", None))
+    )
 
 
 def seed(client, stage, members=GROUP, chat="chat-1"):

@@ -13,7 +13,7 @@ from scout.agent import ScoutAgent
 from scout.ai_provider import connect_agent
 from scout.openai_agent import OpenAIScoutAgent
 from scout.outgoing import Say
-from scout.trip import IncomingMessage, MessagePhoto
+from scout.trip import IncomingMessage, MediaKind, MessagePhoto, SharedMedia
 
 SPACE = "group-chat-1"
 MAYA = "+15550000001"
@@ -77,6 +77,36 @@ def test_bad_tool_input_goes_back_to_openai_as_an_error(store):
     assert tool_result["content"].startswith("Error:")
     assert "no open poll" in tool_result["content"]
     assert said(replies) == ["There's no poll open yet."]
+
+
+def test_a_photo_openai_asks_to_view_follows_the_tool_results(store, tmp_path):
+    trip, message = maya_says(store, "@scout what was the total on that receipt?")
+    readable = tmp_path / "a1b2c3d4.readable.jpg"
+    readable.write_bytes(b"jpeg bytes")
+    store.save_media(
+        SPACE,
+        SharedMedia(
+            "a1b2c3d4", MediaKind.PHOTO, tmp_path / "a1b2c3d4.heic", readable, None
+        ),
+    )
+    model = ScriptedOpenAI(
+        calls("view_photo", {"photo_id": "a1b2c3d4"}),
+        says("$164 at Casa Brisa."),
+    )
+
+    OpenAIScoutAgent(model, store).respond(trip, message)
+
+    tool_result, photos = model.requests[1]["messages"][-2:]
+    assert tool_result["role"] == "tool"
+    assert photos == {
+        "role": "user",
+        "content": [
+            {
+                "type": "image_url",
+                "image_url": {"url": "data:image/jpeg;base64,anBlZyBieXRlcw=="},
+            }
+        ],
+    }
 
 
 def test_a_photo_is_shown_before_the_situation(store):

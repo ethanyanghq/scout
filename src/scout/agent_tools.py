@@ -7,7 +7,12 @@ from typing import Any
 from scout.best_flights import HomeAirport
 from scout.brochures import ActivityPitch, DestinationPitch
 from scout.money import CENTS_PER_DOLLAR
-from scout.trip import DestinationOption, ItineraryDay, PreferenceUpdate
+from scout.trip import (
+    DestinationOption,
+    ItineraryDay,
+    MessagePhoto,
+    PreferenceUpdate,
+)
 from scout.trip_actions import TripActionError, TripActions
 
 
@@ -490,6 +495,27 @@ TOOL_DEFINITIONS = [
         },
     },
     {
+        "name": "view_photo",
+        "description": (
+            "Look at a photo someone sent earlier, when its description in the "
+            "chat isn't enough, like reading a receipt's total or a "
+            "screenshot's small print. The chat shows each photo as "
+            "[photo <id> (<file>): <description>]."
+        ),
+        "strict": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "photo_id": {
+                    "type": "string",
+                    "description": "The photo's id from the chat, like 'a1b2c3d4'.",
+                },
+            },
+            "required": ["photo_id"],
+            "additionalProperties": False,
+        },
+    },
+    {
         "name": "remove_expense",
         "description": (
             "Remove an expense the sender logged by mistake. Only the person who "
@@ -550,9 +576,13 @@ TOOL_DEFINITIONS = [
 MAX_LOGGED_INPUT_CHARACTERS = 200
 
 
-def describe_tool_call(name: str, tool_input: dict[str, Any], outcome: str) -> str:
+def describe_tool_call(
+    name: str, tool_input: dict[str, Any], outcome: str | MessagePhoto
+) -> str:
     """One readable log line for a tool the AI used: what it passed, leaving
     out empty fields, and what came back."""
+    if isinstance(outcome, MessagePhoto):
+        outcome = "showed the photo"
     passed = ", ".join(
         f"{field}={_plain(value)}"
         for field, value in tool_input.items()
@@ -569,8 +599,11 @@ def _plain(value: Any) -> str:
     return str(value)
 
 
-def run_tool(actions: TripActions, name: str, tool_input: dict[str, Any]) -> str:
-    """Runs one tool call. Raises TripActionError if the input can't be used."""
+def run_tool(
+    actions: TripActions, name: str, tool_input: dict[str, Any]
+) -> str | MessagePhoto:
+    """Runs one tool call and returns its status for the AI, or the photo it
+    asked to see. Raises TripActionError if the input can't be used."""
     match name:
         case "save_member_preferences":
             return actions.save_member_preferences(
@@ -618,6 +651,8 @@ def run_tool(actions: TripActions, name: str, tool_input: dict[str, Any]) -> str
             )
         case "drop_pending_receipt":
             return actions.drop_pending_receipt()
+        case "view_photo":
+            return actions.view_photo(tool_input["photo_id"])
         case "remove_expense":
             return actions.remove_expense(tool_input["expense_number"])
         case "post_settle_up":

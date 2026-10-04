@@ -6,7 +6,7 @@
 import { basename, dirname } from "node:path";
 import { parseArgs } from "node:util";
 import { scoutUrl } from "../scout";
-import { DevChat, connectDevChat, readPhoto, type ChatEntry, type Exchange } from "./platform";
+import { DevChat, connectDevChat, readMediaFile, type ChatEntry, type Exchange } from "./platform";
 import { parseScript, runScript, type ScriptEvent } from "./script";
 import { loadSession, saveSession, type Session } from "./session";
 import { TAPBACKS, isTapback } from "../tapbacks";
@@ -18,6 +18,7 @@ const USAGE = `Usage (from bridge/, with the scout service running):
   bun run devchat react priya like "2. San Juan"  (or a message ID, or scout.last)
   bun run devchat reply maya "2. San Juan" this one!
   bun run devchat photo leo receipts/airbnb.jpg
+  bun run devchat voice maya voice-memo.caf
   bun run devchat transcript
   bun run devchat state [--chat <chat id>]
   bun run devchat reset [--chat <chat id>]
@@ -41,7 +42,8 @@ async function runCommand([command, ...args]: string[]): Promise<void> {
     case "reply":
       return replyInThread(args);
     case "photo":
-      return sendPhoto(args);
+    case "voice":
+      return sendMediaFile(args);
     case "transcript":
       return printTranscript();
     case "state":
@@ -84,10 +86,10 @@ async function replyInThread([name, target, ...words]: string[]): Promise<void> 
   await sendInSavedChat((chat) => chat.reply(name, target, words.join(" ")));
 }
 
-async function sendPhoto([name, path]: string[]): Promise<void> {
+async function sendMediaFile([name, path]: string[]): Promise<void> {
   if (!name || !path) throw new Error(USAGE);
-  const photo = await readPhoto(path);
-  await sendInSavedChat((chat) => chat.sendPhoto(name, photo));
+  const file = await readMediaFile(path);
+  await sendInSavedChat((chat) => chat.sendMediaFile(name, file));
 }
 
 async function printTranscript(): Promise<void> {

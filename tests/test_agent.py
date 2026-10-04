@@ -1,13 +1,16 @@
 """The agent loop, with a scripted stand-in for the Claude API."""
 
 from datetime import datetime
+from pathlib import Path
 from types import SimpleNamespace
 
 from scout.agent import ScoutAgent
 from scout.outgoing import Say
 from scout.trip import (
     IncomingMessage,
+    MediaKind,
     MessagePhoto,
+    SharedMedia,
 )
 
 
@@ -179,3 +182,55 @@ def test_a_photo_is_shown_to_claude_before_the_situation(store):
         "data": "cmVjZWlwdA==",
     }
     assert "It comes with the photo above." in situation["text"]
+
+
+def test_a_photo_claude_asks_to_view_comes_back_as_an_image(store, tmp_path):
+    trip, message = maya_says(store, "@scout what was the total on that receipt?")
+    readable = tmp_path / "a1b2c3d4.readable.jpg"
+    readable.write_bytes(b"jpeg bytes")
+    store.save_media(
+        SPACE,
+        SharedMedia(
+            "a1b2c3d4", MediaKind.PHOTO, tmp_path / "a1b2c3d4.heic", readable, None
+        ),
+    )
+    claude = ScriptedClaude(
+        response("tool_use", tool_call("view_photo", {"photo_id": "a1b2c3d4"})),
+        response("end_turn", text("$164 at Casa Brisa.")),
+    )
+
+    ScoutAgent(claude, store).respond(trip, message)
+
+    tool_result = claude.requests[1]["messages"][-1]["content"][0]
+    assert tool_result["content"] == [
+        {
+            "type": "image",
+            "source": {
+                "type": "base64",
+                "media_type": "image/jpeg",
+                "data": "anBlZyBieXRlcw==",
+            },
+        }
+    ]
+
+
+def test_claude_reads_a_voice_notes_words_as_the_newest_message(store):
+    trip, _ = maya_says(store, "")
+    voice_note = SharedMedia(
+        "e5f6a7b8",
+        MediaKind.VOICE_NOTE,
+        Path("media/group-chat-1/e5f6a7b8.caf"),
+        Path("media/group-chat-1/e5f6a7b8.readable.m4a"),
+        "I'm flying from Boston.",
+    )
+    message = IncomingMessage(
+        SPACE, MAYA, "@scout", datetime(2026, 10, 2, 9, 0), media=voice_note
+    )
+    claude = ScriptedClaude(response("end_turn", text("NO_REPLY")))
+
+    ScoutAgent(claude, store).respond(trip, message)
+
+    assert situation_text(claude).endswith(
+        "[voice note e5f6a7b8 (media/group-chat-1/e5f6a7b8.caf): "
+        '"I\'m flying from Boston."] @scout'
+    )

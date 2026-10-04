@@ -8,7 +8,7 @@ function scout(...texts: string[]) {
 }
 
 describe("reading a console script", () => {
-  test("reads the members, starting stage, messages, photos and checks in order", () => {
+  test("reads the members, starting stage, messages, photos, voice notes and checks in order", () => {
     const script = parseScript(
       `# Plain votes close the poll.
       members Maya leo
@@ -16,6 +16,7 @@ describe("reading a console script", () => {
 
       maya: 2
       leo photo receipts/airbnb.jpg
+      maya voice memos/boston.caf
       expect scout ~ "San Juan"
       expect scout quiet
       expect state destination = "San Juan, Puerto Rico"
@@ -28,6 +29,7 @@ describe("reading a console script", () => {
     expect(script.steps.map(({ line, source, ...step }) => step)).toEqual([
       { kind: "say", member: "maya", text: "2" },
       { kind: "photo", member: "leo", path: "/repo/bridge/e2e/receipts/airbnb.jpg" },
+      { kind: "voice", member: "maya", path: "/repo/bridge/e2e/memos/boston.caf" },
       { kind: "expect-reply", contains: "San Juan" },
       { kind: "expect-quiet" },
       { kind: "expect-state", path: "destination", matcher: "=", expected: "San Juan, Puerto Rico" },

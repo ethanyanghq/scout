@@ -5,6 +5,7 @@ store, polls, and summaries are all real.
 """
 
 from datetime import datetime
+from pathlib import Path
 
 from scout.conversation import (
     INTRODUCTION_SNAG_REPLY,
@@ -19,7 +20,9 @@ from scout.trip import (
     DestinationOption,
     IncomingMessage,
     IncomingReaction,
+    MediaKind,
     MessagePhoto,
+    SharedMedia,
     TripStage,
 )
 
@@ -36,6 +39,20 @@ LEO = "+15550000002"
 PRIYA = "+15550000003"
 EVERYONE = (MAYA, LEO, PRIYA)
 RECEIPT_PHOTO = MessagePhoto("image/jpeg", "cmVjZWlwdA==")
+RECEIPT_MEDIA = SharedMedia(
+    id="a1b2c3d4",
+    kind=MediaKind.PHOTO,
+    original_path=Path("media/group-chat-1/a1b2c3d4.heic"),
+    readable_path=Path("media/group-chat-1/a1b2c3d4.readable.jpg"),
+    transcript="A receipt from Casa Brisa, total $164.00",
+)
+BOSTON_VOICE_NOTE = SharedMedia(
+    id="e5f6a7b8",
+    kind=MediaKind.VOICE_NOTE,
+    original_path=Path("media/group-chat-1/e5f6a7b8.caf"),
+    readable_path=Path("media/group-chat-1/e5f6a7b8.readable.m4a"),
+    transcript="I'm flying from Boston.",
+)
 OPTIONS = [
     DestinationOption("Tulum, Mexico", 900, "Beaches"),
     DestinationOption("San Juan, Puerto Rico", 750, "No passport"),
@@ -58,7 +75,7 @@ class BrokenAgent:
         raise ConnectionError("Claude is unreachable")
 
 
-def send(store, agent, sender, text, photo=None):
+def send(store, agent, sender, text, photo=None, media=None):
     message = IncomingMessage(
         space_id=SPACE,
         sender_phone=sender,
@@ -66,6 +83,7 @@ def send(store, agent, sender, text, photo=None):
         sent_at=datetime(2026, 10, 2, 9, 0),
         participant_phones=EVERYONE,
         photo=photo,
+        media=media,
     )
     return said(handle_message(message, store, agent))
 
@@ -236,12 +254,34 @@ def test_untagged_receipt_photos_wait_for_someone_to_tag_scout(store):
     assert agent.messages_seen == []
 
 
-def test_the_chat_log_notes_when_a_photo_was_sent(store):
+def test_the_chat_log_holds_a_photos_description_and_where_its_kept(store):
     choose_san_juan(store)
 
-    send(store, FakeAgent(replies=[]), PRIYA, "casa brisa dinner", photo=RECEIPT_PHOTO)
+    send(store, FakeAgent(), PRIYA, "casa brisa dinner", RECEIPT_PHOTO, RECEIPT_MEDIA)
 
-    assert store.recent_messages(SPACE, limit=1)[0].text == "[photo] casa brisa dinner"
+    assert store.recent_messages(SPACE, limit=1)[0].text == (
+        "[photo a1b2c3d4 (media/group-chat-1/a1b2c3d4.heic): "
+        "A receipt from Casa Brisa, total $164.00] casa brisa dinner"
+    )
+
+
+def test_the_chat_log_holds_a_voice_notes_words(store):
+    scout_joins(store)
+
+    send(store, FakeAgent(), MAYA, "", media=BOSTON_VOICE_NOTE)
+
+    assert store.recent_messages(SPACE, limit=1)[0].text == (
+        "[voice note e5f6a7b8 (media/group-chat-1/e5f6a7b8.caf): "
+        '"I\'m flying from Boston."]'
+    )
+
+
+def test_a_shared_photo_can_be_found_again_by_its_id(store):
+    choose_san_juan(store)
+
+    send(store, FakeAgent(), PRIYA, "", RECEIPT_PHOTO, RECEIPT_MEDIA)
+
+    assert store.find_media(SPACE, "a1b2c3d4") == RECEIPT_MEDIA
 
 
 TACO_SPOTS = [

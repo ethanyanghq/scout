@@ -4,6 +4,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from enum import StrEnum
+from pathlib import Path
 
 from scout.places import Place
 
@@ -31,6 +32,37 @@ class MessagePhoto:
     base64_data: str
 
 
+class MediaKind(StrEnum):
+    PHOTO = "photo"
+    VOICE_NOTE = "voice note"
+
+
+@dataclass(frozen=True)
+class SharedMedia:
+    """A photo or voice note a member sent, kept on disk (media.py)."""
+
+    id: str
+    kind: MediaKind
+    # The file exactly as it was sent.
+    original_path: Path
+    # A copy the AI services can read: a JPEG photo, or audio OpenAI transcribes.
+    readable_path: Path
+    # A photo's description or a voice note's words. None if it couldn't be
+    # put into words.
+    transcript: str | None
+
+    @property
+    def chat_label(self) -> str:
+        """How it reads in the chat log, with where the original is kept."""
+        if self.transcript is None:
+            content = "couldn't be transcribed"
+        elif self.kind is MediaKind.VOICE_NOTE:
+            content = f'"{self.transcript}"'
+        else:
+            content = self.transcript
+        return f"[{self.kind} {self.id} ({self.original_path}): {content}]"
+
+
 @dataclass(frozen=True)
 class IncomingMessage:
     space_id: str
@@ -40,7 +72,10 @@ class IncomingMessage:
     # Everyone in the chat, including people who haven't spoken yet. Empty when
     # the messaging provider can't list participants (for example, in a DM).
     participant_phones: tuple[str, ...] = ()
+    # The photo, ready for the AI to look at, when the message is one.
     photo: MessagePhoto | None = None
+    # The photo or voice note the message carries, as scout kept it.
+    media: SharedMedia | None = None
     # The line's ID for this message, so scout can react or reply to it. None
     # where there's no line, as in scout-simulate.
     message_id: str | None = None
@@ -51,6 +86,13 @@ class IncomingMessage:
     @property
     def mentions_scout(self) -> bool:
         return SCOUT_MENTION.search(self.text) is not None
+
+    @property
+    def readable_text(self) -> str:
+        """The words, after any photo's description or voice note's words."""
+        if self.media is None:
+            return self.text
+        return f"{self.media.chat_label} {self.text}".strip()
 
 
 @dataclass(frozen=True)

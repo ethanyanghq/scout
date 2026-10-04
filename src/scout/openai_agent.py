@@ -15,7 +15,7 @@ from scout.agent import (
 from scout.agent_tools import TOOL_DEFINITIONS, describe_tool_call, run_tool
 from scout.outgoing import Outgoing
 from scout.outside_services import NO_OUTSIDE_SERVICES, OutsideServices
-from scout.trip import IncomingMessage, Trip
+from scout.trip import IncomingMessage, MessagePhoto, Trip
 from scout.trip_actions import TripActionError, TripActions
 from scout.trip_store import TripStore
 
@@ -103,16 +103,19 @@ class OpenAIScoutAgent:
         }
         if message.photo is None:
             return [situation]
-        photo_url = (
-            f"data:{message.photo.media_type};base64,{message.photo.base64_data}"
-        )
-        photo = {"type": "image_url", "image_url": {"url": photo_url}}
-        return [photo, situation]
+        return [_image_part(message.photo), situation]
+
+
+def _image_part(photo: MessagePhoto) -> dict:
+    photo_url = f"data:{photo.media_type};base64,{photo.base64_data}"
+    return {"type": "image_url", "image_url": {"url": photo_url}}
 
 
 def _run_tool_calls(actions: TripActions, tool_calls: list) -> list[dict]:
-    """Runs every tool call in a reply and returns one result message per call."""
+    """Runs every tool call in a reply and returns one result message per call,
+    then a message with any photos the AI asked to see."""
     results = []
+    photos = []
     for call in tool_calls:
         tool_input = json.loads(call.function.arguments)
         try:
@@ -120,5 +123,12 @@ def _run_tool_calls(actions: TripActions, tool_calls: list) -> list[dict]:
         except TripActionError as error:
             outcome = f"Error: {error}"
         logger.info(describe_tool_call(call.function.name, tool_input, outcome))
+        if isinstance(outcome, MessagePhoto):
+            photos.append(_image_part(outcome))
+            outcome = "The photo is in the next message."
         results.append({"role": "tool", "tool_call_id": call.id, "content": outcome})
+    # Tool results can only be text, so the photos follow them as a user
+    # message.
+    if photos:
+        results.append({"role": "user", "content": photos})
     return results

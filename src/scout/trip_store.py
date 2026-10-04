@@ -14,11 +14,13 @@ from scout.trip import (
     DestinationOption,
     Expense,
     ItineraryDay,
+    MediaKind,
     Member,
     PendingReceipt,
     Poll,
     PreferenceUpdate,
     Settlement,
+    SharedMedia,
     Trip,
     TripStage,
 )
@@ -117,6 +119,18 @@ CREATE TABLE IF NOT EXISTS chat_log (
     text         TEXT NOT NULL,
     sent_at      TEXT NOT NULL
 );
+
+-- The photos and voice notes members sent. The files live in the media
+-- folder (media.py); this says where, and what's in each in words.
+CREATE TABLE IF NOT EXISTS media (
+    space_id      TEXT NOT NULL REFERENCES trips (space_id),
+    id            TEXT NOT NULL,
+    kind          TEXT NOT NULL,
+    original_path TEXT NOT NULL,
+    readable_path TEXT NOT NULL,
+    transcript    TEXT,
+    PRIMARY KEY (space_id, id)
+);
 """
 
 # Every table with a space_id column, with trips last because the others refer
@@ -130,6 +144,7 @@ TABLES_BY_SPACE = (
     "pending_receipts",
     "place_suggestions",
     "chat_log",
+    "media",
     "trips",
 )
 
@@ -349,6 +364,39 @@ class TripStore:
                 "VALUES (?, ?, ?, ?)",
                 (space_id, sender_phone, text, sent_at.isoformat()),
             )
+
+    def save_media(self, space_id: str, media: SharedMedia) -> None:
+        with self._transaction() as db:
+            db.execute(
+                "INSERT INTO media (space_id, id, kind, original_path, "
+                "readable_path, transcript) VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    space_id,
+                    media.id,
+                    media.kind,
+                    str(media.original_path),
+                    str(media.readable_path),
+                    media.transcript,
+                ),
+            )
+
+    def find_media(self, space_id: str, media_id: str) -> SharedMedia | None:
+        """A photo or voice note sent in this chat, or None if it has none by
+        that ID."""
+        with self._transaction() as db:
+            row = db.execute(
+                "SELECT * FROM media WHERE space_id = ? AND id = ?",
+                (space_id, media_id),
+            ).fetchone()
+        if row is None:
+            return None
+        return SharedMedia(
+            id=row["id"],
+            kind=MediaKind(row["kind"]),
+            original_path=Path(row["original_path"]),
+            readable_path=Path(row["readable_path"]),
+            transcript=row["transcript"],
+        )
 
     def has_scout_spoken(self, space_id: str) -> bool:
         """Whether scout has sent anything in the chat yet."""

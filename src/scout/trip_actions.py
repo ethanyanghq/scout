@@ -28,6 +28,7 @@ from scout.cards import best_flights, destination_article, flights_thumbnail_url
 from scout.flights import FlightsError
 from scout.group_summary import format_group_summary, summarize_group
 from scout.itinerary import format_itinerary
+from scout.media import load_photo
 from scout.money import format_usd
 from scout.nearby import directions_link, format_directions, format_nearby_places
 from scout.outgoing import Card, Link, Outgoing, Say
@@ -42,7 +43,9 @@ from scout.settle_up import (
 from scout.trip import (
     DestinationOption,
     ItineraryDay,
+    MediaKind,
     Member,
+    MessagePhoto,
     PendingReceipt,
     PreferenceUpdate,
     Settlement,
@@ -267,6 +270,13 @@ class TripActions:
             raise TripActionError("no receipt is waiting for confirmation")
         self._store.clear_pending_receipt(self._space_id)
         return "Receipt dropped. Nothing was logged."
+
+    def view_photo(self, photo_id: str) -> MessagePhoto:
+        """A photo sent earlier in this chat, for the agent to look at again."""
+        media = self._store.find_media(self._space_id, photo_id)
+        if media is None or media.kind is not MediaKind.PHOTO:
+            raise TripActionError(f"there is no photo {photo_id} in this chat")
+        return load_photo(media.readable_path)
 
     def remove_expense(self, expense_id: int) -> str:
         """Removes one of the sender's own expenses, e.g. one logged by mistake."""

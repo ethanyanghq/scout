@@ -12,9 +12,12 @@ from scout.trip import (
     DateWindow,
     DestinationOption,
     ItineraryDay,
+    MediaKind,
+    MessagePhoto,
     PendingReceipt,
     PreferenceUpdate,
     Settlement,
+    SharedMedia,
 )
 from scout.trip_actions import TripActionError, TripActions
 
@@ -474,3 +477,29 @@ def test_flights_are_one_card_with_a_departure_board_per_home_city(
 def test_without_flight_search_scout_sends_booking_links_instead(locked_in_actions):
     with pytest.raises(TripActionError, match="send booking links instead"):
         locked_in_actions.send_best_flights(HOME_AIRPORTS, "SJU")
+
+
+def keep_media(store, tmp_path, kind, media_id="a1b2c3d4", space_id=SPACE):
+    """A photo or voice note kept for a chat, with a readable copy on disk."""
+    readable = tmp_path / f"{media_id}.readable.jpg"
+    readable.write_bytes(b"jpeg bytes")
+    store.save_media(
+        space_id,
+        SharedMedia(media_id, kind, tmp_path / f"{media_id}.heic", readable, None),
+    )
+
+
+def test_viewing_a_photo_shows_its_readable_copy(store, tmp_path, maya_actions):
+    keep_media(store, tmp_path, MediaKind.PHOTO)
+
+    photo = maya_actions.view_photo("a1b2c3d4")
+
+    assert photo == MessagePhoto("image/jpeg", "anBlZyBieXRlcw==")
+
+
+def test_another_chats_photos_stay_out_of_view(store, tmp_path, maya_actions):
+    store.create_trip("another-chat")
+    keep_media(store, tmp_path, MediaKind.PHOTO, space_id="another-chat")
+
+    with pytest.raises(TripActionError, match="no photo a1b2c3d4"):
+        maya_actions.view_photo("a1b2c3d4")

@@ -16,7 +16,7 @@
 
 import { resolve } from "node:path";
 import { TAPBACKS, type Tapback } from "../tapbacks";
-import { readPhoto, type ChatEntry, type DevChat, type Exchange } from "./platform";
+import { readMediaFile, type ChatEntry, type DevChat, type Exchange } from "./platform";
 import { SEED_STAGES, showTrip, type SeedStage } from "./trips";
 
 export type Script = { members: string[]; from: SeedStage | null; steps: Step[] };
@@ -28,6 +28,7 @@ export type Step = StepSource &
     | { kind: "react"; member: string; tapback: Tapback; target: string }
     | { kind: "reply"; member: string; target: string; text: string }
     | { kind: "photo"; member: string; path: string }
+    | { kind: "voice"; member: string; path: string }
     | Expectation
   );
 export type Expectation =
@@ -54,7 +55,8 @@ const STEP_PATTERNS = {
   members: /^members\s+(.+)$/,
   from: /^from\s+(\S+)$/,
   say: /^(\w+):\s*(.+)$/,
-  photo: /^(\w+)\s+photo\s+(.+)$/,
+  // A photo or voice note from a file.
+  media: /^(\w+)\s+(photo|voice)\s+(.+)$/,
   // The target is "scout.last" or quoted words from one of scout's messages.
   react: /^(\w+)\s+react\s+(\S+)\s+(scout\.last|".*")$/,
   reply: /^(\w+)\s+reply\s+(scout\.last|".*?"):\s*(.+)$/,
@@ -68,7 +70,7 @@ const STEP_PATTERNS = {
   expectState: /^expect\s+state\s+(\S+)\s+(=|~)\s+(.+)$/,
 };
 
-// Photo paths are relative to the script's folder.
+// Photo and voice note paths are relative to the script's folder.
 export function parseScript(text: string, scriptFolder: string): Script {
   const script: Script = { members: [], from: null, steps: [] };
   text.split("\n").forEach((rawLine, index) => {
@@ -93,7 +95,7 @@ export async function runScript(
 ): Promise<boolean> {
   let latestReplies: ChatEntry[] = [];
   for (const step of script.steps) {
-    if (step.kind === "say" || step.kind === "react" || step.kind === "reply" || step.kind === "photo") {
+    if (step.kind === "say" || step.kind === "react" || step.kind === "reply" || step.kind === "photo" || step.kind === "voice") {
       const exchange = await send(chat, step);
       report({ kind: "exchange", exchange });
       if (exchange.outcome.kind === "failed") return false;
@@ -118,7 +120,8 @@ function send(chat: DevChat, step: Step): Promise<Exchange> {
     case "reply":
       return chat.reply(step.member, step.target, step.text);
     case "photo":
-      return readPhoto(step.path).then((photo) => chat.sendPhoto(step.member, photo));
+    case "voice":
+      return readMediaFile(step.path).then((file) => chat.sendMediaFile(step.member, file));
     default:
       throw new Error(`line ${step.line} doesn't send anything`);
   }
@@ -219,9 +222,10 @@ function readLine(script: Script, at: StepSource, scriptFolder: string): void {
       target: target === "scout.last" ? target : readQuoted(target),
       text,
     });
-  } else if ((match = source.match(STEP_PATTERNS.photo))) {
-    const member = readMember(script, match[1]!);
-    script.steps.push({ ...at, kind: "photo", member, path: resolve(scriptFolder, match[2]!) });
+  } else if ((match = source.match(STEP_PATTERNS.media))) {
+    const [, name, kind, path] = match as [string, string, "photo" | "voice", string];
+    const member = readMember(script, name);
+    script.steps.push({ ...at, kind, member, path: resolve(scriptFolder, path) });
   } else if ((match = source.match(STEP_PATTERNS.say))) {
     script.steps.push({ ...at, kind: "say", member: readMember(script, match[1]!), text: match[2]! });
   } else {

@@ -13,7 +13,7 @@ from scout.money import format_usd
 from scout.outgoing import Outgoing, Say
 from scout.outside_services import NO_OUTSIDE_SERVICES, OutsideServices
 from scout.settle_up import plan_payments
-from scout.trip import IncomingMessage, Member, Trip
+from scout.trip import IncomingMessage, Member, MessagePhoto, Trip
 from scout.trip_actions import TripActionError, TripActions
 from scout.trip_store import TripStore
 
@@ -96,15 +96,18 @@ class ScoutAgent:
         }
         if message.photo is None:
             return [situation]
-        photo = {
-            "type": "image",
-            "source": {
-                "type": "base64",
-                "media_type": message.photo.media_type,
-                "data": message.photo.base64_data,
-            },
-        }
-        return [photo, situation]
+        return [_image_block(message.photo), situation]
+
+
+def _image_block(photo: MessagePhoto) -> dict:
+    return {
+        "type": "image",
+        "source": {
+            "type": "base64",
+            "media_type": photo.media_type,
+            "data": photo.base64_data,
+        },
+    }
 
 
 def as_text_bubbles(reply: str) -> list[Say]:
@@ -139,7 +142,7 @@ def describe_situation(store: TripStore, trip: Trip, message: IncomingMessage) -
         f"# Trip state\n{_describe_trip(trip)}\n\n"
         f"# The chat so far, oldest first\n{chat}\n\n"
         f"# Newest message\nFrom {sender.label}. {tagged}\n"
-        f"{message.text}"
+        f"{message.readable_text}"
     )
 
 
@@ -244,7 +247,12 @@ def _run_tool_calls(actions: TripActions, content: list) -> list[dict]:
             {
                 "type": "tool_result",
                 "tool_use_id": block.id,
-                "content": outcome,
+                # A photo the AI asked to see comes back as the image itself.
+                "content": (
+                    [_image_block(outcome)]
+                    if isinstance(outcome, MessagePhoto)
+                    else outcome
+                ),
                 "is_error": is_error,
             }
         )
