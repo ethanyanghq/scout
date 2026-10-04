@@ -58,6 +58,8 @@ You need [uv](https://docs.astral.sh/uv/), [Bun](https://bun.sh), and an Anthrop
 uv sync
 cd bridge && bun install && cd ..
 export ANTHROPIC_API_KEY=sk-ant-...
+# or, without an Anthropic key, run me on OpenAI:
+# export OPENAI_API_KEY=sk-...
 ```
 
 There are no database migrations yet. After pulling a change to the database layout, delete your local `scout.db`.

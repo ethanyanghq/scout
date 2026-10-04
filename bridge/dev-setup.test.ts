@@ -25,10 +25,16 @@ describe("checking the setup before bun run dev starts anything", () => {
     ]);
   });
 
-  test("asks for the Anthropic key when it's empty", () => {
+  test("asks for an AI key when there isn't one", () => {
     const setup = linqSetup({ serviceSettings: { ANTHROPIC_API_KEY: "" } });
 
-    expect(findSetupProblems(setup)).toEqual(["Set ANTHROPIC_API_KEY in .env."]);
+    expect(findSetupProblems(setup)).toEqual(["Set ANTHROPIC_API_KEY (or OPENAI_API_KEY) in .env."]);
+  });
+
+  test("accepts an OpenAI key in place of the Anthropic key", () => {
+    const setup = linqSetup({ serviceSettings: { OPENAI_API_KEY: "sk-123" } });
+
+    expect(findSetupProblems(setup)).toEqual([]);
   });
 
   test("asks for uv when it isn't installed", () => {
