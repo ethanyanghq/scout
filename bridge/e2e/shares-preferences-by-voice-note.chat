@@ -1,11 +1,10 @@
-# Journey: a member shares preferences in a voice memo without tagging scout,
-# and scout saves them from its transcript once someone tags it.
+# Journey: a member says "hey scout" in a voice memo, which counts as a tag,
+# and scout saves the preferences from its transcript.
 # Needs Claude (or OpenAI), OPENAI_API_KEY to transcribe, and a Mac.
 members maya leo priya
 
 maya voice media/maya-preferences.caf
-expect scout quiet
-leo: @scout spring break?
+expect scout ~ "scout"
 expect state members.0.display_name ~ "maya"
 expect state members.0.budget_usd = 800
 expect state members.0.home_city ~ "boston"
