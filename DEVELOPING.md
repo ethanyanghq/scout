@@ -113,7 +113,6 @@ leo: lol this is taking forever
 expect scout quiet
 priya: 1
 expect scout ~ "San Juan, Puerto Rico wins"
-expect card url ~ "calendar.google.com"
 expect state destination = "San Juan, Puerto Rico"
 ```
 
@@ -229,7 +228,7 @@ iMessage never runs HTML or JavaScript in the chat. A link card is a preview of 
 - The card is built from the page's `og:title`, `og:description` and `og:image`, then Twitter Card tags, then the page's `<title>` and first image.
 - The card is a snapshot from when it was sent. To show new state, send a new link.
 
-scout sends a link as its own action (`Link` in `outgoing.py`), so it's always alone in its message. The console previews every card scout sends, and its preview of the calendar link shows a real problem: Google's page titles the card "Google Calendar - Sign in to Access & Edit Your Schedule". A page scout hosts would fix that, but where scout's pages will be hosted isn't decided yet (TODO, Decide).
+scout sends a link as its own action (`Link` in `outgoing.py`), so it's always alone in its message. The console previews every card scout sends. The calendar link is a `webcal://` address on `SCOUT_PUBLIC_URL`, which scout sends only when that is set; the console's card preview fetches `https://` pages, so it can't preview that one.
 
 ## Set up the demo group
 

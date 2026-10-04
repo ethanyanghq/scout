@@ -449,7 +449,7 @@ Reusing what exists wherever it already works.
 | Bookings | `Expense`, `log_sender_expense` (`src/scout/trip_actions.py`) | new `Booking`, logged as an expense on confirm |
 | Hotels and activities | `GooglePlaces.search` (`src/scout/places.py`) | extend `FIELD_MASK` with `rating`, `userRatingCount`, `photos` |
 | Flight | `GoogleFlights` (`src/scout/flights.py`), through SerpApi | built: one flight per home city, live fare, `flightBoard` card |
-| Calendar | `google_calendar_link` (`src/scout/calendar_link.py`) | moves to stage 8; one event per itinerary day |
+| Calendar | `build_calendar_feed` (`src/scout/calendar_feed.py`) | built: a subscribable feed with one event per itinerary day, linked when the first plan is posted |
 | Outgoing | `Say` / `React` / `Link` (`src/scout/outgoing.py`) | add `Card` |
 | Bridge | `perform()` (`bridge/spectrum.ts`), `sendParts()` (`bridge/linq.ts`) | add the `imessage_app` part |
 | Console | `bridge/devchat/link-card.ts` | a card preview beside the link card preview |

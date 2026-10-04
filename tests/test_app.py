@@ -3,7 +3,7 @@
 import base64
 import re
 import shutil
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 import pytest
@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 
 from scout.app import create_app
 from scout.media import MediaLibrary
-from scout.trip import DestinationOption
+from scout.trip import DateWindow, DestinationOption, ItineraryDay
 
 FIXTURES = Path(__file__).parent / "fixtures"
 SPACE = "group-chat-1"
@@ -103,3 +103,22 @@ def test_a_voice_memo_is_kept_and_noted_in_the_chat(client, store):
     assert logged == (
         f"[voice note {media_id} ({kept.original_path}): couldn't be transcribed]"
     )
+
+
+def test_a_chat_with_a_plan_serves_it_as_a_calendar_feed(client, store):
+    store.lock_in_destination(
+        SPACE, "San Juan, Puerto Rico", DateWindow(date(2027, 3, 14), date(2027, 3, 19))
+    )
+    store.replace_itinerary(
+        SPACE, [ItineraryDay(date(2027, 3, 14), "Land and check in")], []
+    )
+
+    response = client.get(f"/calendars/{SPACE}.ics")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/calendar")
+    assert "SUMMARY:Land and check in" in response.text
+
+
+def test_a_chat_without_a_plan_has_no_calendar_feed(client):
+    assert client.get(f"/calendars/{SPACE}.ics").status_code == 404

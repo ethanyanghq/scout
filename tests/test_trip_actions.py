@@ -8,7 +8,7 @@ from scout.brochures import ActivityPitch, DestinationPitch
 from scout.cards import fits_in_one_message
 from scout.flights import Flight, FlightsError
 from scout.hotels import Hotel, HotelsError
-from scout.outgoing import Card, React, Say, Tapback
+from scout.outgoing import Card, Link, React, Say, Tapback
 from scout.outside_services import OutsideServices
 from scout.places import Coordinates, PhotographedPlace, Place, PlacesError
 from scout.trip import (
@@ -250,7 +250,7 @@ def test_choosing_for_the_group_announces_the_lock_in_once(store):
     actions.lock_in_group_choice("san juan")
 
     texts = [item.text for item in actions.outbox if isinstance(item, Say)]
-    assert texts == ["locked in: san juan, Mar 14–19. add it to your calendar:"]
+    assert texts == ["locked in: san juan, Mar 14–19 🎉"]
 
 
 def test_the_group_can_choose_a_destination_without_a_poll(maya_actions, store):
@@ -601,6 +601,41 @@ def test_the_plan_is_a_timeline_card_with_the_text_for_phones_without_it(
     assert "Scuba at Escambrón · Leo's pick" in card.fallback_text
 
 
+def test_locking_in_the_destination_sends_no_calendar_link(store):
+    everyone_votes_for_san_juan(store)
+    actions = TripActions(
+        store, SPACE, MAYA, OutsideServices(public_url="https://scout.example.com")
+    )
+
+    actions.lock_in_group_choice("Tulum, Mexico")
+
+    assert not [item for item in actions.outbox if isinstance(item, Link)]
+
+
+def test_the_first_plan_sends_a_calendar_subscription_link(locked_in_actions, store):
+    actions = TripActions(
+        store, SPACE, MAYA, OutsideServices(public_url="https://scout.example.com")
+    )
+
+    actions.post_itinerary([plan_day(14, "Land and check in")], add_ons=[])
+
+    assert actions.outbox[-1] == Link(
+        f"webcal://scout.example.com/calendars/{SPACE}.ics"
+    )
+    assert "subscribe" in actions.outbox[-2].text
+
+
+def test_a_revised_plan_does_not_send_the_calendar_link_again(locked_in_actions, store):
+    services = OutsideServices(public_url="https://scout.example.com")
+    first = TripActions(store, SPACE, MAYA, services)
+    first.post_itinerary([plan_day(14, "Land")], add_ons=[])
+    revision = TripActions(store, SPACE, MAYA, services)
+
+    revision.post_itinerary([plan_day(14, "Land and swim")], add_ons=[])
+
+    assert not [item for item in revision.outbox if isinstance(item, Link)]
+
+
 def test_the_plan_is_posted_as_text_when_place_search_is_down(locked_in_actions, store):
     actions = actions_with(store, FakeBrochurePhotos(is_down=True))
 
@@ -855,7 +890,11 @@ def test_the_hotel_is_one_card_with_its_photo_rate_and_rating(locked_in_actions,
 
     actions.send_best_hotel()
 
-    _, card = actions.outbox
+    intro, card = actions.outbox
+    assert intro == Say(
+        "Maya, are you making the booking for the group? "
+        "i'll help figure out the accounting later. book this hotel:"
+    )
     assert isinstance(card, Card)
     assert card.layout["title"] == "Where to stay in San Juan, Puerto Rico"
     assert card.layout["subtitle"] == "Mar 14–19 · 5 nights"
@@ -875,11 +914,7 @@ def test_an_unrated_hotel_card_leaves_out_the_rating(locked_in_actions, store):
 
     actions.send_best_hotel()
 
-    intro, card = actions.outbox
-    assert intro == Say(
-        "Maya, are you making the booking for the group? "
-        "i'll help figure out the accounting later. book this hotel:"
-    )
+    _, card = actions.outbox
     assert "Guests say" not in card_words(card.layout)
     assert "★" not in card.fallback_text
 

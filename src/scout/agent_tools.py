@@ -263,7 +263,7 @@ TOOL_DEFINITIONS = [
             '"we\'ve chosen San Juan", "we\'re all going with 2", "talked '
             "it over, it's Tulum\". One member saying it for everyone is "
             "enough; don't wait for the others to vote or confirm. Closes any "
-            "open poll and sends the calendar link. For one person's own pick, "
+            "open poll. For one person's own pick, "
             "use record_member_vote instead."
         ),
         "strict": True,
@@ -301,8 +301,9 @@ TOOL_DEFINITIONS = [
         "description": (
             "Post a day-by-day plan for the chosen destination, one anchor "
             "activity per day within the trip dates, plus optional add-ons for "
-            "what only one person wanted. Replaces any earlier plan, so include "
-            "every day and add-on when editing."
+            "what only one person wanted. The first plan also sends the group a "
+            "calendar link that stays up to date. Replaces any earlier plan, so "
+            "include every day and add-on when editing."
         ),
         # Not strict: with it, every strict tool together compiles to a grammar
         # too large for the API. post_itinerary checks every value it's given.

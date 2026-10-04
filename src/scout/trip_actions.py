@@ -36,7 +36,7 @@ from scout.brochures import (
     build_brochures,
     format_brochure,
 )
-from scout.calendar_link import format_calendar_message, google_calendar_link
+from scout.calendar_feed import calendar_subscription_url, format_calendar_message
 from scout.cards import (
     activity_deck,
     best_flights,
@@ -285,11 +285,13 @@ class TripActions:
 
         dates = summarize_group(trip.members).shared_window
         self._store.lock_in_destination(self._space_id, destination, dates)
-        # The calendar message already says the trip is locked in.
         if dates is None:
             self.outbox.append(Say(f"{destination} it is, the group's pick 🎉"))
-        calendar = self._send_calendar(destination, dates)
-        return f"Destination is now {destination}. {calendar}"
+        else:
+            self.outbox.append(
+                Say(f"locked in: {destination}, {format_window(dates)} 🎉")
+            )
+        return f"Destination is now {destination}. {_describe_dates(dates)}"
 
     def post_itinerary(
         self, days: list[ItineraryDay], add_ons: list[ItineraryAddOn]
@@ -318,7 +320,11 @@ class TripActions:
 
         in_order = sorted(days, key=lambda day: day.day)
         self._store.replace_itinerary(self._space_id, in_order, add_ons)
-        return self._send_itinerary(self._load_trip())
+        status = self._send_itinerary(self._load_trip())
+        if trip.itinerary:
+            # The link is already in the chat, and its feed shows the new plan.
+            return f"{status} The calendar feed now shows the new plan."
+        return f"{status} {self._send_calendar(self._load_trip())}"
 
     def _send_itinerary(self, trip: Trip) -> str:
         """Sends the plan as a card, or as text when there's no photo of the
@@ -367,22 +373,22 @@ class TripActions:
                 f"{error}; try a nearby airport or send booking links"
             ) from error
 
+        self.outbox.append(Say(_introduce_flights(home_city_flights)))
         self.outbox.append(
             Card(
                 layout=best_flights(trip, home_city_flights),
                 caption=f"Flights to {trip.destination}",
                 thumbnail_url=flights_thumbnail_url(home_city_flights),
                 fallback_text=format_best_flights(trip, home_city_flights),
-        self.outbox.append(Say(_introduce_flights(home_city_flights)))
             )
         )
+        self.outbox.append(Say(HOTEL_OFFER))
         return "Flights posted."
 
     def send_best_hotel(self) -> str:
         """Posts a card with the best hotel, live from Google Hotels, for the
         chosen destination and dates."""
         trip = self._load_locked_in_trip()
-        self.outbox.append(Say(HOTEL_OFFER))
         hotels = self._services.hotels
         if hotels is None:
             raise TripActionError(
@@ -396,13 +402,13 @@ class TripActions:
         except NoHotelAvailable as error:
             raise TripActionError(f"{error}; send booking links instead") from error
 
+        self.outbox.append(Say(_introduce_hotel(trip)))
         self.outbox.append(
             Card(
                 layout=best_hotel(trip, hotel),
                 caption=f"Where to stay in {trip.destination}",
                 thumbnail_url=hotel.photo_url,
                 fallback_text=format_best_hotel(trip, hotel),
-        self.outbox.append(Say(_introduce_hotel(trip)))
             )
         )
         return "Hotel posted."
@@ -770,18 +776,21 @@ class TripActions:
         dates = summarize_group(trip.members).shared_window
         self._store.close_poll(trip.open_poll.id, result.winner.name, dates)
         self.outbox.append(Say(polls.format_result(result, len(trip.open_poll.votes))))
-        calendar = self._send_calendar(result.winner.name, dates)
-        return f"Poll closed. Destination is now {result.winner.name}. {calendar}"
+        return (
+            f"Poll closed. Destination is now {result.winner.name}. "
+            f"{_describe_dates(dates)}"
+        )
 
-    def _send_calendar(self, destination: str, dates: DateWindow | None) -> str:
-        """Sends the calendar link for the locked-in trip, if it has dates, and
-        says which happened."""
-        if dates is None:
-            return "No dates work for everyone, so the trip has no dates."
+    def _send_calendar(self, trip: Trip) -> str:
+        """Sends the link to subscribe to the plan's calendar, if scout has a
+        public address to serve it from, and says which happened."""
+        public_url = self._services.public_url
+        if public_url is None:
+            return "No calendar link: SCOUT_PUBLIC_URL isn't set."
         self.outbox.extend(
             [
-                Say(format_calendar_message(destination, dates)),
-                Link(google_calendar_link(destination, dates)),
+                Say(format_calendar_message(trip)),
+                Link(calendar_subscription_url(public_url, trip.space_id)),
             ]
         )
         return "Sent the calendar link."
@@ -833,6 +842,12 @@ class TripActions:
         if trip is None:
             raise LookupError(f"no trip for space {self._space_id}")
         return trip
+
+
+def _describe_dates(dates: DateWindow | None) -> str:
+    if dates is None:
+        return "No dates work for everyone, so the trip has no dates."
+    return f"The trip is {format_window(dates)}."
 
 
 def _describe_saved_details(member: Member) -> str:
@@ -909,6 +924,20 @@ def _describe_logged_expense(expense: Expense, trip: Trip) -> str:
     return "\n".join(lines)
 
 
+def _introduce_flights(home_city_flights: list[HomeCityFlight]) -> str:
+    if len(home_city_flights) == 1:
+        return "this flight seems like the best deal"
+    return "these flights seem like the best deals"
+
+
+def _introduce_hotel(trip: Trip) -> str:
+    # The first person to talk to scout is the likeliest to book for everyone.
+    return (
+        f"{trip.initiator.label}, are you making the booking for the group? "
+        "i'll help figure out the accounting later. book this hotel:"
+    )
+
+
 def _check_every_home_city_has_an_airport(
     trip: Trip, home_airports: list[HomeAirport]
 ) -> None:
@@ -922,20 +951,6 @@ def _check_every_home_city_has_an_airport(
     ]
     if missing:
         raise TripActionError(f"no airport given for {', '.join(missing)}")
-
-
-def _introduce_flights(home_city_flights: list[HomeCityFlight]) -> str:
-    if len(home_city_flights) == 1:
-        return "this flight seems like the best deal"
-    return "these flights seem like the best deals"
-
-
-def _introduce_hotel(trip: Trip) -> str:
-    # The first person to talk to scout is the likeliest to book for everyone.
-    return (
-        f"{trip.initiator.label}, are you making the booking for the group? "
-        "i'll help figure out the accounting later. book this hotel:"
-    )
 
 
 def _locate(places: GooglePlaces, spot: str, destination: str) -> Coordinates:

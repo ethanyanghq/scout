@@ -4,14 +4,15 @@ import base64
 import logging
 import os
 from dataclasses import asdict
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Response
 from pydantic import BaseModel, Field
 
 from scout.ai_provider import connect_agent, connect_speak_gate
+from scout.calendar_feed import build_calendar_feed
 from scout.conversation import Agent, Gate, handle_message, handle_reaction
 from scout.dev_endpoints import create_dev_router
 from scout.media import Attachment, MediaLibrary
@@ -106,6 +107,15 @@ def create_app(
     def receive_reaction(incoming: IncomingTapback) -> Actions:
         reaction = IncomingReaction(**incoming.model_dump())
         return _as_actions(handle_reaction(reaction, store))
+
+    @app.get("/calendars/{space_id}.ics")
+    def show_calendar(space_id: str) -> Response:
+        """The chat's itinerary as a calendar feed that phones subscribe to."""
+        trip = store.get_trip(space_id)
+        if trip is None or not trip.itinerary:
+            raise HTTPException(404, "This chat has no itinerary yet.")
+        feed = build_calendar_feed(trip, datetime.now(UTC))
+        return Response(feed, media_type="text/calendar")
 
     app.include_router(create_dev_router(store, media))
     return app

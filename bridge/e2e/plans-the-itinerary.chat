@@ -11,3 +11,4 @@ priya: @scout can you make us a plan?
 expect scout ~ "the plan"
 expect state itinerary ~ "2027-03-14"
 expect state itinerary_add_ons ~ "leo"
+expect card url ~ "/calendars/"

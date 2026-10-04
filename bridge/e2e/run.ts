@@ -80,6 +80,7 @@ async function startService(port: number) {
     env: {
       ...process.env,
       SCOUT_PORT: String(port),
+      SCOUT_PUBLIC_URL: `http://127.0.0.1:${port}`,
       SCOUT_DB_PATH: DATABASE,
       SCOUT_MEDIA_DIR: MEDIA_FOLDER,
     },

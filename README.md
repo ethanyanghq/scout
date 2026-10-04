@@ -17,7 +17,7 @@ here's how it goes:
 3. **i pitch three places.** once i know where your dates overlap, i send three brochures you can tap through: a photo, the best hotel there, what it comes with, and what the whole trip runs. pick one and hit send — that's your vote. or just tell me ("we want cancun") and i'll lock it in.
 4. **you tell me what you'd actually do.** i send a deck of things to do at that hotel and that town, each with a picture and a price. swipe each one nah, meh or yeah, send once, and i'll tell you what the group agreed on.
 5. **i plan the days.** a day-by-day plan built from what you actually picked, paced for whether you're up at six or noon. then one room and one flight for everyone — you book, i put what it cost in the ledger.
-6. **i put it on your calendar.** the whole trip in one tap, then a shared album link for the photos.
+6. **i put it on your calendar.** once the itinerary is posted, one link to subscribe to with every day of the plan as an event, kept up to date if the plan changes, then a shared album link for the photos.
 7. **we settle up.** tell me what you paid ("i got the airbnb, $1,240") or text me a photo of the receipt. i split it, work out the fewest payments to square everyone up, and check each one off when you tell me you've paid ("i paid leo").
 
 i never book anything or touch real money. i find the links, you book. and i stay quiet unless you tag me or tell me something about the trip, because a scout that talks too much gets kicked out of the chat.
@@ -49,7 +49,7 @@ My number is a [Linq](https://linqapp.com) line, a real iMessage number you can 
 | `hotels.py` | Live Google Hotels search through SerpApi. |
 | `best_hotel.py` | The hotel scout recommends for the trip, and how it reads in the chat. |
 | `serpapi.py` | The request that the flight and hotel searches share. |
-| `calendar_link.py` | The "Add to Google Calendar" link sent once the trip is locked in. |
+| `calendar_feed.py` | The subscribable calendar feed of the itinerary, and the link to it sent when the first plan is posted. |
 | `money.py` | How amounts of money read in the chat. |
 | `settle_up.py` | Who owes whom: each person's share and the fewest payments to settle up. |
 | `trip_store.py` | Saving everything to SQLite. |
