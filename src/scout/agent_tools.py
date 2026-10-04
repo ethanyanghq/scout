@@ -16,7 +16,7 @@ from scout.trip import (
     MessagePhoto,
     PreferenceUpdate,
 )
-from scout.trip_actions import TripActionError, TripActions
+from scout.trip_actions import ExpenseDraft, ItemDraft, TripActionError, TripActions
 
 
 def _nullable(json_type: str, description: str) -> dict:
@@ -575,9 +575,14 @@ TOOL_DEFINITIONS = [
     {
         "name": "log_sender_expense",
         "description": (
-            "Log a shared trip cost that the sender of the newest message paid. "
-            "It's split evenly across everyone in the trip. Only log costs the "
-            "sender says they paid themselves."
+            "Log a trip cost that the sender of the newest message paid. By "
+            "default it's split evenly across everyone in the trip. If only some "
+            "people shared it, pass split_among with just their names. If people "
+            "had different things (a receipt where each person ordered their "
+            "own), pass items with who shared each one: tax and tip are then "
+            "split in proportion to what each person had. Only log costs the "
+            "sender says they paid themselves. Never guess who shared it: if "
+            "it's unclear, ask first."
         ),
         "strict": True,
         "input_schema": {
@@ -585,7 +590,10 @@ TOOL_DEFINITIONS = [
             "properties": {
                 "amount_usd": {
                     "type": "number",
-                    "description": "What they paid in US dollars, e.g. 1240 or 164.5.",
+                    "description": (
+                        "The full amount they paid in US dollars, tax and tip "
+                        "included, e.g. 1240 or 164.5."
+                    ),
                 },
                 "description": {
                     "type": "string",
@@ -594,8 +602,28 @@ TOOL_DEFINITIONS = [
                         "'Casa Brisa dinner'."
                     ),
                 },
+                "paid_on": _nullable(
+                    "string", "The date it was paid as YYYY-MM-DD, if known."
+                ),
+                "split_among": _nullable(
+                    "array",
+                    "Names of the only people who share it, or null for everyone.",
+                ),
+                "items": _nullable(
+                    "array",
+                    "The receipt's lines, each with who shared it, or null to "
+                    "split the whole amount evenly. Each is "
+                    "{name, amount_usd, shared_by: [names]}; an empty "
+                    "shared_by means everyone in split_among.",
+                ),
             },
-            "required": ["amount_usd", "description"],
+            "required": [
+                "amount_usd",
+                "description",
+                "paid_on",
+                "split_among",
+                "items",
+            ],
             "additionalProperties": False,
         },
     },
@@ -703,6 +731,22 @@ TOOL_DEFINITIONS = [
         },
     },
     {
+        "name": "post_expense_report",
+        "description": (
+            "Post the trip's full expense report: every expense with who paid "
+            "it and how it was split, each person's total paid and owed, and "
+            "who owes whom. Use it when someone asks to wrap up the money or "
+            "for the whole breakdown; post_settle_up is the quick version."
+        ),
+        "strict": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": False,
+        },
+    },
+    {
         "name": "post_settle_up",
         "description": (
             "Post the total shared cost, each person's share, and the fewest "
@@ -804,9 +848,9 @@ def run_tool(
                 _to_pitches(tool_input["destinations"]), tool_input["nights"]
             )
         case "log_sender_expense":
-            return actions.log_sender_expense(
-                _to_cents(tool_input["amount_usd"]), tool_input["description"]
-            )
+            return actions.log_sender_expense(_to_expense_draft(tool_input))
+        case "post_expense_report":
+            return actions.post_expense_report()
         case "ask_to_confirm_receipt":
             return actions.ask_to_confirm_receipt(
                 tool_input["merchant"],
@@ -825,6 +869,23 @@ def run_tool(
             return actions.record_sender_payment(tool_input["payee_name"])
         case _:
             raise TripActionError(f"unknown tool {name}")
+
+
+def _to_expense_draft(tool_input: dict[str, Any]) -> ExpenseDraft:
+    return ExpenseDraft(
+        amount_cents=_to_cents(tool_input["amount_usd"]),
+        description=tool_input["description"],
+        paid_on=_parse_date(tool_input.get("paid_on")),
+        split_among=tuple(tool_input.get("split_among") or ()),
+        items=tuple(
+            ItemDraft(
+                item["name"],
+                _to_cents(item["amount_usd"]),
+                tuple(item["shared_by"]),
+            )
+            for item in tool_input.get("items") or ()
+        ),
+    )
 
 
 def _to_preference_update(tool_input: dict[str, Any]) -> PreferenceUpdate:

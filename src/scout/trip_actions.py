@@ -8,7 +8,7 @@ agent to read.
 
 import logging
 from collections.abc import Callable
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import date
 
 from scout import polls
@@ -39,11 +39,20 @@ from scout.cards import (
     activity_deck,
     best_flights,
     destination_article,
+    expense_report,
     fits_in_one_message,
     flights_thumbnail_url,
     itinerary,
     trip_interview,
 )
+from scout.expense_report import (
+    describe_items,
+    describe_split,
+    format_expense_ledger,
+    format_expense_report,
+    format_expense_summary,
+)
+from scout.expense_split import split_by_items, split_evenly
 from scout.flights import FlightsError
 from scout.group_summary import format_group_summary, summarize_group
 from scout.itinerary import format_itinerary
@@ -63,11 +72,14 @@ from scout.trip import (
     DateWindow,
     DeckActivity,
     DestinationOption,
+    Expense,
+    ExpenseItem,
     ItineraryAddOn,
     ItineraryDay,
     MediaKind,
     Member,
     MessagePhoto,
+    NewExpense,
     PendingReceipt,
     PreferenceUpdate,
     Settlement,
@@ -92,6 +104,33 @@ INTERVIEW_FALLBACK_TEXT = (
 
 class TripActionError(Exception):
     """The action can't be done as asked. The message says why, for the agent."""
+
+
+@dataclass(frozen=True)
+class ItemDraft:
+    """One line of a receipt, with the members who shared it as the chat names them."""
+
+    name: str
+    amount_cents: int
+    # Empty means whoever the whole expense is split among.
+    shared_by: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class ExpenseDraft:
+    """A cost as the sender described it, before scout works out who owes what."""
+
+    amount_cents: int
+    description: str
+    paid_on: date | None = None
+    # The members who share it, as the chat names them. Empty means everyone.
+    split_among: tuple[str, ...] = ()
+    # When the receipt's lines were split by who had what.
+    items: tuple[ItemDraft, ...] = ()
+
+
+class _NoDestinationPhoto(Exception):
+    """There's no photo of the destination to put on a card. The message says why."""
 
 
 class TripActions:
@@ -245,20 +284,11 @@ class TripActions:
         """Sends the plan as a card, or as text when there's no photo of the
         destination to show on the card, and says which happened."""
         text = format_itinerary(trip.itinerary, trip.itinerary_add_ons)
-        places = self._services.places
-        if places is None:
-            self.outbox.append(Say(text))
-            return "Itinerary posted as text: place search isn't set up."
         try:
-            destination = places.find_photographed(trip.destination, photo_count=1)
-        except PlacesError as error:
+            photo_url = self._destination_photo_url(trip)
+        except _NoDestinationPhoto as no_photo:
             self.outbox.append(Say(text))
-            return f"Itinerary posted as text: place search isn't working: {error}"
-        if destination is None or not destination.photo_urls:
-            self.outbox.append(Say(text))
-            return f"Itinerary posted as text: no photo of {trip.destination}."
-
-        photo_url = destination.photo_urls[0]
+            return f"Itinerary posted as text: {no_photo}"
         self.outbox.append(
             Card(
                 layout=itinerary(trip, photo_url),
@@ -307,31 +337,59 @@ class TripActions:
         )
         return "Flights posted."
 
-    def log_sender_expense(self, amount_cents: int, description: str) -> str:
-        """Logs a shared cost the sender paid. Only payers log their own costs."""
-        if amount_cents <= 0:
+    def log_sender_expense(self, draft: ExpenseDraft) -> str:
+        """Logs a cost the sender paid, split among the members who shared it.
+        Only payers log their own costs."""
+        if draft.amount_cents <= 0:
             raise TripActionError("an expense must be more than $0")
-        if not description.strip():
+        if not draft.description.strip():
             raise TripActionError("an expense needs a description, e.g. 'Airbnb'")
 
-        expense_id = self._store.add_expense(
-            self._space_id, self._sender_phone, amount_cents, description
-        )
         trip = self._load_trip()
+        new_expense = self._divide_among_members(trip, draft)
+        expense_id = self._store.add_expense(self._space_id, new_expense)
         if (
             trip.pending_receipt
             and trip.pending_receipt.payer_phone == self._sender_phone
         ):
             # Logging is how the payer confirms (or corrects) their receipt.
             self._store.clear_pending_receipt(self._space_id)
-        payer = trip.find_member(self._sender_phone)
-        self.outbox.append(
-            Say(
-                f"got it: {description}, {format_usd(amount_cents)}, paid by "
-                f"{payer.label}. split {len(trip.members)} ways."
-            )
-        )
+        expense = Expense(**vars(new_expense), id=expense_id)
+        self.outbox.append(Say(_describe_logged_expense(expense, trip)))
         return f"Logged as expense #{expense_id}."
+
+    def _divide_among_members(self, trip: Trip, draft: ExpenseDraft) -> NewExpense:
+        """Works out what each member owes toward the cost, to the cent."""
+        everyone = tuple(member.phone for member in trip.members)
+        split_among = self._find_member_phones(draft.split_among) or everyone
+        items = tuple(
+            _to_expense_item(
+                item, self._find_member_phones(item.shared_by) or split_among
+            )
+            for item in draft.items
+        )
+        if items:
+            shares = split_by_items(items, draft.amount_cents)
+        else:
+            shares = split_evenly(draft.amount_cents, split_among)
+
+        if any(cents < 0 for cents in shares.values()):
+            raise TripActionError(
+                "the receipt's discount is bigger than the items it comes off"
+            )
+        if set(shares) <= {self._sender_phone}:
+            raise TripActionError(
+                "nobody else is sharing this, so there's nothing to split; "
+                "ask who shared it"
+            )
+        return NewExpense(
+            payer_phone=self._sender_phone,
+            amount_cents=draft.amount_cents,
+            description=draft.description,
+            shares=shares,
+            paid_on=draft.paid_on,
+            items=items,
+        )
 
     def ask_to_confirm_receipt(
         self, merchant: str, purchased_on: date | None, total_cents: int
@@ -348,7 +406,8 @@ class TripActions:
         self.outbox.append(
             Say(
                 f"from the receipt: {merchant}{when}, {format_usd(total_cents)} total, "
-                f"paid by {payer.label}. split it {len(trip.members)} ways?"
+                f"paid by {payer.label}. split it {len(trip.members)} ways, or "
+                "tell me who had what?"
             )
         )
         return f"Asked {payer.label} to confirm. Log it once they do."
@@ -392,6 +451,34 @@ class TripActions:
             raise TripActionError("nobody has logged an expense yet")
         self.outbox.append(Say(format_settle_up(trip)))
         return "Settle-up posted."
+
+    def post_expense_report(self) -> str:
+        """Posts the whole trip's spending: every expense and its split, who
+        paid what, and who owes whom. Cards, or text without a destination photo."""
+        trip = self._load_trip()
+        if not trip.expenses:
+            raise TripActionError("nobody has logged an expense yet")
+        text = format_expense_report(trip)
+        try:
+            photo_url = self._destination_photo_url(trip)
+        except _NoDestinationPhoto as no_photo:
+            self.outbox.append(Say(text))
+            return f"Expense report posted as text: {no_photo}"
+        pages = expense_report(trip, photo_url)
+        for page in pages:
+            self.outbox.append(
+                Card(
+                    layout=page.layout,
+                    caption=page.caption,
+                    thumbnail_url=photo_url,
+                    fallback_text=(
+                        format_expense_ledger(trip, page.expenses)
+                        if page.expenses
+                        else format_expense_summary(trip)
+                    ),
+                )
+            )
+        return f"Expense report posted as {len(pages)} cards."
 
     def record_sender_payment(self, payee_label: str) -> str:
         """Records that the sender paid what they owed one person."""
@@ -634,6 +721,26 @@ class TripActions:
             )
         return trip
 
+    def _destination_photo_url(self, trip: Trip) -> str:
+        """A photo of the destination for a card's unopened bubble."""
+        if trip.destination is None:
+            raise _NoDestinationPhoto("the group hasn't picked a destination yet.")
+        places = self._services.places
+        if places is None:
+            raise _NoDestinationPhoto("place search isn't set up.")
+        try:
+            destination = places.find_photographed(trip.destination, photo_count=1)
+        except PlacesError as error:
+            raise _NoDestinationPhoto(f"place search isn't working: {error}") from error
+        if destination is None or not destination.photo_urls:
+            raise _NoDestinationPhoto(f"no photo of {trip.destination}.")
+        return destination.photo_urls[0]
+
+    def _find_member_phones(self, member_labels: tuple[str, ...]) -> tuple[str, ...]:
+        """The members the chat calls these names, each once, in the order given."""
+        phones = (self._find_member(label).phone for label in member_labels)
+        return tuple(dict.fromkeys(phones))
+
     def _find_member(self, member_label: str) -> Member:
         trip = self._load_trip()
         member = trip.find_member_by_label(member_label)
@@ -682,6 +789,24 @@ def _check_deck_activities(activities: list[DeckActivity]) -> None:
             raise TripActionError(f"an activity can't be called {PASS_LABEL!r}")
         if activity.estimated_cost_usd < 0:
             raise TripActionError(f"{activity.name!r} can't cost less than $0")
+
+
+def _to_expense_item(item: ItemDraft, shared_by: tuple[str, ...]) -> ExpenseItem:
+    if item.amount_cents <= 0:
+        raise TripActionError(f"{item.name!r} must cost more than $0")
+    return ExpenseItem(item.name, item.amount_cents, shared_by)
+
+
+def _describe_logged_expense(expense: Expense, trip: Trip) -> str:
+    payer = trip.find_member(expense.payer_phone)
+    lines = [
+        f"got it: {expense.description}, {format_usd(expense.amount_cents)}, "
+        f"paid by {payer.label}. {describe_split(expense, trip.members)}."
+    ]
+    items = describe_items(expense, trip.members)
+    if items:
+        lines.append(f"{items} (tax and tip split by what each person had)")
+    return "\n".join(lines)
 
 
 def _check_every_home_city_has_an_airport(

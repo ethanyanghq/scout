@@ -247,14 +247,40 @@ class ItineraryAddOn:
 
 
 @dataclass(frozen=True)
-class Expense:
-    """A shared cost one member paid, split evenly across the whole group."""
+class ExpenseItem:
+    """One line of an itemized receipt, and who split it."""
 
-    id: int
+    name: str
+    amount_cents: int
+    # Phones of the members who share this item. Never empty.
+    shared_by: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class NewExpense:
+    """A cost one member paid, and what each member owes toward it.
+
+    Costs the whole group shares and costs only a few shared are the same
+    thing: the members left out of `shares` owe nothing.
+    """
+
     payer_phone: str
     amount_cents: int
     # What it was for, e.g. "Airbnb" or "Casa Brisa dinner".
     description: str
+    # Member phone -> cents they owe toward it. Adds up to `amount_cents`.
+    shares: dict[str, int]
+    paid_on: date | None = None
+    # The receipt's lines, when the split followed what each person had. What
+    # they don't add up to (tax, tip, fees, a discount) is in `shares` too.
+    items: tuple[ExpenseItem, ...] = ()
+
+
+@dataclass(frozen=True)
+class Expense(NewExpense):
+    """A saved expense. Its ID is how people refer to it in the chat."""
+
+    id: int = field(kw_only=True)
 
 
 @dataclass(frozen=True)

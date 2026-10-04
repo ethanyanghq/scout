@@ -1,4 +1,4 @@
-"""Who owes whom once the trip's shared costs are in (CS-2, CS-4)."""
+"""Who owes whom once the trip's costs are in (CS-2, CS-4)."""
 
 from dataclasses import dataclass
 
@@ -18,9 +18,11 @@ class Payment:
 def format_settle_up(trip: Trip) -> str:
     """Expects a trip with at least one expense."""
     total_cents = sum(expense.amount_cents for expense in trip.expenses)
-    share = _describe_share(total_cents, len(trip.members))
+    noun = "expense" if len(trip.expenses) == 1 else "expenses"
+    lead_in = (
+        f"shared costs: {format_usd(total_cents)} across {len(trip.expenses)} {noun}."
+    )
     payments = plan_payments(trip)
-    lead_in = f"shared costs: {format_usd(total_cents)}, so {share} each."
     if not payments:
         return f"{lead_in} everyone's already even."
     lines = [f"{lead_in} fewest payments to settle up:"]
@@ -63,31 +65,19 @@ def plan_payments(trip: Trip) -> list[Payment]:
 
 
 def _net_balances(trip: Trip) -> dict[str, int]:
-    """What each member paid minus their share, after settlements, in cents.
+    """What each member paid minus what they owe, after settlements, in cents.
 
     Positive means the group owes them.
     """
-    total_cents = sum(expense.amount_cents for expense in trip.expenses)
-    base_share, leftover_cents = divmod(total_cents, len(trip.members))
-    balances = {}
-    for position, member in enumerate(trip.members):
-        # The first few members cover the leftover cents, a cent each, so the
-        # shares add up to exactly the total.
-        share = base_share + (1 if position < leftover_cents else 0)
-        balances[member.phone] = -share
+    balances = {member.phone: 0 for member in trip.members}
     for expense in trip.expenses:
         balances[expense.payer_phone] += expense.amount_cents
+        for phone, share_cents in expense.shares.items():
+            balances[phone] -= share_cents
     for settlement in trip.settlements:
         balances[settlement.payer_phone] += settlement.amount_cents
         balances[settlement.payee_phone] -= settlement.amount_cents
     return balances
-
-
-def _describe_share(total_cents: int, member_count: int) -> str:
-    base_share, leftover_cents = divmod(total_cents, member_count)
-    if leftover_cents == 0:
-        return format_usd(base_share)
-    return f"about {format_usd(base_share)}"
 
 
 def _format_payment(payment: Payment) -> str:

@@ -8,6 +8,7 @@ from pathlib import Path
 import anthropic
 
 from scout.agent_tools import TOOL_DEFINITIONS, describe_tool_call, run_tool
+from scout.expense_report import describe_split
 from scout.group_summary import DateWindow, format_window, summarize_group
 from scout.money import format_usd
 from scout.outgoing import Outgoing, Say
@@ -241,11 +242,12 @@ def _describe_costs(trip: Trip) -> list[str]:
     """Expenses, what's still owed, and any receipt waiting to be confirmed."""
     lines = []
     if trip.expenses:
-        lines.append("Expenses, split evenly across everyone:")
+        lines.append("Expenses:")
         lines.extend(
             f"  #{expense.id} {expense.description}: "
             f"{format_usd(expense.amount_cents)}, paid by "
-            f"{trip.find_member(expense.payer_phone).label}"
+            f"{trip.find_member(expense.payer_phone).label}, "
+            f"{describe_split(expense, trip.members)}"
             for expense in trip.expenses
         )
         lines.append("Payments still owed:")

@@ -22,9 +22,12 @@ from scout.best_flights import (
     format_clock,
     format_duration,
 )
+from scout.expense_report import describe_items, describe_split, member_totals
 from scout.group_summary import format_window, summarize_group
 from scout.itinerary import format_day, format_start
-from scout.trip import DeckActivity, ItineraryAddOn, ItineraryDay, Trip
+from scout.money import format_usd
+from scout.settle_up import plan_payments
+from scout.trip import DeckActivity, Expense, ItineraryAddOn, ItineraryDay, Trip
 
 # Every scout card is white text on HermesShare's near-black `atmosphere`
 # background, so it looks the same whatever mode the phone is in. Scout blue is
@@ -54,6 +57,10 @@ TRIP_KINDS = [
     ("city", "City break", "building.2.fill"),
     ("other", "Other", "pencil"),
 ]
+# Chunks are fitted with the longest title a ledger card could get, so the
+# real "(1 of 3)" never pushes a full card over Linq's limit.
+LEDGER_TITLE = "Every expense"
+LONGEST_LEDGER_TITLE = f"{LEDGER_TITLE} (99 of 99)"
 OTHER_TRIP_KIND_PLACEHOLDER = "Describe your trip"
 # What each person is into; they can tick any number. (id, label, sublabel,
 # SF Symbol)
@@ -577,3 +584,134 @@ def _booking_action(home_city_flight: HomeCityFlight) -> dict:
 def _slug(text: str) -> str:
     kept = [c.lower() if c.isalnum() else "-" for c in text]
     return "".join(kept).strip("-").replace("--", "-")
+
+
+@dataclass(frozen=True)
+class ExpenseReportPage:
+    """One card of the expense report, and what it covers."""
+
+    layout: dict
+    caption: str
+    # The expenses it lists. Empty on the summary card.
+    expenses: tuple[Expense, ...]
+
+
+def expense_report(trip: Trip, destination_photo_url: str) -> list[ExpenseReportPage]:
+    """Everything the trip cost, as a summary card (who paid what, who owes
+    whom) followed by as many ledger cards as the expenses need, since one
+    message only holds so much. Expects a trip with at least one expense."""
+    summary = ExpenseReportPage(
+        _expense_summary(trip, destination_photo_url), "Trip expenses", ()
+    )
+    chunks = _fit_expense_chunks(trip, destination_photo_url)
+    pages = [summary]
+    for number, chunk in enumerate(chunks, start=1):
+        caption = LEDGER_TITLE
+        if len(chunks) > 1:
+            caption += f" ({number} of {len(chunks)})"
+        layout = _expense_ledger(trip, chunk, destination_photo_url, caption)
+        pages.append(ExpenseReportPage(layout, caption, tuple(chunk)))
+    return pages
+
+
+def _fit_expense_chunks(trip: Trip, photo_url: str) -> list[list[Expense]]:
+    """Splits the expenses, in order, into the fewest runs that each fit on a card."""
+    chunks: list[list[Expense]] = [[]]
+    for expense in trip.expenses:
+        candidate = [*chunks[-1], expense]
+        fits = fits_in_one_message(
+            _expense_ledger(trip, candidate, photo_url, LONGEST_LEDGER_TITLE)
+        )
+        if fits or not chunks[-1]:
+            chunks[-1] = candidate
+        else:
+            chunks.append([expense])
+    return chunks
+
+
+def _expense_summary(trip: Trip, photo_url: str) -> dict:
+    total_cents = sum(expense.amount_cents for expense in trip.expenses)
+    payments = [
+        _row(
+            f"{p.payer.label} → {p.payee.label}",
+            format_usd(p.amount_cents),
+            "arrow.right.circle",
+        )
+        for p in plan_payments(trip)
+    ] or [_row("Everyone's settled up", "🎉", "checkmark.circle")]
+    who_paid_what = [
+        _row(
+            t.member.label,
+            f"paid {format_usd(t.paid_cents)} · owes {format_usd(t.share_cents)}",
+            "person.fill",
+        )
+        for t in member_totals(trip)
+    ]
+    return _expense_card(
+        trip,
+        "Trip expenses",
+        photo_url,
+        [
+            {
+                "type": "statusBadge",
+                "label": f"{format_usd(total_cents)} across "
+                f"{len(trip.expenses)} expenses",
+                "colorHex": SCOUT_BLUE_HEX,
+            },
+            _section_heading("Who paid what"),
+            _card_of_rows(who_paid_what),
+            _section_heading("Who owes who"),
+            _card_of_rows(payments),
+        ],
+    )
+
+
+def _expense_ledger(
+    trip: Trip, expenses: list[Expense], photo_url: str, title: str
+) -> dict:
+    nodes = [_expense_nodes(trip, expense) for expense in expenses]
+    return _expense_card(trip, title, photo_url, nodes)
+
+
+def _expense_card(trip: Trip, title: str, photo_url: str, children: list[dict]) -> dict:
+    subtitle = format_window(trip.dates) if trip.dates else trip.destination or ""
+    return {
+        "version": 1,
+        "title": title,
+        "subtitle": subtitle,
+        "accentColorHex": SCOUT_BLUE_HEX,
+        "background": {"kind": "atmosphere", "colorsHex": [NIGHT_GLOW_HEX]},
+        "root": {
+            "type": "vstack",
+            "spacing": 18,
+            "alignment": "leading",
+            "children": [
+                {
+                    "type": "gallery",
+                    "urls": [photo_url],
+                    "heightPt": 160,
+                    "cornerRadius": 18,
+                },
+                *children,
+            ],
+        },
+    }
+
+
+def _card_of_rows(rows: list[dict]) -> dict:
+    return {"type": "card", "child": {"type": "vstack", "spacing": 4, "children": rows}}
+
+
+def _expense_nodes(trip: Trip, expense: Expense) -> dict:
+    payer = trip.find_member(expense.payer_phone)
+    amount = format_usd(expense.amount_cents)
+    details = [describe_split(expense, trip.members)]
+    items = describe_items(expense, trip.members)
+    if items:
+        details.append(items)
+    return _card_of_rows(
+        [
+            _row(expense.description, f"{amount} · {payer.label}", "receipt"),
+            *[_text(d, role="footnote", color_hex=SOFT_GRAY_HEX) for d in details],
+        ]
+    )

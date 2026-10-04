@@ -121,3 +121,17 @@ def test_scout_never_counts_a_missing_name_as_something_to_ask_for(store):
     [maya] = store.get_trip(SPACE).members
     assert maya.display_name is None
     assert maya.missing_preferences == []
+
+
+def test_an_expense_saved_before_shares_were_kept_is_split_evenly(store):
+    store.create_trip("chat")
+    store.add_members("chat", ["+15550000001", "+15550000002"])
+    with store._transaction() as db:
+        db.execute(
+            "INSERT INTO expenses (space_id, payer_phone, amount_cents, description) "
+            "VALUES ('chat', '+15550000001', 10_001, 'Groceries')"
+        )
+
+    [expense] = store.get_trip("chat").expenses
+
+    assert expense.shares == {"+15550000001": 5_001, "+15550000002": 5_000}

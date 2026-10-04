@@ -8,6 +8,7 @@ from dataclasses import asdict, dataclass
 from datetime import date, datetime, time
 from pathlib import Path
 
+from scout.expense_split import split_evenly
 from scout.places import Coordinates, Place
 from scout.trip import (
     ActivityDeck,
@@ -16,10 +17,12 @@ from scout.trip import (
     DeckActivity,
     DestinationOption,
     Expense,
+    ExpenseItem,
     ItineraryAddOn,
     ItineraryDay,
     MediaKind,
     Member,
+    NewExpense,
     PendingReceipt,
     Poll,
     PreferenceUpdate,
@@ -110,7 +113,13 @@ CREATE TABLE IF NOT EXISTS expenses (
     space_id     TEXT NOT NULL REFERENCES trips (space_id),
     payer_phone  TEXT NOT NULL,
     amount_cents INTEGER NOT NULL,
-    description  TEXT NOT NULL
+    description  TEXT NOT NULL,
+    -- JSON: phone -> cents owed. NULL on expenses logged before shares were
+    -- kept, which were all split evenly across the whole group.
+    shares       TEXT,
+    -- JSON: the receipt's lines, when the split followed them.
+    items        TEXT,
+    paid_on      TEXT
 );
 
 -- Payments already made. What's still owed is worked out from expenses and
@@ -199,6 +208,9 @@ class LoggedMessage:
 ADDED_COLUMNS = [
     ("members", "chronotype", "TEXT"),
     ("itinerary_days", "starts_at", "TEXT"),
+    ("expenses", "shares", "TEXT"),
+    ("expenses", "items", "TEXT"),
+    ("expenses", "paid_on", "TEXT"),
 ]
 
 
@@ -216,17 +228,18 @@ class TripStore:
             ).fetchone()
             if row is None:
                 return None
+            members = _load_members(db, space_id)
             return Trip(
                 space_id=space_id,
                 stage=TripStage(row["stage"]),
                 destination=row["destination"],
                 dates=_load_dates(row),
-                members=_load_members(db, space_id),
+                members=members,
                 open_poll=_load_open_poll(db, space_id),
                 itinerary=_load_itinerary(db, space_id),
                 itinerary_add_ons=_load_itinerary_add_ons(db, space_id),
                 activity_deck=_load_activity_deck(db, space_id),
-                expenses=_load_expenses(db, space_id),
+                expenses=_load_expenses(db, space_id, members),
                 settlements=_load_settlements(db, space_id),
                 pending_receipt=_load_pending_receipt(db, space_id),
                 place_suggestions=_load_place_suggestions(db, space_id),
@@ -408,15 +421,21 @@ class TripStore:
                 (space_id, phone, json.dumps(positions)),
             )
 
-    def add_expense(
-        self, space_id: str, payer_phone: str, amount_cents: int, description: str
-    ) -> int:
+    def add_expense(self, space_id: str, expense: NewExpense) -> int:
         """Saves a new expense and returns its ID."""
         with self._transaction() as db:
             cursor = db.execute(
                 "INSERT INTO expenses (space_id, payer_phone, amount_cents, "
-                "description) VALUES (?, ?, ?, ?)",
-                (space_id, payer_phone, amount_cents, description),
+                "description, shares, items, paid_on) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    space_id,
+                    expense.payer_phone,
+                    expense.amount_cents,
+                    expense.description,
+                    json.dumps(expense.shares),
+                    json.dumps([asdict(item) for item in expense.items]),
+                    expense.paid_on.isoformat() if expense.paid_on else None,
+                ),
             )
             return cursor.lastrowid
 
@@ -679,10 +698,12 @@ def _load_activity_deck(db: sqlite3.Connection, space_id: str) -> ActivityDeck |
     )
 
 
-def _load_expenses(db: sqlite3.Connection, space_id: str) -> list[Expense]:
+def _load_expenses(
+    db: sqlite3.Connection, space_id: str, members: list[Member]
+) -> list[Expense]:
     rows = db.execute(
-        "SELECT id, payer_phone, amount_cents, description FROM expenses "
-        "WHERE space_id = ? ORDER BY id",
+        "SELECT id, payer_phone, amount_cents, description, shares, items, paid_on "
+        "FROM expenses WHERE space_id = ? ORDER BY id",
         (space_id,),
     ).fetchall()
     return [
@@ -691,9 +712,25 @@ def _load_expenses(db: sqlite3.Connection, space_id: str) -> list[Expense]:
             payer_phone=row["payer_phone"],
             amount_cents=row["amount_cents"],
             description=row["description"],
+            shares=_load_shares(row, members),
+            paid_on=_parse_date(row["paid_on"]),
+            items=_load_expense_items(row),
         )
         for row in rows
     ]
+
+
+def _load_shares(row: sqlite3.Row, members: list[Member]) -> dict[str, int]:
+    if row["shares"] is not None:
+        return json.loads(row["shares"])
+    return split_evenly(row["amount_cents"], [member.phone for member in members])
+
+
+def _load_expense_items(row: sqlite3.Row) -> tuple[ExpenseItem, ...]:
+    return tuple(
+        ExpenseItem(item["name"], item["amount_cents"], tuple(item["shared_by"]))
+        for item in json.loads(row["items"] or "[]")
+    )
 
 
 def _load_settlements(db: sqlite3.Connection, space_id: str) -> list[Settlement]:

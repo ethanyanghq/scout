@@ -19,12 +19,18 @@ from scout.trip import (
     ItineraryDay,
     MediaKind,
     MessagePhoto,
+    NewExpense,
     PendingReceipt,
     PreferenceUpdate,
     Settlement,
     SharedMedia,
 )
-from scout.trip_actions import TripActionError, TripActions
+from scout.trip_actions import (
+    ExpenseDraft,
+    ItemDraft,
+    TripActionError,
+    TripActions,
+)
 
 SPACE = "group-chat-1"
 MAYA = "+15550000001"
@@ -254,7 +260,7 @@ def test_booking_links_cover_each_home_city_and_a_stay(locked_in_actions):
 
 
 def test_payers_can_remove_their_own_expense(maya_actions, store):
-    maya_actions.log_sender_expense(19_600, "Bio bay kayaks")
+    maya_actions.log_sender_expense(ExpenseDraft(19_600, "Bio bay kayaks"))
     [expense] = store.get_trip(SPACE).expenses
 
     maya_actions.remove_expense(expense.id)
@@ -264,11 +270,18 @@ def test_payers_can_remove_their_own_expense(maya_actions, store):
 
 
 def test_nobody_else_can_remove_someones_expense(maya_actions, store):
-    expense_id = store.add_expense(SPACE, LEO, 124_000, "Airbnb")
+    expense_id = store.add_expense(
+        SPACE, even_expense(LEO, 124_000, "Airbnb", MAYA, LEO)
+    )
 
     with pytest.raises(TripActionError, match="only they can remove it"):
         maya_actions.remove_expense(expense_id)
     assert len(store.get_trip(SPACE).expenses) == 1
+
+
+def even_expense(payer, cents, description, *members):
+    shares = {member: cents // len(members) for member in members}
+    return NewExpense(payer, cents, description, shares)
 
 
 def maya_owes_leo_50(store):
@@ -276,7 +289,7 @@ def maya_owes_leo_50(store):
     store.add_members(SPACE, [MAYA, LEO])
     store.save_preferences(SPACE, MAYA, MAYA_PREFERENCES)
     store.save_preferences(SPACE, LEO, LEO_PREFERENCES)
-    store.add_expense(SPACE, LEO, 10_000, "Groceries")
+    store.add_expense(SPACE, even_expense(LEO, 10_000, "Groceries", MAYA, LEO))
 
 
 def test_a_payment_is_recorded_and_confirmed_in_the_chat(store):
@@ -315,7 +328,7 @@ def test_a_receipt_is_read_back_for_its_payer_to_confirm(store):
 
     assert said(priya_actions.outbox) == [
         "from the receipt: Casa Brisa, Mar 16, $164 total, paid by Priya. "
-        "split it 3 ways?"
+        "split it 3 ways, or tell me who had what?"
     ]
     assert store.get_trip(SPACE).expenses == []
     assert store.get_trip(SPACE).pending_receipt == PendingReceipt(
@@ -326,7 +339,7 @@ def test_a_receipt_is_read_back_for_its_payer_to_confirm(store):
 def test_logging_the_confirmed_receipt_clears_it(store):
     priya_actions = priya_texts_a_receipt(store)
 
-    priya_actions.log_sender_expense(16_400, "Casa Brisa")
+    priya_actions.log_sender_expense(ExpenseDraft(16_400, "Casa Brisa"))
 
     trip = store.get_trip(SPACE)
     assert trip.pending_receipt is None
@@ -746,3 +759,147 @@ def test_after_the_brochures_scout_asks_for_the_groups_final_decision(
     assert maya_actions_with_photos.outbox[-1] == Say(
         "once you're ready, let me know your final decision with @scout"
     )
+
+
+@pytest.fixture
+def trio_actions(store):
+    """Maya, Leo and Priya, with Priya's actions."""
+    store.create_trip(SPACE)
+    store.add_members(SPACE, [MAYA, LEO, PRIYA])
+    for phone, name in [(MAYA, "Maya"), (LEO, "Leo"), (PRIYA, "Priya")]:
+        store.save_preferences(SPACE, phone, PreferenceUpdate(display_name=name))
+    return lambda phone: TripActions(store, SPACE, phone)
+
+
+def test_a_cost_only_two_people_shared_is_split_between_just_them(trio_actions, store):
+    maya_actions = trio_actions(MAYA)
+
+    maya_actions.log_sender_expense(
+        ExpenseDraft(19_600, "Kayaks", split_among=("Maya", "Leo"))
+    )
+
+    [expense] = store.get_trip(SPACE).expenses
+    assert expense.shares == {MAYA: 9_800, LEO: 9_800}
+    assert said(maya_actions.outbox) == [
+        "got it: Kayaks, $196, paid by Maya. split between Maya and Leo, $98 each."
+    ]
+
+
+def test_each_person_pays_for_their_own_items_plus_their_part_of_tax_and_tip(
+    trio_actions, store
+):
+    priya_actions = trio_actions(PRIYA)
+    priya_actions.log_sender_expense(
+        ExpenseDraft(
+            6_000,
+            "Casa Brisa",
+            items=(
+                ItemDraft("Steak", 4_000, ("Maya",)),
+                ItemDraft("Salad", 1_000, ("Leo",)),
+            ),
+        )
+    )
+
+    [expense] = store.get_trip(SPACE).expenses
+    assert expense.shares == {MAYA: 4_800, LEO: 1_200}
+    assert "Steak $40 (Maya)" in said(priya_actions.outbox)[0]
+
+
+def test_an_item_with_no_names_is_split_among_the_expenses_group(trio_actions, store):
+    maya_actions = trio_actions(MAYA)
+
+    maya_actions.log_sender_expense(
+        ExpenseDraft(
+            3_000,
+            "Pizza",
+            split_among=("Maya", "Leo"),
+            items=(ItemDraft("Pizza", 3_000),),
+        )
+    )
+
+    assert store.get_trip(SPACE).expenses[0].shares == {MAYA: 1_500, LEO: 1_500}
+
+
+def test_a_cost_only_the_payer_shared_is_not_logged(trio_actions, store):
+    maya_actions = trio_actions(MAYA)
+
+    with pytest.raises(TripActionError, match="nothing to split"):
+        maya_actions.log_sender_expense(
+            ExpenseDraft(2_000, "Souvenir", split_among=("Maya",))
+        )
+    assert store.get_trip(SPACE).expenses == []
+
+
+def test_an_unknown_name_stops_the_expense_from_being_logged(trio_actions, store):
+    maya_actions = trio_actions(MAYA)
+
+    with pytest.raises(TripActionError, match="no single member is called 'Sam'"):
+        maya_actions.log_sender_expense(
+            ExpenseDraft(2_000, "Taxi", split_among=("Leo", "Sam"))
+        )
+    assert store.get_trip(SPACE).expenses == []
+
+
+def test_the_expense_report_is_posted_as_text_without_a_destination_photo(
+    trio_actions,
+):
+    maya_actions = trio_actions(MAYA)
+    maya_actions.log_sender_expense(
+        ExpenseDraft(19_600, "Kayaks", split_among=("Maya", "Leo"))
+    )
+    maya_actions.outbox.clear()
+
+    maya_actions.post_expense_report()
+
+    [report] = said(maya_actions.outbox)
+    assert "$196 across 1 expense" in report
+    assert "Maya: paid $196, owes $98 · is owed $98" in report
+    assert "Priya: paid $0, owes $0 · even" in report
+    assert "#1 Kayaks · $196 · paid by Maya" in report
+    assert "Leo → Maya $98" in report
+
+
+def photo_actions(store, phone=MAYA):
+    store.lock_in_destination(
+        SPACE, "San Juan", DateWindow(date(2027, 3, 14), date(2027, 3, 19))
+    )
+    return TripActions(
+        store, SPACE, phone, OutsideServices(places=FakeBrochurePhotos())
+    )
+
+
+def test_the_expense_report_is_a_summary_card_then_a_ledger_card(trio_actions, store):
+    trio_actions(MAYA).log_sender_expense(
+        ExpenseDraft(19_600, "Kayaks", split_among=("Maya", "Leo"))
+    )
+    actions = photo_actions(store)
+
+    actions.post_expense_report()
+
+    summary, ledger = actions.outbox
+    assert [summary.caption, ledger.caption] == ["Trip expenses", "Every expense"]
+    assert "Leo → Maya $98" in summary.fallback_text
+    assert "#1 Kayaks · $196 · paid by Maya" in ledger.fallback_text
+
+
+def test_a_long_trip_spreads_its_expenses_over_several_cards(trio_actions, store):
+    maya_actions = trio_actions(MAYA)
+    for number in range(60):
+        maya_actions.log_sender_expense(
+            ExpenseDraft(1_000 + number, f"Expense number {number}")
+        )
+    actions = photo_actions(store)
+
+    actions.post_expense_report()
+
+    summary, *ledgers = actions.outbox
+    assert len(ledgers) > 1
+    assert ledgers[0].caption == f"Every expense (1 of {len(ledgers)})"
+    assert all(fits_in_one_message(card.layout) for card in actions.outbox)
+    listed = "\n".join(card.fallback_text for card in ledgers)
+    assert all(f"Expense number {n} " in listed for n in range(60))
+
+
+def test_the_expense_report_needs_an_expense(trio_actions):
+    with pytest.raises(TripActionError, match="nobody has logged"):
+        trio_actions(MAYA).post_expense_report()

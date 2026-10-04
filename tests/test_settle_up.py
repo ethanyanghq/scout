@@ -1,3 +1,4 @@
+from scout.expense_split import split_evenly
 from scout.settle_up import plan_payments
 from scout.trip import Expense, Member, Settlement, Trip, TripStage
 
@@ -19,7 +20,13 @@ def trip_with(members, *expenses):
         itinerary_add_ons=[],
         activity_deck=None,
         expenses=[
-            Expense(number, payer.phone, cents, description)
+            Expense(
+                payer.phone,
+                cents,
+                description,
+                shares=split_evenly(cents, [m.phone for m in members]),
+                id=number,
+            )
             for number, (payer, cents, description) in enumerate(expenses, start=1)
         ],
         settlements=[],
@@ -93,3 +100,18 @@ def test_payments_already_made_drop_out_of_the_plan():
         ("Jordan", "Leo", 40_000),
         ("Priya", "Leo", 23_600),
     ]
+
+
+def test_a_cost_only_some_people_shared_is_owed_only_by_them():
+    trip = trip_with([MAYA, LEO, JORDAN, PRIYA])
+    kayaks = split_evenly(19_600, [MAYA.phone, LEO.phone])
+    trip.expenses.append(
+        Expense(MAYA.phone, 19_600, "Kayaks", shares=kayaks_by_phone(kayaks), id=1)
+    )
+
+    # Jordan and Priya weren't on the kayaks, so they owe nothing.
+    assert summarize(plan_payments(trip)) == [("Leo", "Maya", 9_800)]
+
+
+def kayaks_by_phone(shares):
+    return {MAYA.phone: shares[MAYA.phone], LEO.phone: shares[LEO.phone]}
