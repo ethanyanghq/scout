@@ -174,6 +174,36 @@ def test_tells_claude_whether_it_was_tagged(store):
     assert "[…0001] @scout hi" in situation
 
 
+def test_tells_claude_when_it_was_not_tagged_and_should_lean_toward_silence(store):
+    trip, message = maya_says(store, "anyone know good flights?")
+    claude = ScriptedClaude(response("end_turn", text("NO_REPLY")))
+
+    ScoutAgent(claude, store).respond(trip, message)
+
+    situation = situation_text(claude)
+    assert "It does not tag you." in situation
+    assert "reply NO_REPLY unless the group clearly needs you" in situation
+
+
+def test_a_threaded_reply_to_one_of_scouts_texts_counts_as_addressing_it(store):
+    trip, _ = maya_says(store, "yes pls")
+    store.log_message(
+        SPACE, None, "want me to pull flights?", datetime(2026, 10, 2, 8, 0)
+    )
+    message = IncomingMessage(
+        SPACE,
+        MAYA,
+        "yes pls",
+        datetime(2026, 10, 2, 9, 0),
+        reply_to_text="want me to pull flights?",
+    )
+    claude = ScriptedClaude(response("end_turn", text("on it")))
+
+    ScoutAgent(claude, store).respond(trip, message)
+
+    assert "It tags or addresses you." in situation_text(claude)
+
+
 def test_a_new_photo_reaches_claude_as_its_description_not_an_image(store):
     trip, _ = maya_says(store, "")
     receipt = SharedMedia(

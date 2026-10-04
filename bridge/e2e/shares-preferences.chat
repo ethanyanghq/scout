@@ -1,11 +1,9 @@
-# Journey: members share preferences in plain words without tagging scout, and
-# scout saves and confirms them once someone tags it.
+# Journey: a member shares preferences in plain words without tagging scout, and
+# scout notices, saves them and confirms.
 # Needs Claude.
 members maya leo priya
 
 maya: i'm maya, free mar 13-20, ~$800, flying from boston, need a beach
-expect scout quiet
-leo: @scout spring break?
 expect scout ~ "boston"
 expect state members.0.display_name ~ "maya"
 expect state members.0.budget_usd = 800

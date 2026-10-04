@@ -530,6 +530,16 @@ class TripStore:
             ).fetchone()
         return row is not None
 
+    def has_scout_said(self, space_id: str, text: str) -> bool:
+        """Whether scout sent exactly this text in the chat."""
+        with self._transaction() as db:
+            row = db.execute(
+                "SELECT 1 FROM chat_log "
+                "WHERE space_id = ? AND sender_phone IS NULL AND text = ?",
+                (space_id, text),
+            ).fetchone()
+        return row is not None
+
     def chat_history(self, space_id: str) -> list[LoggedMessage]:
         """Every message in the chat since scout joined, oldest first."""
         with self._transaction() as db:

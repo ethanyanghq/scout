@@ -11,8 +11,8 @@ import uvicorn
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
 
-from scout.ai_provider import connect_agent
-from scout.conversation import Agent, handle_message, handle_reaction
+from scout.ai_provider import connect_agent, connect_speak_gate
+from scout.conversation import Agent, Gate, handle_message, handle_reaction
 from scout.dev_endpoints import create_dev_router
 from scout.media import Attachment, MediaLibrary
 from scout.openai_transcriber import connect_transcriber
@@ -75,6 +75,7 @@ class Actions(BaseModel):
 def create_app(
     store: TripStore,
     agent: Agent,
+    gate: Gate,
     media: MediaLibrary,
     services: OutsideServices = NO_OUTSIDE_SERVICES,
 ) -> FastAPI:
@@ -99,7 +100,7 @@ def create_app(
             message_id=incoming.message_id,
             reply_to_text=incoming.reply_to_text,
         )
-        return _as_actions(handle_message(message, store, agent, services))
+        return _as_actions(handle_message(message, store, agent, gate, services))
 
     @app.post("/reactions")
     def receive_reaction(incoming: IncomingTapback) -> Actions:
@@ -127,6 +128,7 @@ def main() -> None:
     store = TripStore(Path(os.environ.get("SCOUT_DB_PATH", DEFAULT_DB_PATH)))
     services = connect_outside_services()
     agent = connect_agent(store, services)
+    gate = connect_speak_gate(store)
     media = MediaLibrary(
         Path(os.environ.get("SCOUT_MEDIA_DIR", DEFAULT_MEDIA_DIR)),
         connect_transcriber(),
@@ -135,7 +137,7 @@ def main() -> None:
     logger.info("scout service is listening on http://%s:%d", HOST, port)
     # The bridge logs every message, so a line per request would only repeat it.
     uvicorn.run(
-        create_app(store, agent, media, services),
+        create_app(store, agent, gate, media, services),
         host=HOST,
         port=port,
         access_log=False,

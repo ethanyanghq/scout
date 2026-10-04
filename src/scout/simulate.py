@@ -13,8 +13,8 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 
-from scout.ai_provider import connect_agent
-from scout.conversation import Agent, handle_message
+from scout.ai_provider import connect_agent, connect_speak_gate
+from scout.conversation import Agent, Gate, handle_message
 from scout.outgoing import as_plain_text
 from scout.outside_services import connect_outside_services
 from scout.trip import IncomingMessage
@@ -39,11 +39,12 @@ def main() -> None:
     with tempfile.TemporaryDirectory() as scratch:
         store = TripStore(Path(scratch) / "simulated.db")
         agent = connect_agent(store, connect_outside_services())
+        gate = connect_speak_gate(store)
         print(f"Group chat with {', '.join(args.people)}. Ctrl-D to quit.")
-        _chat(phones, store, agent)
+        _chat(phones, store, agent, gate)
 
 
-def _chat(phones: dict[str, str], store: TripStore, agent: Agent) -> None:
+def _chat(phones: dict[str, str], store: TripStore, agent: Agent, gate: Gate) -> None:
     while True:
         try:
             line = input("> ")
@@ -61,5 +62,5 @@ def _chat(phones: dict[str, str], store: TripStore, agent: Agent) -> None:
             sent_at=datetime.now(),
             participant_phones=tuple(phones.values()),
         )
-        for reply in handle_message(message, store, agent):
+        for reply in handle_message(message, store, agent, gate):
             print(f"\nscout: {as_plain_text(reply)}\n")

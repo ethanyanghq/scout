@@ -1,0 +1,16 @@
+# Journey: friends chat among themselves and scout stays out of it, then speaks
+# up when someone asks the room a trip question without tagging it.
+# Needs Claude.
+members maya leo priya
+from destination-chosen
+
+maya: omg did you see the game last night
+expect scout quiet
+leo: lol yes it was insane
+expect scout quiet
+priya: haha same
+expect scout quiet
+maya: priya what time is your flight on sunday
+expect scout quiet
+leo: what should we do while we're there?
+expect state activity_deck.activities ~ "name"

@@ -13,6 +13,7 @@ from scout.money import format_usd
 from scout.outgoing import Outgoing, Say
 from scout.outside_services import NO_OUTSIDE_SERVICES, OutsideServices
 from scout.settle_up import plan_payments
+from scout.speak_gate import is_addressed_to_scout
 from scout.trip import IncomingMessage, ItineraryDay, Member, MessagePhoto, Trip
 from scout.trip_actions import TripActionError, TripActions
 from scout.trip_store import TripStore
@@ -50,6 +51,11 @@ WEB_TOOLS = [
     },
 ]
 NO_REPLY = "NO_REPLY"
+UNTAGGED_MESSAGE_NOTE = (
+    "It does not tag you. A quick check guessed you might have something to "
+    "add, and that check is often wrong, so reply NO_REPLY unless the group "
+    "clearly needs you."
+)
 PARAGRAPH_BREAK = re.compile(r"\n\s*\n")
 SYSTEM_PROMPT = (Path(__file__).parent / "system_prompt.md").read_text()
 
@@ -145,8 +151,8 @@ def describe_situation(store: TripStore, trip: Trip, message: IncomingMessage) -
     sender = trip.find_member(message.sender_phone)
     tagged = (
         "It tags or addresses you."
-        if message.mentions_scout
-        else ("It does not tag you.")
+        if is_addressed_to_scout(store, message)
+        else UNTAGGED_MESSAGE_NOTE
     )
     if message.reply_to_text is not None:
         tagged += f' It replies in a thread to: "{message.reply_to_text}".'

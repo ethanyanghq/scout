@@ -70,6 +70,14 @@ class FakeAgent:
         return [Say(text) for text in self.replies]
 
 
+class FakeGate:
+    """Says SPEAK to messages containing "trigger" and SILENT to the rest, so a
+    test picks which untagged messages scout looks at."""
+
+    def should_speak(self, trip, message):
+        return "trigger" in message.text
+
+
 class BrokenAgent:
     def respond(self, trip, message):
         raise ConnectionError("Claude is unreachable")
@@ -84,7 +92,7 @@ def send(store, agent, sender, text, media=None):
         participant_phones=EVERYONE,
         media=media,
     )
-    return said(handle_message(message, store, agent))
+    return said(handle_message(message, store, agent, FakeGate()))
 
 
 def send_from_line(store, agent, sender, text, message_id):
@@ -97,7 +105,7 @@ def send_from_line(store, agent, sender, text, message_id):
         participant_phones=EVERYONE,
         message_id=message_id,
     )
-    return handle_message(message, store, agent)
+    return handle_message(message, store, agent, FakeGate())
 
 
 def scout_joins(store):
@@ -139,13 +147,21 @@ def test_the_trip_interview_card_goes_out_only_with_the_introduction(store):
     assert replies == ["Got it, Leo"]
 
 
+def test_scout_stays_quiet_about_a_snag_on_a_message_nobody_tagged_it_in(store):
+    scout_joins(store)
+
+    replies = send(store, BrokenAgent(), LEO, "trigger: can someone find flights?")
+
+    assert replies == []
+
+
 def test_scout_says_it_hit_a_snag_when_it_cant_introduce_itself(store):
     replies = send(store, BrokenAgent(), MAYA, "@scout hey")
 
     assert replies == [INTRODUCTION_SNAG_REPLY]
 
 
-def test_scout_stays_silent_in_a_new_chat_until_someone_tags_it(store):
+def test_scout_stays_silent_in_a_new_chat_when_the_gate_says_silent(store):
     agent = FakeAgent(replies=["Hey all, I'm scout 👋"])
 
     first = send(store, agent, MAYA, "hey everyone, someone added a bot?")
@@ -163,7 +179,7 @@ def test_everyone_in_the_chat_joins_the_trip_including_quiet_members(store):
     assert {member.phone for member in members} == set(EVERYONE)
 
 
-def test_talking_about_scout_without_the_at_sign_is_not_a_tag(store):
+def test_talking_about_scout_without_the_at_sign_is_left_to_the_gate(store):
     scout_joins(store)
     agent = FakeAgent()
 
@@ -226,7 +242,7 @@ def test_a_voice_note_that_only_talks_about_scout_is_not_a_tag(store):
     assert agent.messages_seen == []
 
 
-def test_untagged_trip_details_wait_for_someone_to_tag_scout(store):
+def test_untagged_trip_details_get_no_reply_when_the_gate_says_silent(store):
     scout_joins(store)
     agent = FakeAgent()
 
@@ -234,6 +250,58 @@ def test_untagged_trip_details_wait_for_someone_to_tag_scout(store):
 
     assert replies == []
     assert agent.messages_seen == []
+
+
+def test_an_untagged_message_the_gate_approves_reaches_the_agent(store):
+    scout_joins(store)
+    agent = FakeAgent()
+
+    replies = send(store, agent, LEO, "anyone know a trigger for flights?")
+
+    assert replies == ["agent reply"]
+
+
+def test_an_untagged_message_the_gate_approves_can_be_answered_with_silence(store):
+    scout_joins(store)
+
+    replies = send(store, FakeAgent(replies=[]), LEO, "trigger: lol same")
+
+    assert replies == []
+
+
+def test_a_tag_skips_the_gate(store):
+    scout_joins(store)
+
+    class GateThatMustNotRun:
+        def should_speak(self, trip, message):
+            raise AssertionError("a tag shouldn't need the gate")
+
+    message = IncomingMessage(
+        SPACE,
+        LEO,
+        "@scout hi",
+        datetime(2026, 10, 2, 9, 0),
+        participant_phones=EVERYONE,
+    )
+    agent = FakeAgent()
+
+    handle_message(message, store, agent, GateThatMustNotRun())
+
+    assert agent.messages_seen == ["@scout hi"]
+
+
+def test_a_threaded_reply_to_scouts_own_text_skips_the_gate(store):
+    scout_joins(store)
+    store.log_message(
+        SPACE, None, "want me to pull flights?", datetime(2026, 10, 2, 8, 5)
+    )
+    agent = FakeAgent()
+
+    reply_in_thread(
+        store, agent, LEO, "yes pls", replying_to="want me to pull flights?"
+    )
+
+    assert agent.messages_seen == ["yes pls"]
 
 
 def test_tagged_messages_always_reach_the_agent(store):
@@ -311,7 +379,7 @@ def test_replies_are_saved_so_the_agent_sees_them_next_time(store):
     ]
 
 
-def test_untagged_receipt_photos_wait_for_someone_to_tag_scout(store):
+def test_untagged_receipt_photos_get_no_reply_when_the_gate_says_silent(store):
     choose_san_juan(store)
     agent = FakeAgent()
 
@@ -437,7 +505,7 @@ def reply_in_thread(store, agent, sender, text, replying_to):
         message_id="reply-message",
         reply_to_text=replying_to,
     )
-    return handle_message(message, store, agent)
+    return handle_message(message, store, agent, FakeGate())
 
 
 def test_an_untagged_threaded_reply_under_a_poll_option_is_just_chat(store):

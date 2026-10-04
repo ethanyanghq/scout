@@ -17,10 +17,17 @@ class UnusedAgent:
         raise AssertionError("seeded trips and plain votes shouldn't need Claude")
 
 
+class UnusedGate:
+    def should_speak(self, trip, message):
+        raise AssertionError("seeded trips and plain votes shouldn't reach the gate")
+
+
 @pytest.fixture
 def client(store, tmp_path):
     return TestClient(
-        create_app(store, UnusedAgent(), MediaLibrary(tmp_path / "media", None))
+        create_app(
+            store, UnusedAgent(), UnusedGate(), MediaLibrary(tmp_path / "media", None)
+        )
     )
 
 
@@ -60,7 +67,7 @@ def test_seeding_never_overwrites_an_existing_trip(client):
 
 def test_reset_deletes_the_photos_and_voice_notes_the_chat_sent(store, tmp_path):
     media = MediaLibrary(tmp_path / "media", None)
-    client = TestClient(create_app(store, UnusedAgent(), media))
+    client = TestClient(create_app(store, UnusedAgent(), UnusedGate(), media))
     seed(client, "poll-open")
     voice_note = media.keep("chat-1", Attachment("audio/mpeg", b"mp3 bytes"))
 

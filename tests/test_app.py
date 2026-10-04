@@ -28,6 +28,11 @@ class UnusedAgent:
         raise AssertionError("votes shouldn't need Claude")
 
 
+class SilentGate:
+    def should_speak(self, trip, message):
+        return False
+
+
 @pytest.fixture
 def client(store, tmp_path):
     store.create_trip(SPACE)
@@ -35,7 +40,9 @@ def client(store, tmp_path):
     store.add_members(SPACE, [MAYA, LEO])
     store.open_poll(SPACE, OPTIONS)
     return TestClient(
-        create_app(store, UnusedAgent(), MediaLibrary(tmp_path / "media", None))
+        create_app(
+            store, UnusedAgent(), SilentGate(), MediaLibrary(tmp_path / "media", None)
+        )
     )
 
 

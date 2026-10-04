@@ -2,9 +2,11 @@
 
 Cheap, predictable cases (counting a plain "2" or a 👍 on a poll option as a
 vote, the picks sent from the activity deck, a pick of a nearby place) are
-handled here in code. Only messages that tag scout go to the agent, which reads
-the whole chat to catch up. Messages arrive one at a time per chat (the bridge
-waits for each reply), so two votes can't race to close the same poll.
+handled here in code. Messages that tag scout go straight to the agent, which
+reads the whole chat to catch up. Any other message first goes past a cheap
+gate that decides whether scout has anything to add. Messages arrive one at a
+time per chat (the bridge waits for each reply), so two votes can't race to
+close the same poll.
 """
 
 import logging
@@ -17,6 +19,7 @@ from scout import polls
 from scout.activity_deck import parse_picks
 from scout.outgoing import Outgoing, React, Say, Tapback, as_plain_text
 from scout.outside_services import NO_OUTSIDE_SERVICES, OutsideServices
+from scout.speak_gate import is_addressed_to_scout
 from scout.trip import IncomingMessage, IncomingReaction, Trip
 from scout.trip_actions import TripActions
 from scout.trip_store import TripStore
@@ -36,10 +39,15 @@ class Agent(Protocol):
     def respond(self, trip: Trip, message: IncomingMessage) -> list[Outgoing]: ...
 
 
+class Gate(Protocol):
+    def should_speak(self, trip: Trip, message: IncomingMessage) -> bool: ...
+
+
 def handle_message(
     message: IncomingMessage,
     store: TripStore,
     agent: Agent,
+    gate: Gate,
     services: OutsideServices = NO_OUTSIDE_SERVICES,
 ) -> list[Outgoing]:
     """Records the message and returns what scout should send back."""
@@ -57,7 +65,7 @@ def handle_message(
 
     trip = store.get_trip(message.space_id)
     is_introduction = not store.has_scout_spoken(message.space_id)
-    replies = _respond(trip, message, store, agent)
+    replies = _respond(trip, message, store, agent, gate)
     if is_introduction and replies and replies[0] != Say(INTRODUCTION_SNAG_REPLY):
         # Sent in code, not left to the AI, so every group gets the interview.
         actions = TripActions(store, message.space_id, message.sender_phone, services)
@@ -97,7 +105,11 @@ def handle_reaction(reaction: IncomingReaction, store: TripStore) -> list[Outgoi
 
 
 def _respond(
-    trip: Trip, message: IncomingMessage, store: TripStore, agent: Agent
+    trip: Trip,
+    message: IncomingMessage,
+    store: TripStore,
+    agent: Agent,
+    gate: Gate,
 ) -> list[Outgoing]:
     if trip.open_poll is not None:
         option_names = [option.name for option in trip.open_poll.options]
@@ -126,12 +138,16 @@ def _respond(
             actions.send_directions(pick)
             return actions.outbox
 
-    # Only a tag costs an AI call; everything else is just chat scout reads later.
-    if not message.mentions_scout:
-        logger.info("Not tagged, so no AI call")
+    # A tag always gets scout's attention. Anything else only does when the
+    # gate (a small, quick model) thinks scout has something to add.
+    is_addressed = is_addressed_to_scout(store, message)
+    if is_addressed:
+        logger.info("Tagged, so asking the AI")
+    elif gate.should_speak(trip, message):
+        logger.info("Not tagged, but the gate says scout may have something to add")
+    else:
+        logger.info("Not tagged, and the gate says to stay quiet")
         return []
-
-    logger.info("Tagged, so asking the AI")
     started = time.monotonic()
     try:
         replies = agent.respond(trip, message)
@@ -141,6 +157,9 @@ def _respond(
         return replies
     except Exception:
         logger.exception("Agent failed on message in %s", message.space_id)
+        # Nobody asked scout anything, so a snag isn't worth interrupting for.
+        if not is_addressed:
+            return []
         if store.has_scout_spoken(message.space_id):
             return [Say(SNAG_REPLY)]
         # Joining with a canned greeting would hide that scout is broken.
