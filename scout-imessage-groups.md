@@ -53,7 +53,7 @@ iMessage group (Maya, Leo, Priya + scout's Linq number)
 ### 1. scout's number: a Linq line
 
 - **One line per teammate.** Each developer runs `linq signup` and gets their own number and API key, so teammates never receive each other's webhooks.
-- **Free line limits.** A free line takes up to 20 contacts, and each contact must text the line before it can message them. So every member texts scout's number privately once (after `linq contacts add`). scout ignores those private texts.
+- **Free line limits.** A free line takes up to 20 contacts, and each contact must text the line before it can message them. So every member texts scout's number privately once (after `linq contacts add`). scout answers that text by asking what to call them.
 - **Groups.** Group chats take up to 31 handles and must be iMessage (or RCS), not SMS.
 - **Rate limits.** 7,000 messages per line per day, and 30 per minute between scout and any one person. Going over returns HTTP 429.
 - **Delivery.** Webhooks arrive at least once, so the bridge skips repeats by `event_id`. Deliveries are signed (Standard Webhooks headers).
