@@ -200,6 +200,8 @@ def _describe_trip(trip: Trip) -> str:
                 f"  {number}. {option.name} (~${option.estimated_cost_per_person_usd})"
                 f" votes: {', '.join(voters) or 'none'}"
             )
+    if trip.activity_deck:
+        lines.extend(_describe_activity_deck(trip))
     if trip.place_suggestions:
         lines.append("Places you last suggested:")
         lines.extend(
@@ -208,6 +210,25 @@ def _describe_trip(trip: Trip) -> str:
         )
     lines.extend(_describe_costs(trip))
     return "\n".join(lines)
+
+
+def _describe_activity_deck(trip: Trip) -> list[str]:
+    """Each deck activity and who's in for it, and who hasn't sent picks."""
+    deck = trip.activity_deck
+    waiting_on = [m.label for m in trip.members if m.phone not in deck.picks]
+    lines = [
+        "Activity deck (still waiting on picks from: "
+        f"{', '.join(waiting_on) or 'nobody'}):"
+    ]
+    for number, activity in enumerate(deck.activities, start=1):
+        fans = [
+            m.label for m in trip.members if number - 1 in deck.picks.get(m.phone, [])
+        ]
+        lines.append(
+            f"  {number}. {activity.name} (~${activity.estimated_cost_usd}) "
+            f"in: {', '.join(fans) or 'nobody'}"
+        )
+    return lines
 
 
 def _describe_costs(trip: Trip) -> list[str]:

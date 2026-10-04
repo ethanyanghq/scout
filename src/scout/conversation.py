@@ -1,10 +1,10 @@
 """Decides what scout does with each message in a chat.
 
 Cheap, predictable cases (counting a plain "2" or a 👍 on a poll option as a
-vote, a pick of a nearby place) are handled here in code. Only messages that
-tag scout go to the agent, which reads the whole chat to catch up. Messages
-arrive one at a time per chat (the bridge waits for each reply), so two votes
-can't race to close the same poll.
+vote, the picks sent from the activity deck, a pick of a nearby place) are
+handled here in code. Only messages that tag scout go to the agent, which reads
+the whole chat to catch up. Messages arrive one at a time per chat (the bridge
+waits for each reply), so two votes can't race to close the same poll.
 """
 
 import logging
@@ -14,6 +14,7 @@ from datetime import date, datetime
 from typing import Protocol
 
 from scout import polls
+from scout.activity_deck import parse_picks
 from scout.outgoing import Outgoing, React, Say, Tapback, as_plain_text
 from scout.outside_services import NO_OUTSIDE_SERVICES, OutsideServices
 from scout.trip import IncomingMessage, IncomingReaction, Trip
@@ -105,6 +106,15 @@ def _respond(
             logger.info("A vote for option %d, counted without the AI", choice + 1)
             actions = TripActions(store, trip.space_id, message.sender_phone)
             actions.record_sender_vote(choice, confirm=_tapback_on(message))
+            return actions.outbox
+
+    if trip.activity_deck is not None:
+        activity_names = [activity.name for activity in trip.activity_deck.activities]
+        picks = parse_picks(message.text, activity_names)
+        if picks is not None:
+            logger.info("Activity picks %s, saved without the AI", picks)
+            actions = TripActions(store, trip.space_id, message.sender_phone)
+            actions.record_sender_picks(picks, confirm=_tapback_on(message))
             return actions.outbox
 
     if trip.place_suggestions:

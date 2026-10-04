@@ -1,9 +1,11 @@
+from dataclasses import replace
 from datetime import date, datetime, time
 
 import pytest
 
 from scout.best_flights import HomeAirport
 from scout.brochures import ActivityPitch, DestinationPitch
+from scout.cards import fits_in_one_message
 from scout.flights import Flight, FlightsError
 from scout.outgoing import Card, Say
 from scout.outside_services import OutsideServices
@@ -11,6 +13,7 @@ from scout.places import Coordinates, PhotographedPlace, Place, PlacesError
 from scout.trip import (
     Chronotype,
     DateWindow,
+    DeckActivity,
     DestinationOption,
     ItineraryAddOn,
     ItineraryDay,
@@ -521,6 +524,120 @@ def test_the_plan_is_posted_as_text_when_place_search_is_down(locked_in_actions,
 
     assert said(actions.outbox) == ["the plan:\nSun 3/14 · Land and check in"]
     assert "place search isn't working" in status
+
+
+def deck_activity(name):
+    return DeckActivity(name, "A local favorite.", 60)
+
+
+DECK = [
+    deck_activity("Night kayak in the bio bay"),
+    deck_activity("Old San Juan food tour"),
+    deck_activity("El Yunque hike"),
+]
+
+
+def test_the_deck_is_one_card_with_a_photo_and_an_in_or_pass_pick_per_activity(
+    locked_in_actions, store
+):
+    actions = actions_with(store, FakeBrochurePhotos())
+
+    actions.send_activity_deck(DECK)
+
+    [card] = actions.outbox
+    assert card.thumbnail_url == (
+        "https://lh3.googleusercontent.com/San-Juan,-Puerto-Rico"
+    )
+    pickers = [
+        node
+        for node in card.layout["root"]["children"]
+        if node["type"] == "optionPicker"
+    ]
+    assert [p["options"][0]["label"] for p in pickers] == [a.name for a in DECK]
+    assert {p["options"][1]["label"] for p in pickers} == {"Pass"}
+    assert pickers[0]["options"][0]["imageUrl"] == (
+        "https://lh3.googleusercontent.com/"
+        "Night-kayak-in-the-bio-bay-in-San-Juan,-Puerto-Rico"
+    )
+    [send] = card.layout["actions"]
+    assert send["deepLinkURL"] == "hermesshare://text?lead=%40scout%20my%20picks%3A"
+
+
+class FakeLongPhotoLinks(FakeBrochurePhotos):
+    """Google Places, when its photo links run to thousands of characters."""
+
+    def find_photographed(self, text_query, photo_count):
+        place = super().find_photographed(text_query, photo_count)
+        return replace(place, photo_urls=[url + "x" * 3000 for url in place.photo_urls])
+
+
+def test_a_deck_too_big_for_one_message_drops_the_activity_photos(
+    locked_in_actions, store
+):
+    actions = actions_with(store, FakeLongPhotoLinks())
+
+    actions.send_activity_deck(DECK)
+
+    [card] = actions.outbox
+    assert fits_in_one_message(card.layout)
+    assert card.thumbnail_url is not None
+    pickers = [
+        n for n in card.layout["root"]["children"] if n["type"] == "optionPicker"
+    ]
+    assert all("imageUrl" not in p["options"][0] for p in pickers)
+
+
+def test_without_place_search_the_deck_goes_out_as_numbered_text(
+    locked_in_actions, store
+):
+    status = locked_in_actions.send_activity_deck(DECK)
+
+    [card] = locked_in_actions.outbox
+    assert card.thumbnail_url is None
+    assert "2. Old San Juan food tour · ~$60" in card.fallback_text
+    assert '"@scout my picks: 1, 3"' in card.fallback_text
+    assert "posted as text: place search isn't set up" in status
+
+
+def test_a_deck_activity_name_cant_hold_the_pick_separators(locked_in_actions):
+    with pytest.raises(TripActionError, match="can't contain"):
+        locked_in_actions.send_activity_deck(
+            [*DECK[:2], deck_activity("Snorkel, then lunch")]
+        )
+
+
+def test_picks_are_confirmed_until_the_last_one_brings_the_tally(store):
+    everyone_votes_for_san_juan(store)
+    TripActions(store, SPACE, MAYA).send_activity_deck(DECK)
+
+    maya_actions = TripActions(store, SPACE, MAYA)
+    maya_actions.record_sender_picks([0, 1])
+    leo_actions = TripActions(store, SPACE, LEO)
+    leo_actions.record_sender_picks([0])
+
+    assert said(maya_actions.outbox) == ["got Maya's picks (1 of 2 sent)"]
+    assert said(leo_actions.outbox) == [
+        "everyone's picks are in:\n"
+        "everyone: Night kayak in the bio bay\n"
+        "just one: Old San Juan food tour (Maya)\n"
+        "nobody: El Yunque hike"
+    ]
+
+
+def test_sending_a_new_deck_forgets_the_old_picks(locked_in_actions, store):
+    locked_in_actions.send_activity_deck(DECK)
+    locked_in_actions.record_sender_picks([0])
+
+    locked_in_actions.send_activity_deck(DECK)
+
+    assert store.get_trip(SPACE).activity_deck.picks == {}
+
+
+def test_picks_must_be_on_the_deck(locked_in_actions):
+    locked_in_actions.send_activity_deck(DECK)
+
+    with pytest.raises(TripActionError, match="activity 4 isn't on the deck"):
+        locked_in_actions.record_member_picks("Leo", [3])
 
 
 class FakeFlights:

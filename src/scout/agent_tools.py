@@ -9,6 +9,7 @@ from scout.brochures import ActivityPitch, DestinationPitch
 from scout.money import CENTS_PER_DOLLAR
 from scout.trip import (
     Chronotype,
+    DeckActivity,
     DestinationOption,
     ItineraryAddOn,
     ItineraryDay,
@@ -168,6 +169,80 @@ TOOL_DEFINITIONS = [
                 },
             },
             "required": ["member", "option_number"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "send_activity_deck",
+        "description": (
+            "Post a deck of things to do at the chosen destination for each "
+            "member to tick. Replaces any earlier deck and its picks."
+        ),
+        # Not strict, like post_itinerary, to keep the strict tools' grammar
+        # small enough for the API. The action checks every value.
+        "strict": False,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "activities": {
+                    "type": "array",
+                    "description": "3 to 8 real, well-known activities there.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string",
+                                "description": (
+                                    "Under 6 words, without commas, e.g. "
+                                    "'Night kayak in the bio bay'."
+                                ),
+                            },
+                            "description": {
+                                "type": "string",
+                                "description": "One short line on what it is.",
+                            },
+                            "estimated_cost_usd": {
+                                "type": "integer",
+                                "description": "Rough cost per person in US dollars.",
+                            },
+                        },
+                        "required": ["name", "description", "estimated_cost_usd"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
+            "required": ["activities"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "record_member_picks",
+        "description": (
+            "Record which deck activities one member is in for, from what they "
+            "or a friend said in words. Replaces their earlier picks. Posts the "
+            "tally automatically once everyone has sent picks."
+        ),
+        "strict": False,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "member": {
+                    "type": "string",
+                    "description": (
+                        "Whose picks these are, exactly as the chat labels "
+                        "them, like 'Maya' or '…0002'."
+                    ),
+                },
+                "activity_numbers": {
+                    "type": "array",
+                    "items": {"type": "integer"},
+                    "description": (
+                        "Every activity they're in for, by its number on the "
+                        "deck. Empty if they're in for none."
+                    ),
+                },
+            },
+            "required": ["member", "activity_numbers"],
             "additionalProperties": False,
         },
     },
@@ -692,6 +767,15 @@ def run_tool(
             )
         case "close_poll":
             return actions.close_poll()
+        case "send_activity_deck":
+            return actions.send_activity_deck(
+                [DeckActivity(**activity) for activity in tool_input["activities"]]
+            )
+        case "record_member_picks":
+            return actions.record_member_picks(
+                tool_input["member"],
+                [number - 1 for number in tool_input["activity_numbers"]],
+            )
         case "lock_in_group_choice":
             return actions.lock_in_group_choice(tool_input["destination"])
         case "post_itinerary":

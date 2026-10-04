@@ -10,8 +10,10 @@ from pathlib import Path
 
 from scout.places import Coordinates, Place
 from scout.trip import (
+    ActivityDeck,
     Chronotype,
     DateWindow,
+    DeckActivity,
     DestinationOption,
     Expense,
     ItineraryAddOn,
@@ -83,6 +85,26 @@ CREATE TABLE IF NOT EXISTS itinerary_add_ons (
     PRIMARY KEY (space_id, position)
 );
 
+-- The activity deck scout last sent. Sending a new one replaces it and its
+-- picks.
+CREATE TABLE IF NOT EXISTS deck_activities (
+    space_id           TEXT NOT NULL REFERENCES trips (space_id),
+    position           INTEGER NOT NULL,
+    name               TEXT NOT NULL,
+    description        TEXT NOT NULL,
+    estimated_cost_usd INTEGER NOT NULL,
+    photo_url          TEXT,
+    PRIMARY KEY (space_id, position)
+);
+
+-- One row per member who has sent their picks; sending again replaces them.
+CREATE TABLE IF NOT EXISTS activity_picks (
+    space_id  TEXT NOT NULL REFERENCES trips (space_id),
+    phone     TEXT NOT NULL,
+    positions TEXT NOT NULL,
+    PRIMARY KEY (space_id, phone)
+);
+
 CREATE TABLE IF NOT EXISTS expenses (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     space_id     TEXT NOT NULL REFERENCES trips (space_id),
@@ -152,6 +174,8 @@ TABLES_BY_SPACE = (
     "polls",
     "itinerary_days",
     "itinerary_add_ons",
+    "deck_activities",
+    "activity_picks",
     "expenses",
     "settlements",
     "pending_receipts",
@@ -192,6 +216,7 @@ class TripStore:
                 open_poll=_load_open_poll(db, space_id),
                 itinerary=_load_itinerary(db, space_id),
                 itinerary_add_ons=_load_itinerary_add_ons(db, space_id),
+                activity_deck=_load_activity_deck(db, space_id),
                 expenses=_load_expenses(db, space_id),
                 settlements=_load_settlements(db, space_id),
                 pending_receipt=_load_pending_receipt(db, space_id),
@@ -338,6 +363,40 @@ class TripStore:
                     (space_id, position, add_on.activity, add_on.wanted_by)
                     for position, add_on in enumerate(add_ons)
                 ],
+            )
+
+    def replace_activity_deck(
+        self, space_id: str, activities: list[DeckActivity]
+    ) -> None:
+        """Saves a newly sent deck, forgetting the old one and its picks."""
+        with self._transaction() as db:
+            db.execute("DELETE FROM deck_activities WHERE space_id = ?", (space_id,))
+            db.execute("DELETE FROM activity_picks WHERE space_id = ?", (space_id,))
+            db.executemany(
+                "INSERT INTO deck_activities (space_id, position, name, description, "
+                "estimated_cost_usd, photo_url) VALUES (?, ?, ?, ?, ?, ?)",
+                [
+                    (
+                        space_id,
+                        position,
+                        activity.name,
+                        activity.description,
+                        activity.estimated_cost_usd,
+                        activity.photo_url,
+                    )
+                    for position, activity in enumerate(activities)
+                ],
+            )
+
+    def save_activity_picks(
+        self, space_id: str, phone: str, positions: list[int]
+    ) -> None:
+        """Saves the activities one member is in for, replacing earlier picks."""
+        with self._transaction() as db:
+            db.execute(
+                "INSERT OR REPLACE INTO activity_picks (space_id, phone, positions) "
+                "VALUES (?, ?, ?)",
+                (space_id, phone, json.dumps(positions)),
             )
 
     def add_expense(
@@ -574,6 +633,31 @@ def _load_itinerary_add_ons(
         (space_id,),
     ).fetchall()
     return [ItineraryAddOn(row["activity"], row["wanted_by"]) for row in rows]
+
+
+def _load_activity_deck(db: sqlite3.Connection, space_id: str) -> ActivityDeck | None:
+    rows = db.execute(
+        "SELECT * FROM deck_activities WHERE space_id = ? ORDER BY position",
+        (space_id,),
+    ).fetchall()
+    if not rows:
+        return None
+    picks = db.execute(
+        "SELECT phone, positions FROM activity_picks WHERE space_id = ? ORDER BY rowid",
+        (space_id,),
+    ).fetchall()
+    return ActivityDeck(
+        activities=[
+            DeckActivity(
+                row["name"],
+                row["description"],
+                row["estimated_cost_usd"],
+                row["photo_url"],
+            )
+            for row in rows
+        ],
+        picks={pick["phone"]: json.loads(pick["positions"]) for pick in picks},
+    )
 
 
 def _load_expenses(db: sqlite3.Connection, space_id: str) -> list[Expense]:

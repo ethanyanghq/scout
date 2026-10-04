@@ -216,6 +216,28 @@ class ItineraryDay:
 
 
 @dataclass(frozen=True)
+class DeckActivity:
+    """One thing to do at the destination, as the activity deck shows it."""
+
+    name: str
+    # A line on what it is, e.g. "Boat from the hotel dock, gear included".
+    description: str
+    estimated_cost_usd: int
+    photo_url: str | None = None
+
+
+@dataclass
+class ActivityDeck:
+    """The activities scout put to the group, and who's in for which (AC-1)."""
+
+    activities: list[DeckActivity]
+    # Member phone -> 0-based indexes of the activities they're in for. Only
+    # members who have sent their picks are here, so an empty list means
+    # "sent, and in for nothing".
+    picks: dict[str, list[int]]
+
+
+@dataclass(frozen=True)
 class ItineraryAddOn:
     """Something only one member wanted, offered as optional rather than
     scheduled for everyone or dropped (IT-2)."""
@@ -270,6 +292,7 @@ class Trip:
     open_poll: Poll | None
     itinerary: list[ItineraryDay]
     itinerary_add_ons: list[ItineraryAddOn]
+    activity_deck: ActivityDeck | None
     expenses: list[Expense]
     settlements: list[Settlement]
     pending_receipt: PendingReceipt | None

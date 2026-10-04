@@ -22,7 +22,7 @@ here's how it goes:
 
 i never book anything or touch real money. i find the links, you book. and i stay quiet unless you tag me or tell me something about the trip, because a scout that talks too much gets kicked out of the chat.
 
-**where i'm at:** joining, collecting preferences, and running the vote all work, in plain text (phase 1). the itinerary (a card paced to whether the group are early risers or night owls), booking links, the calendar link, and cost splitting are built too. the cards in steps 3 and 4 aren't: they're specified in [integration.md](integration.md) and not written yet, so today the vote is a numbered text poll. on-trip recommendations and a shared photo album are also still to come. the full plan lives in [scout-PRD.md](scout-PRD.md).
+**where i'm at:** joining, collecting preferences, and running the vote all work, in plain text (phase 1). the activity deck, the itinerary (a card paced to whether the group are early risers or night owls), booking links, the calendar link, and cost splitting are built too. the cards in steps 3 and 4 aren't: they're specified in [integration.md](integration.md) and not written yet, so today the vote is a numbered text poll. on-trip recommendations and a shared photo album are also still to come. the full plan lives in [scout-PRD.md](scout-PRD.md).
 
 ## How it fits together
 

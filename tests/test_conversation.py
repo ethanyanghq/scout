@@ -18,6 +18,7 @@ from scout.outgoing import Card, Link, React, Say, Tapback
 from scout.places import Coordinates, Place
 from scout.polls import format_poll
 from scout.trip import (
+    DeckActivity,
     DestinationOption,
     IncomingMessage,
     IncomingReaction,
@@ -365,6 +366,27 @@ def test_a_plain_pick_sends_directions_without_the_agent(store):
     assert agent.messages_seen == []
     assert replies[0] == Say("directions to Taco Bar:")
     assert isinstance(replies[1], Link)
+
+
+def test_picks_sent_from_the_deck_are_saved_without_the_agent(store):
+    choose_san_juan(store)
+    store.replace_activity_deck(
+        SPACE,
+        [DeckActivity("Night kayak", "", 60), DeckActivity("Food tour", "", 80)],
+    )
+    agent = FakeAgent()
+
+    replies = send_from_line(
+        store, agent, LEO, "@scout my picks: Pass · Food tour", message_id="leo-picks"
+    )
+
+    assert agent.messages_seen == []
+    assert replies == [
+        React(
+            "leo-picks", Tapback.LIKE, fallback_text="got …0002's picks (1 of 3 sent)"
+        )
+    ]
+    assert store.get_trip(SPACE).activity_deck.picks == {LEO: [1]}
 
 
 def tapback(store, sender, on_text, kind="like", on_id="option-message"):

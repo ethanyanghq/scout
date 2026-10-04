@@ -9,10 +9,13 @@ ingest flattens an inbound `imessage_app` part to a single replacement
 character before any webhook sees it, so the group still votes in text.
 """
 
+import base64
+import json
 import urllib.parse
 from dataclasses import dataclass
 from datetime import date
 
+from scout.activity_deck import PASS_LABEL, PICKS_LEAD
 from scout.best_flights import (
     HomeCityFlight,
     describe_stops,
@@ -21,7 +24,7 @@ from scout.best_flights import (
 )
 from scout.group_summary import format_window, summarize_group
 from scout.itinerary import format_day, format_start
-from scout.trip import ItineraryAddOn, ItineraryDay, Trip
+from scout.trip import DeckActivity, ItineraryAddOn, ItineraryDay, Trip
 
 # Destination articles are white text on near-black, with one muted sea-glass
 # accent and soft gray for the small print, so nothing fights the photos.
@@ -33,6 +36,9 @@ NIGHT_GLOW_HEX = "#1B2422"
 # answers arrive as an ordinary message: Linq can't carry a card reply back.
 INTERVIEW_ANSWER_LEAD = "@scout my trip:"
 UPCOMING_MONTH_COUNT = 6
+# Linq's limit on a card's data: URL, mirrored from bridge/hermes-card.ts.
+MAX_CARD_URL_CHARS = 16_384
+CARD_URL_PREFIX = "data:application/json;base64,"
 # (id, label, sublabel)
 TRIP_LENGTHS = [
     ("weekend", "A weekend", "2–3 nights"),
@@ -278,6 +284,90 @@ def _option(
     if sf_symbol:
         option["systemImage"] = sf_symbol
     return option
+
+
+def fits_in_one_message(layout: dict) -> bool:
+    """Whether Linq will send the card. It refuses one whose data: URL is
+    longer than MAX_CARD_URL_CHARS (bridge/hermes-card.ts). Python's JSON is
+    a little longer than the bridge's, so this errs on the safe side."""
+    encoded = base64.b64encode(json.dumps(layout).encode())
+    return len(CARD_URL_PREFIX) + len(encoded) <= MAX_CARD_URL_CHARS
+
+
+def activity_deck(
+    destination: str, activities: list[DeckActivity], destination_photo_url: str | None
+) -> dict:
+    """A deck of things to do, each with its own in-or-pass picker. Send puts
+    the activities someone is in for in the chat as text."""
+    lead = urllib.parse.quote(PICKS_LEAD)
+    photo = (
+        [
+            {
+                "type": "gallery",
+                "urls": [destination_photo_url],
+                "heightPt": 180,
+                "cornerRadius": 18,
+            }
+        ]
+        if destination_photo_url
+        else []
+    )
+    return {
+        "version": 1,
+        # HermesShare requires one on any card with form inputs.
+        "formId": "activity-deck",
+        "title": "What are you up for?",
+        "subtitle": destination,
+        "accentColorHex": SEA_GLASS_HEX,
+        "background": {"kind": "atmosphere", "colorsHex": [NIGHT_GLOW_HEX]},
+        "root": {
+            "type": "vstack",
+            "spacing": 14,
+            "alignment": "leading",
+            "children": [
+                *photo,
+                _text(
+                    "Tick what you'd do, then send. Your picks drop into the chat.",
+                    role="body",
+                    color_hex=SOFT_GRAY_HEX,
+                ),
+                *[
+                    _activity_picker(position, activity)
+                    for position, activity in enumerate(activities)
+                ],
+                _text(
+                    "Prices are estimates per person. Nothing is booked.",
+                    role="footnote",
+                    color_hex=SOFT_GRAY_HEX,
+                ),
+            ],
+        },
+        "actions": [
+            {
+                "id": "send-activity-picks",
+                "label": "Send my picks",
+                "systemImage": "paperplane.fill",
+                # A `text` action puts the picks in the message box as plain text.
+                "deepLinkURL": f"hermesshare://text?lead={lead}",
+            }
+        ],
+    }
+
+
+def _activity_picker(position: int, activity: DeckActivity) -> dict:
+    # Each activity is its own single-select field, because HermesShare's form
+    # holds one answer per field. The "in" option is labeled with the activity
+    # itself, so the sent text names what someone picked.
+    picked = _option(
+        "in",
+        activity.name,
+        f"~${activity.estimated_cost_usd:,} · {activity.description}",
+        "checkmark.circle",
+    )
+    if activity.photo_url:
+        picked["imageUrl"] = activity.photo_url
+    passed = _option("pass", PASS_LABEL, "Not for me", "xmark.circle")
+    return _picker(f"activity-{position}", "list", [picked, passed])
 
 
 def itinerary(trip: Trip, destination_photo_url: str) -> dict:

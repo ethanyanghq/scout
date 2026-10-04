@@ -12,6 +12,15 @@ from dataclasses import replace
 from datetime import date
 
 from scout import polls
+from scout.activity_deck import (
+    MAX_DECK_ACTIVITIES,
+    MIN_DECK_ACTIVITIES,
+    PASS_LABEL,
+    PICK_SEPARATOR,
+    find_deck_photos,
+    format_deck,
+    format_tally,
+)
 from scout.best_flights import (
     HomeAirport,
     NoFlightFound,
@@ -27,8 +36,10 @@ from scout.brochures import (
 )
 from scout.calendar_link import format_calendar_message, google_calendar_link
 from scout.cards import (
+    activity_deck,
     best_flights,
     destination_article,
+    fits_in_one_message,
     flights_thumbnail_url,
     itinerary,
     trip_interview,
@@ -50,6 +61,7 @@ from scout.settle_up import (
 )
 from scout.trip import (
     DateWindow,
+    DeckActivity,
     DestinationOption,
     ItineraryAddOn,
     ItineraryDay,
@@ -444,6 +456,84 @@ class TripActions:
         )
         return "Directions sent."
 
+    def send_activity_deck(self, activities: list[DeckActivity]) -> str:
+        """Posts the deck of things to do at the destination for each member to
+        tick, replacing any earlier deck and its picks."""
+        trip = self._load_trip()
+        if trip.destination is None:
+            raise TripActionError("the group hasn't picked a destination yet")
+        _check_deck_activities(activities)
+
+        destination_photo, missing_photo = None, "place search isn't set up"
+        places = self._services.places
+        if places is not None:
+            try:
+                destination_photo, activities = find_deck_photos(
+                    places, trip.destination, activities
+                )
+                missing_photo = f"no photo of {trip.destination}"
+            except PlacesError as error:
+                missing_photo = f"place search isn't working: {error}"
+
+        self._store.replace_activity_deck(self._space_id, activities)
+        layout = activity_deck(trip.destination, activities, destination_photo)
+        if not fits_in_one_message(layout):
+            # Photo links are most of a deck, and some of Google's are long.
+            without_photos = [replace(a, photo_url=None) for a in activities]
+            layout = activity_deck(trip.destination, without_photos, destination_photo)
+        # Without a thumbnail, the bridge sends the deck's text instead.
+        self.outbox.append(
+            Card(
+                layout=layout,
+                caption=f"What are you up for in {trip.destination}?",
+                thumbnail_url=destination_photo,
+                fallback_text=format_deck(trip.destination, activities),
+            )
+        )
+        if destination_photo is None:
+            return f"Activity deck posted as text: {missing_photo}."
+        return "Activity deck posted."
+
+    def record_sender_picks(
+        self, positions: list[int], confirm: Callable[[str], Outgoing] = Say
+    ) -> str:
+        """Saves the activities the sender is in for. Unless they're the last
+        to send, `confirm` turns the confirmation text into what scout sends."""
+        return self._record_picks(self._sender_phone, positions, confirm)
+
+    def record_member_picks(self, member_label: str, positions: list[int]) -> str:
+        """Saves the activities any member is in for, including picks a friend
+        reported for them."""
+        member = self._find_member(member_label)
+        return self._record_picks(member.phone, positions, Say)
+
+    def _record_picks(
+        self, phone: str, positions: list[int], confirm: Callable[[str], Outgoing]
+    ) -> str:
+        trip = self._load_trip()
+        deck = trip.activity_deck
+        if deck is None:
+            raise TripActionError("there is no activity deck; send one first")
+        for position in positions:
+            if not 0 <= position < len(deck.activities):
+                raise TripActionError(f"activity {position + 1} isn't on the deck")
+
+        picks = sorted(set(positions))
+        self._store.save_activity_picks(self._space_id, phone, picks)
+        deck.picks[phone] = picks
+        if len(deck.picks) == len(trip.members):
+            self.outbox.append(Say(format_tally(deck, trip.members)))
+            return "Picks recorded. Everyone has sent theirs, so the tally is posted."
+
+        member = trip.find_member(phone)
+        self.outbox.append(
+            confirm(
+                f"got {member.label}'s picks "
+                f"({len(deck.picks)} of {len(trip.members)} sent)"
+            )
+        )
+        return "Picks recorded."
+
     def send_trip_interview(self, today: date) -> str:
         """Posts the card each member taps through to say what trip they want."""
         self.outbox.append(
@@ -570,6 +660,25 @@ def _find_sender_payment(trip: Trip, sender_phone: str, payee_label: str) -> Pay
         f"{sender.label} doesn't owe {payee_label} anything. "
         f"They owe: {payees or 'nobody'}"
     )
+
+
+def _check_deck_activities(activities: list[DeckActivity]) -> None:
+    if not MIN_DECK_ACTIVITIES <= len(activities) <= MAX_DECK_ACTIVITIES:
+        raise TripActionError(
+            f"a deck needs {MIN_DECK_ACTIVITIES} to {MAX_DECK_ACTIVITIES} "
+            f"activities, got {len(activities)}"
+        )
+    names = [activity.name.strip().casefold() for activity in activities]
+    if len(set(names)) != len(names):
+        raise TripActionError("each activity needs its own name")
+    for activity in activities:
+        # The sent picks are names separated by these, so a name can't have one.
+        if PICK_SEPARATOR.search(activity.name):
+            raise TripActionError(f"{activity.name!r} can't contain '·' or ','")
+        if activity.name.strip().casefold() == PASS_LABEL.casefold():
+            raise TripActionError(f"an activity can't be called {PASS_LABEL!r}")
+        if activity.estimated_cost_usd < 0:
+            raise TripActionError(f"{activity.name!r} can't cost less than $0")
 
 
 def _check_every_home_city_has_an_airport(

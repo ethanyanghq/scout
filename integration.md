@@ -183,6 +183,17 @@ scout stays silent for every submit except the last. When the final person
 sends, it posts the aggregate: what everyone wants, what most people want, and
 what only one person wants.
 
+Built: `send_activity_deck` (`src/scout/trip_actions.py`), `activity_deck.py`
+for reading picks and the tally, and `cards.activity_deck` for the layout. A
+card's own submit never reaches scout (Linq flattens it to one character), so
+the deck works like the trip interview: Send fills in a text, "@scout my picks:
+Night kayak · Pass · Food tour", from the labels people tapped, and
+`conversation.py` counts it in code without a Claude call. Each "in" option is
+labeled with its activity so the text names what was picked. Instead of
+silence, each submit before the last gets a 👍 tapback, as plain votes do.
+Without a Places key the deck goes out as a numbered list, answered with
+"@scout my picks: 1, 3".
+
 ### Stage 5 — Itinerary
 
 Built from the aggregate, not from must-haves. One anchor activity per day,
@@ -198,8 +209,9 @@ text version, and `cards.itinerary` for the layout, a `timeline` with each day's
 start time under a photo of the destination. The text version is the card's
 `fallback_text`, as with the flight card, rather than a second message. The
 card needs `GOOGLE_PLACES_API_KEY` for its photo; without it the plan goes out
-as text. Until the activity deck exists, the agent builds the plan from what
-people say in the chat, and puts what only one person asked for in the add-ons.
+as text. The agent builds the plan from the activity deck's picks, or from
+what people say in the chat when there's no deck, and puts what only one person
+picked in the add-ons.
 
 ### Stage 6 — Hotel
 
@@ -406,7 +418,7 @@ Reusing what exists wherever it already works.
 | Interview | `Member`, `PreferenceUpdate` (`src/scout/trip.py`) | add `vacation_interest`; `chronotype` is built |
 | Ballot | `polls.decide_winner`, `count_votes`, `format_result` | unchanged; a submit becomes a vote |
 | Brochure data | `DestinationOption` (`src/scout/trip.py`) | add `hotel`, `amenities`, `photo_url` |
-| Activities | — | new `Activity` and `ActivityVote` |
+| Activities | — | built: `DeckActivity` and `ActivityDeck` (`src/scout/trip.py`) |
 | Bookings | `Expense`, `log_sender_expense` (`src/scout/trip_actions.py`) | new `Booking`, logged as an expense on confirm |
 | Hotels and activities | `GooglePlaces.search` (`src/scout/places.py`) | extend `FIELD_MASK` with `rating`, `userRatingCount`, `photos` |
 | Flight | `GoogleFlights` (`src/scout/flights.py`), through SerpApi | built: one flight per home city, live fare, `flightBoard` card |

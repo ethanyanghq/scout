@@ -1,0 +1,18 @@
+# Journey: scout sends the activity deck, everyone sends their picks, and the
+# plan schedules what the group shares and offers solo picks as add-ons.
+# Picks are counted in code; asking for the deck and the plan needs Claude.
+members maya leo priya
+from destination-chosen
+
+maya: @scout what should we do while we're there?
+expect state activity_deck.activities ~ "name"
+maya: @scout my picks: 1, 2
+expect scout reacted like
+leo: @scout my picks: 1
+priya: @scout my picks: 1, 3
+expect scout ~ "everyone's picks are in"
+expect state activity_deck.picks ~ "[0,2]"
+priya: @scout can you make us a plan?
+expect scout ~ "the plan"
+expect state itinerary_add_ons ~ "maya"
+expect state itinerary_add_ons ~ "priya"
