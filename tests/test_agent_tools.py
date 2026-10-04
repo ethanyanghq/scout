@@ -163,3 +163,17 @@ def test_a_tool_call_reads_plainly_in_the_log_without_empty_fields():
         "  AI used save_member_preferences(member=…7695, display_name=Yuvraj, "
         "budget_usd=1000, must_haves=Mexico / bungee jumping) → Saved."
     )
+
+
+def test_flight_tool_input_reaches_the_action(maya_actions):
+    # Before a destination is picked the action refuses, which shows the
+    # input parsed.
+    with pytest.raises(TripActionError, match="destination"):
+        run_tool(
+            maya_actions,
+            "send_best_flights",
+            {
+                "home_airports": [{"home_city": "Boston", "airport_code": "BOS"}],
+                "arrival_airport_code": "SJU",
+            },
+        )

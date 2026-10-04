@@ -11,10 +11,23 @@ character before any webhook sees it, so the group still votes in text.
 
 from dataclasses import dataclass
 
+from scout.best_flights import (
+    HomeCityFlight,
+    describe_stops,
+    format_clock,
+    format_duration,
+)
+from scout.group_summary import format_window
+from scout.trip import Trip
+
 # Tints the card's icons and headers. A warm sand, for a resort brochure.
 BROCHURE_ACCENT_HEX = "#E08A3C"
 # Shown when a hero photo won't load.
 BROCHURE_FALLBACK_SYMBOL = "beach.umbrella.fill"
+# A departure-board blue, matching HermesShare's own flight cards.
+FLIGHT_ACCENT_HEX = "#0A84FF"
+NONSTOP_HEX = "#30D158"
+CONNECTING_HEX = "#FF9F0A"
 
 
 @dataclass(frozen=True)
@@ -116,6 +129,98 @@ def _activity_tile(brochure: Brochure, activity: Activity) -> dict:
 def brochure_thumbnail_url(brochures: list[Brochure]) -> str | None:
     """The photo iMessage shows on the unopened bubble: the first hero there is."""
     return next((b.hero_photo_url for b in brochures if b.hero_photo_url), None)
+
+
+def best_flights(trip: Trip, home_city_flights: list[HomeCityFlight]) -> dict:
+    """A departure board for each home city's flight, with its fare and a
+    button that opens it on Google Flights.
+
+    Expects a trip whose destination and dates are locked in.
+    """
+    return {
+        "version": 1,
+        "title": f"Flights to {trip.destination}",
+        "subtitle": f"{format_window(trip.dates)} · round trip",
+        "accentColorHex": FLIGHT_ACCENT_HEX,
+        # The board is drawn dark, so the card around it goes dark too.
+        "background": {"kind": "atmosphere"},
+        "root": {
+            "type": "vstack",
+            "spacing": 16,
+            "alignment": "leading",
+            "children": [
+                node
+                for home_city_flight in home_city_flights
+                for node in _flight_nodes(trip, home_city_flight)
+            ],
+        },
+        "actions": [_booking_action(f) for f in home_city_flights],
+    }
+
+
+def flights_thumbnail_url(home_city_flights: list[HomeCityFlight]) -> str | None:
+    """The photo iMessage shows on the unopened bubble: the destination city."""
+    return next(
+        (
+            f.flight.destination_photo_url
+            for f in home_city_flights
+            if f.flight.destination_photo_url
+        ),
+        None,
+    )
+
+
+def _flight_nodes(trip: Trip, home_city_flight: HomeCityFlight) -> list[dict]:
+    flight = home_city_flight.flight
+    board = {
+        "type": "flightBoard",
+        "board": {
+            "origin": flight.departure_airport,
+            "destination": flight.arrival_airport,
+            "originCity": home_city_flight.home_city,
+            "destinationCity": trip.destination,
+            "flightCode": flight.flight_numbers[0],
+            "departTime": format_clock(flight.departs_at),
+            "arriveTime": format_clock(flight.arrives_at),
+            "status": describe_stops(flight),
+            "statusColorHex": (
+                CONNECTING_HEX if flight.layover_airports else NONSTOP_HEX
+            ),
+        },
+    }
+    fare = {
+        "type": "card",
+        "child": {
+            "type": "vstack",
+            "spacing": 4,
+            "children": [
+                _row("Fare", f"${flight.price_usd:,} per person", "dollarsign.circle"),
+                _row("Airline", " / ".join(flight.airlines), "airplane"),
+                _row("Flying time", format_duration(flight.duration_minutes), "clock"),
+                _row("For", ", ".join(home_city_flight.travelers), "person.2.fill"),
+            ],
+        },
+    }
+    return [board, fare]
+
+
+def _row(key: str, value: str, sf_symbol: str) -> dict:
+    return {
+        "type": "keyValueRow",
+        "key": key,
+        "value": value,
+        "iconSystemName": sf_symbol,
+    }
+
+
+def _booking_action(home_city_flight: HomeCityFlight) -> dict:
+    # An https link opens Google Flights rather than posting a reply in the chat.
+    return {
+        "id": f"book-{_slug(home_city_flight.home_city)}",
+        "label": f"Book from {home_city_flight.home_city}",
+        "systemImage": "airplane.departure",
+        "deepLinkURL": home_city_flight.flight.booking_url,
+    }
 
 
 def _slug(text: str) -> str:
