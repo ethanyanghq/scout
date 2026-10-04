@@ -238,6 +238,19 @@ def test_one_member_choosing_for_the_group_closes_the_poll_without_votes(store):
     assert trip.dates == DateWindow(date(2027, 3, 14), date(2027, 3, 19))
 
 
+def test_choosing_for_the_group_announces_the_lock_in_once(store):
+    store.create_trip(SPACE)
+    store.add_members(SPACE, [MAYA, LEO])
+    store.save_preferences(SPACE, MAYA, MAYA_PREFERENCES)
+    store.save_preferences(SPACE, LEO, LEO_PREFERENCES)
+    actions = TripActions(store, SPACE, MAYA)
+
+    actions.lock_in_group_choice("san juan")
+
+    texts = [item.text for item in actions.outbox if isinstance(item, Say)]
+    assert texts == ["locked in: san juan, Mar 14–19. add it to your calendar:"]
+
+
 def test_the_group_can_choose_a_destination_without_a_poll(maya_actions, store):
     maya_actions.lock_in_group_choice("Lisbon, Portugal")
 

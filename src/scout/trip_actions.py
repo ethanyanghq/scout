@@ -278,7 +278,9 @@ class TripActions:
 
         dates = summarize_group(trip.members).shared_window
         self._store.lock_in_destination(self._space_id, destination, dates)
-        self.outbox.append(Say(f"{destination} it is, the group's pick 🎉"))
+        # The calendar message already says the trip is locked in.
+        if dates is None:
+            self.outbox.append(Say(f"{destination} it is, the group's pick 🎉"))
         calendar = self._send_calendar(destination, dates)
         return f"Destination is now {destination}. {calendar}"
 
