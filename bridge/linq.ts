@@ -19,7 +19,7 @@ import { cardPart, cardProblems, type HermesCard } from "./hermes-card";
 import { LINQ_API_URL, LinqApiError, callLinq, type LinqApi, type LinqHandle } from "./linq-api";
 import { threadedReplySchema } from "./spectrum";
 import { isTapback, tapbackEmoji, tapbackNamed } from "./tapbacks";
-import { isSkipped, logOutcome, type Skipped } from "./trace";
+import { consoleReport, isSkipped, type Skipped } from "./trace";
 
 const PLATFORM = "linq";
 export const WEBHOOK_PORT = 8788;
@@ -191,7 +191,9 @@ function receiveWebhookEvents(
         : readLinqEvent(event);
       seenEventIds.add(event.event_id);
       if (isSkipped(record)) {
-        logOutcome({ id: event.event_id, chatId: null, kind: "skipped", reason: record.skipReason });
+        if (isAboutAMemberMessage(event)) {
+          consoleReport.finished({ id: event.event_id, chatId: null, kind: "skipped", reason: record.skipReason });
+        }
       } else {
         delivered = delivered.then(() => emit(record));
       }
@@ -199,6 +201,13 @@ function receiveWebhookEvents(
     },
   });
   return () => server.stop(true);
+}
+
+// Linq also reports scout's own sends, deliveries, read receipts and typing.
+// Logging a skip for each would bury the conversation, so only skipped member
+// messages and tapbacks are worth a line.
+function isAboutAMemberMessage(event: LinqEvent): boolean {
+  return event.event_type === "message.received" || event.event_type.startsWith("reaction.");
 }
 
 // Lets scout count group members who haven't texted yet.

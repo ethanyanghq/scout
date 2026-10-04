@@ -18,7 +18,7 @@ import z from "zod";
 import { localIMessage } from "@spectrum-ts/imessage-local";
 import { askScout, tellScoutAboutTapback, toJpeg, type ScoutAction } from "./scout";
 import { tapbackEmoji, tapbackNamed } from "./tapbacks";
-import { secondsSince, type MessageOutcome, type Skipped } from "./trace";
+import { secondsSince, type RelayReport, type Skipped } from "./trace";
 
 type PhotoAttachment = Extract<Content, { type: "attachment" }>;
 
@@ -56,7 +56,7 @@ export const noTypingPause: TypingPause = () => 0;
 
 export async function relaySpectrumMessages(
   app: SpectrumInstance,
-  reportOutcome: (outcome: MessageOutcome) => void,
+  report: RelayReport,
   typingPause: TypingPause,
 ): Promise<void> {
   const recent = new RecentMessages();
@@ -69,47 +69,60 @@ export async function relaySpectrumMessages(
     const outcome = { id: message.id, chatId: space.id };
     const readable = readForScout(space, message);
     if ("skipReason" in readable) {
-      reportOutcome({ ...outcome, kind: "skipped", reason: readable.skipReason });
+      report.finished({ ...outcome, kind: "skipped", reason: readable.skipReason });
       continue;
     }
 
     try {
-      const actions =
-        readable.kind === "tapback"
-          ? await tellScoutAboutTapback({
-              space_id: space.id,
-              sender_phone: readable.senderPhone,
-              tapback: readable.tapback,
-              message_id: readable.targetId,
-              message_text: await findText(space, readable.targetId, recent),
-              sent_at: message.timestamp.toISOString(),
-            })
-          : await askScout({
-              space_id: space.id,
-              sender_phone: readable.senderPhone,
-              text: readable.text,
-              sent_at: message.timestamp.toISOString(),
-              participant_phones: await listParticipants(space, message),
-              photo: readable.photo ? await toJpeg(await readable.photo.read()) : null,
-              message_id: message.id,
-              reply_to_text: readable.replyToId
-                ? await findText(space, readable.replyToId, recent)
-                : null,
-            });
+      const arrival = { ...outcome, senderPhone: readable.senderPhone, at: message.timestamp };
+      let actions: ScoutAction[];
+      if (readable.kind === "tapback") {
+        const tappedText = await findText(space, readable.targetId, recent);
+        report.arrived({ ...arrival, said: describeTapback(readable.tapback, tappedText) });
+        actions = await tellScoutAboutTapback({
+          space_id: space.id,
+          sender_phone: readable.senderPhone,
+          tapback: readable.tapback,
+          message_id: readable.targetId,
+          message_text: tappedText,
+          sent_at: message.timestamp.toISOString(),
+        });
+      } else {
+        const repliedToText = readable.replyToId
+          ? await findText(space, readable.replyToId, recent)
+          : null;
+        report.arrived({ ...arrival, said: describeMessage(readable, repliedToText) });
+        actions = await askScout({
+          space_id: space.id,
+          sender_phone: readable.senderPhone,
+          text: readable.text,
+          sent_at: message.timestamp.toISOString(),
+          participant_phones: await listParticipants(space, message),
+          photo: readable.photo ? await toJpeg(await readable.photo.read()) : null,
+          message_id: message.id,
+          reply_to_text: repliedToText,
+        });
+      }
       for (const action of actions) {
         await perform(space, action, { recent, typing });
       }
-      reportOutcome({
-        ...outcome,
-        kind: "handled",
-        replyCount: actions.length,
-        seconds: secondsSince(startedAt),
-      });
+      report.finished({ ...outcome, kind: "handled", sent: actions, seconds: secondsSince(startedAt) });
     } catch (error) {
       // Keep listening: one failed message shouldn't take scout offline.
-      reportOutcome({ ...outcome, kind: "failed", error });
+      report.finished({ ...outcome, kind: "failed", error });
     }
   }
+}
+
+// How a member's message reads in the bridge's log.
+function describeMessage({ text, photo }: ReadableParts, repliedToText: string | null): string {
+  const words = photo ? `[photo] ${text}`.trim() : text;
+  return repliedToText === null ? words : `(replying to "${repliedToText}") ${words}`;
+}
+
+function describeTapback(tapback: string, tappedText: string | null): string {
+  const emoji = tapbackEmoji(tapback as Parameters<typeof tapbackEmoji>[0]) ?? tapback;
+  return tappedText === null ? `${emoji} on a message` : `${emoji} on "${tappedText}"`;
 }
 
 // What the relay keeps across messages to send scout's actions well.

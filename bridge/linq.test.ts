@@ -212,7 +212,7 @@ describe("a Linq group chat through Spectrum", () => {
     });
     const app = await Spectrum({ providers: [platform.config({})] });
     const finished = new Promise<MessageOutcome>((resolve) => {
-      relaySpectrumMessages(app, resolve, typingPause);
+      relaySpectrumMessages(app, { arrived: () => {}, finished: resolve }, typingPause);
     });
     await fetch(`http://127.0.0.1:${webhookPort}/linq-events`, {
       method: "POST",

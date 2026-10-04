@@ -8,12 +8,15 @@ import { join } from "node:path";
 import { findSetupProblems, iMessageMode, type DevSetup } from "./dev-setup";
 import { readEnvFile } from "./env-file";
 import { WEBHOOK_PORT, WEBHOOK_URL } from "./linq";
+import { isWorthShowing } from "./relay-log";
 
 const BRIDGE_FOLDER = import.meta.dir;
 const REPO_ROOT = join(BRIDGE_FOLDER, "..");
 const DEFAULT_SERVICE_PORT = 8787;
 
 type Labeled = { label: string; subprocess: Bun.Subprocess<"ignore", "pipe", "pipe"> };
+type LineFilter = (line: string) => boolean;
+const showEveryLine: LineFilter = () => true;
 
 const setup = await describeSetup();
 const problems = findSetupProblems(setup);
@@ -29,7 +32,9 @@ const running: Labeled[] = [
   start("bridge", [process.execPath, "index.ts"], BRIDGE_FOLDER),
 ];
 if (mode === "linq") {
-  running.push(start("relay", ["linq", "webhooks", "listen", "--forward-to", WEBHOOK_URL], BRIDGE_FOLDER));
+  running.push(
+    start("relay", ["linq", "webhooks", "listen", "--forward-to", WEBHOOK_URL], BRIDGE_FOLDER, isWorthShowing),
+  );
 }
 console.log(`[dev] scout is starting in ${mode} mode. Ctrl-C stops everything.`);
 
@@ -80,27 +85,24 @@ function isPortBusy(port: number): boolean {
   }
 }
 
-function start(label: string, command: string[], cwd: string): Labeled {
+function start(label: string, command: string[], cwd: string, shouldShow = showEveryLine): Labeled {
   const subprocess = Bun.spawn(command, { cwd, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
   const prefix = `[${label}]`.padEnd("[service]".length);
-  printLines(subprocess.stdout, prefix, (line) => console.log(line));
-  printLines(subprocess.stderr, prefix, (line) => console.error(line));
+  printLines(subprocess.stdout, (line) => shouldShow(line) && console.log(`${prefix} ${line}`));
+  // Errors always show.
+  printLines(subprocess.stderr, (line) => console.error(`${prefix} ${line}`));
   return { label, subprocess };
 }
 
-async function printLines(
-  stream: ReadableStream<Uint8Array>,
-  prefix: string,
-  print: (line: string) => void,
-): Promise<void> {
+async function printLines(stream: ReadableStream<Uint8Array>, print: (line: string) => void): Promise<void> {
   const decoder = new TextDecoder();
   let unfinishedLine = "";
   for await (const chunk of stream) {
     const lines = (unfinishedLine + decoder.decode(chunk, { stream: true })).split("\n");
     unfinishedLine = lines.pop() ?? "";
-    for (const line of lines) print(`${prefix} ${line}`);
+    for (const line of lines) print(line);
   }
-  if (unfinishedLine) print(`${prefix} ${unfinishedLine}`);
+  if (unfinishedLine) print(unfinishedLine);
 }
 
 async function stopAll(exitCode: number): Promise<void> {

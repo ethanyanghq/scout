@@ -18,6 +18,8 @@ from scout.outgoing import Card, Link, Outgoing, React, Say
 from scout.trip import IncomingMessage, IncomingReaction, MessagePhoto
 from scout.trip_store import TripStore
 
+logger = logging.getLogger(__name__)
+
 # Only the bridge on this machine should reach scout, never the internet.
 HOST = "127.0.0.1"
 DEFAULT_PORT = 8787
@@ -103,8 +105,32 @@ def _as_actions(outgoing: list[Outgoing]) -> Actions:
 
 
 def main() -> None:
-    logging.basicConfig(level=logging.INFO)
+    _log_decisions_only()
     store = TripStore(Path(os.environ.get("SCOUT_DB_PATH", DEFAULT_DB_PATH)))
     agent = connect_agent(store)
     port = int(os.environ.get("SCOUT_PORT", DEFAULT_PORT))
-    uvicorn.run(create_app(store, agent), host=HOST, port=port)
+    logger.info("scout service is listening on http://%s:%d", HOST, port)
+    # The bridge logs every message, so a line per request would only repeat it.
+    uvicorn.run(
+        create_app(store, agent),
+        host=HOST,
+        port=port,
+        access_log=False,
+        log_level="warning",
+    )
+
+
+def _log_decisions_only() -> None:
+    """Logs what scout decided and why, in plain lines, and anything worse
+    with its level. The HTTP clients' per-request lines would bury those."""
+    handler = logging.StreamHandler()
+    handler.setFormatter(_ReadableFormatter("%(message)s"))
+    logging.basicConfig(level=logging.INFO, handlers=[handler])
+    for chatty in ("httpx", "httpx2"):
+        logging.getLogger(chatty).setLevel(logging.WARNING)
+
+
+class _ReadableFormatter(logging.Formatter):
+    def format(self, record: logging.LogRecord) -> str:
+        line = super().format(record)
+        return line if record.levelno <= logging.INFO else f"{record.levelname}: {line}"

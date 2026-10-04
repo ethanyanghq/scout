@@ -236,7 +236,9 @@ export async function connectDevChat(chat: DevChat): Promise<() => Promise<void>
   setLogLevel("warn");
   const app = await Spectrum({ providers: [devchatPlatform(chat).config({})] });
   // Scripts and agents drive the console, so scout replies without pausing.
-  const relay = relaySpectrumMessages(app, (outcome) => chat.recordOutcome(outcome), noTypingPause);
+  // The console prints the chat itself, so only finished messages matter here.
+  const report = { arrived: () => {}, finished: (outcome: MessageOutcome) => chat.recordOutcome(outcome) };
+  const relay = relaySpectrumMessages(app, report, noTypingPause);
   return async () => {
     await app.stop();
     await relay;

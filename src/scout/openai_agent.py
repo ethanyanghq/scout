@@ -6,7 +6,7 @@ import logging
 import openai
 
 from scout.agent import MAX_TOOL_ROUNDS, NO_REPLY, SYSTEM_PROMPT, describe_situation
-from scout.agent_tools import TOOL_DEFINITIONS, run_tool
+from scout.agent_tools import TOOL_DEFINITIONS, describe_tool_call, run_tool
 from scout.outgoing import Outgoing, Say
 from scout.outside_services import NO_OUTSIDE_SERVICES, OutsideServices
 from scout.trip import IncomingMessage, Trip
@@ -113,6 +113,6 @@ def _run_tool_calls(actions: TripActions, tool_calls: list) -> list[dict]:
             outcome = run_tool(actions, call.function.name, tool_input)
         except TripActionError as error:
             outcome = f"Error: {error}"
-        logger.info("Tool %s(%s) -> %s", call.function.name, tool_input, outcome)
+        logger.info(describe_tool_call(call.function.name, tool_input, outcome))
         results.append({"role": "tool", "tool_call_id": call.id, "content": outcome})
     return results

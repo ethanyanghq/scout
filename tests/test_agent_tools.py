@@ -2,7 +2,7 @@ from datetime import date
 
 import pytest
 
-from scout.agent_tools import run_tool
+from scout.agent_tools import describe_tool_call, run_tool
 from scout.outgoing import Link, Say
 from scout.places import Coordinates, Place
 from scout.trip import DateWindow, DestinationOption, ItineraryDay
@@ -144,3 +144,20 @@ def test_brochure_tool_input_reaches_the_action(maya_actions):
             "send_destination_brochures",
             {"nights": 5, "destinations": [destination] * 3},
         )
+
+
+def test_a_tool_call_reads_plainly_in_the_log_without_empty_fields():
+    tool_input = {
+        "member": "…7695",
+        "display_name": "Yuvraj",
+        "available_from": None,
+        "budget_usd": 1000,
+        "must_haves": ["Mexico", "bungee jumping"],
+    }
+
+    line = describe_tool_call("save_member_preferences", tool_input, "Saved.")
+
+    assert line == (
+        "  AI used save_member_preferences(member=…7695, display_name=Yuvraj, "
+        "budget_usd=1000, must_haves=Mexico / bungee jumping) → Saved."
+    )

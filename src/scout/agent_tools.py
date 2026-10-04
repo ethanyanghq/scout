@@ -490,6 +490,29 @@ TOOL_DEFINITIONS = [
 ]
 
 
+# Long inputs, like a whole itinerary, are cut short in the log.
+MAX_LOGGED_INPUT_CHARACTERS = 200
+
+
+def describe_tool_call(name: str, tool_input: dict[str, Any], outcome: str) -> str:
+    """One readable log line for a tool the AI used: what it passed, leaving
+    out empty fields, and what came back."""
+    passed = ", ".join(
+        f"{field}={_plain(value)}"
+        for field, value in tool_input.items()
+        if value not in (None, [], "")
+    )
+    if len(passed) > MAX_LOGGED_INPUT_CHARACTERS:
+        passed = passed[:MAX_LOGGED_INPUT_CHARACTERS] + "…"
+    return f"  AI used {name}({passed}) → {outcome}"
+
+
+def _plain(value: Any) -> str:
+    if isinstance(value, list):
+        return " / ".join(_plain(item) for item in value)
+    return str(value)
+
+
 def run_tool(actions: TripActions, name: str, tool_input: dict[str, Any]) -> str:
     """Runs one tool call. Raises TripActionError if the input can't be used."""
     match name:

@@ -48,7 +48,7 @@ iPhone in the group
 - **scout types before it texts.** Before each text, link or card, the relay shows the typing bubble and waits about as long as the text would take to type (0.8 to 5 seconds, `typingPauseFor` in `spectrum.ts`). Linq can't show the bubble in group chats, so there scout only pauses. The developer console and the tests skip the wait.
 - **Actions fall back to text.** If a line can't send a tapback, a threaded reply or a link card, or the bridge can't find the message it targets, the plain-text version goes instead.
 - **The bridge drops** private chats (in Linq mode), scout's own messages, messages with nothing to read (stickers, voice memos) and repeat deliveries.
-- **The bridge logs one line per message**: `handled` with the reply count and time, `skipped` with the reason, or `failed` with the error.
+- **The log reads like the chat.** `bun run dev` shows each message as it arrives (time, the chat's first 8 characters, the sender's last 4 digits, their words), then the service's decision in plain words (`Not tagged, so no AI call`, a counted vote, or the AI's tool calls and timing), then what scout sent and how long it took, `· no reply`, `· skipped:` with the reason, or `✗` with the error. Request lines, scout's own sends, delivery and read receipts, and the relay's setup details (including its signing secret) are hidden.
 - **The service decides whether to speak** (`conversation.py`). A plain vote ("2"), a 👍 or ❤️ on a poll option, and a pick of a nearby place are handled in code. Only a message that tags `@scout` goes to the AI, which reads the whole chat to catch up: it introduces itself the first time, and saves the details everyone shared about themselves without tagging it. If that AI call fails, scout says it hit a snag. Everything else gets no reply and costs no AI call.
 - **Votes stay quiet.** A vote by number gets a 👍 tapback, and a tapback vote gets a reply threaded under the option, instead of a new line in the chat.
 - **Each chat is one trip**, saved in `scout.db` under the chat's ID (`space_id`).
@@ -193,7 +193,7 @@ This needs a Mac (the bridge converts iPhone photos with macOS's `sips`) and you
 
 ### When scout doesn't reply
 
-1. **Find the bridge's line for the message** (`[bridge]` in `bun run dev`). `skipped` says why: a private chat, scout's own message, nothing to read, or a repeat delivery. `failed` shows the error from Linq's API or the service. `handled … scout stayed quiet` means the service chose not to reply (step 3).
+1. **Find the message in the log** (`[bridge]` in `bun run dev`). `skipped` says why: a private chat, scout's own message, nothing to read, or a repeat delivery. `✗` shows the error from Linq's API or the service. `· no reply` means the service chose not to reply, and the `[service]` line above it says why (step 3).
 2. **No line at all?** The message never reached the bridge. Is the relay running (`[relay]` in `bun run dev`)? Did the sender text scout privately first? The free line ignores anyone who hasn't.
 3. **Was scout tagged?** Only messages with `@scout` reach the AI. Saying "scout" without the @ is just chat.
 4. **Did the database layout change?** There are no migrations. Delete `scout.db`, and every group gets the introduction again.

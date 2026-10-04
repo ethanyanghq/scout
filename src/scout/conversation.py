@@ -8,6 +8,7 @@ can't race to close the same poll.
 """
 
 import logging
+import time
 from collections.abc import Callable
 from datetime import datetime
 from typing import Protocol
@@ -89,6 +90,7 @@ def _respond(
         option_names = [option.name for option in trip.open_poll.options]
         choice = polls.parse_vote(message.text, option_names)
         if choice is not None:
+            logger.info("A vote for option %d, counted without the AI", choice + 1)
             actions = TripActions(store, trip.space_id, message.sender_phone)
             actions.record_sender_vote(choice, confirm=_tapback_on(message))
             return actions.outbox
@@ -97,16 +99,24 @@ def _respond(
         place_names = [place.name for place in trip.place_suggestions]
         pick = polls.parse_vote(message.text, place_names)
         if pick is not None:
+            logger.info("A pick of place %d, sent directions without the AI", pick + 1)
             actions = TripActions(store, trip.space_id, message.sender_phone)
             actions.send_directions(pick)
             return actions.outbox
 
     # Only a tag costs an AI call; everything else is just chat scout reads later.
     if not message.mentions_scout:
+        logger.info("Not tagged, so no AI call")
         return []
 
+    logger.info("Tagged, so asking the AI")
+    started = time.monotonic()
     try:
-        return agent.respond(trip, message)
+        replies = agent.respond(trip, message)
+        took = time.monotonic() - started
+        outcome = "replied" if replies else "chose not to reply"
+        logger.info("The AI %s after %.1fs", outcome, took)
+        return replies
     except Exception:
         logger.exception("Agent failed on message in %s", message.space_id)
         if store.has_scout_spoken(message.space_id):

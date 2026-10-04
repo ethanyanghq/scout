@@ -6,7 +6,7 @@ from pathlib import Path
 
 import anthropic
 
-from scout.agent_tools import TOOL_DEFINITIONS, run_tool
+from scout.agent_tools import TOOL_DEFINITIONS, describe_tool_call, run_tool
 from scout.group_summary import DateWindow, format_window, summarize_group
 from scout.money import format_usd
 from scout.outgoing import Outgoing, Say
@@ -230,7 +230,7 @@ def _run_tool_calls(actions: TripActions, content: list) -> list[dict]:
         except TripActionError as error:
             outcome = f"Error: {error}"
             is_error = True
-        logger.info("Tool %s(%s) -> %s", block.name, block.input, outcome)
+        logger.info(describe_tool_call(block.name, block.input, outcome))
         results.append(
             {
                 "type": "tool_result",

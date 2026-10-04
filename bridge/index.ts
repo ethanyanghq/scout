@@ -14,21 +14,24 @@
 //   SCOUT_URL=http://127.0.0.1:8787   Where the Python service is listening.
 
 import { Spectrum } from "spectrum-ts";
+import { setLogLevel } from "spectrum-ts/authoring";
 import { imessage } from "spectrum-ts/providers/imessage";
 import { localIMessage } from "@spectrum-ts/imessage-local";
 import { WEBHOOK_URL, linqPlatform } from "./linq";
 import { scoutUrl } from "./scout";
 import { relaySpectrumMessages, typingPauseFor } from "./spectrum";
-import { logOutcome } from "./trace";
+import { consoleReport } from "./trace";
 
 const mode = process.env.IMESSAGE_MODE ?? "local";
+// Spectrum's start and stop notices would bury the conversation in the log.
+setLogLevel("warn");
 const app = await connectToIMessage(mode);
 console.log(`scout bridge is listening in ${mode} mode, forwarding to ${scoutUrl()}`);
 if (mode === "linq") {
   console.log(`Linq's events come in at ${WEBHOOK_URL}. Relay them with`);
   console.log(`\`linq webhooks listen --forward-to ${WEBHOOK_URL}\`, which \`bun run dev\` starts for you.`);
 }
-await relaySpectrumMessages(app, logOutcome, typingPauseFor);
+await relaySpectrumMessages(app, consoleReport, typingPauseFor);
 
 async function connectToIMessage(mode: string) {
   if (mode === "local") {
