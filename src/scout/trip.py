@@ -8,14 +8,16 @@ from pathlib import Path
 
 from scout.places import Place
 
-# Matches "@scout" and "@Scout?", but not "scout," or "@scouting".
-# Only an explicit tag counts: "someone added a scout bot?" isn't for scout.
+# Matches "@scout" and "@Scout?", but not "@scouting".
 SCOUT_MENTION = re.compile(r"@scout\b", re.IGNORECASE)
-# A voice note can't type the @, so saying scout's name to it counts: "@scout"
-# or "at scout" as a transcript writes it, "hey/hi/okay scout", or opening
-# with "Scout,". Talking about scout ("let's ask scout later") still doesn't.
-SPOKEN_SCOUT_MENTION = re.compile(
-    r"(?:@|\b(?:at|hey|hi|hello|yo|ok|okay)\s+)scout\b|^\W*scout\b", re.IGNORECASE
+# Saying scout's name to it counts as a tag, typed or spoken: "@scout" or
+# "at scout" as a transcript writes it, "hey/hi/yo/okay scout", or opening
+# with "Scout,". Talking about scout ("let's ask scout later", "scout seems
+# useful") doesn't. Voice notes and dictation often hear the name as "Scott".
+ADDRESSES_SCOUT = re.compile(
+    r"(?:@|\b(?:at|hey|hi|hello|yo|ok|okay)\s+)(?:scout|scott)\b"
+    r"|^\W*(?:scout|scott)\s*,",
+    re.IGNORECASE,
 )
 
 
@@ -70,7 +72,7 @@ class SharedMedia:
         """Whether a voice note says scout's name to it, like a spoken tag."""
         if self.kind is not MediaKind.VOICE_NOTE or self.transcript is None:
             return False
-        return SPOKEN_SCOUT_MENTION.search(self.transcript) is not None
+        return ADDRESSES_SCOUT.search(self.transcript) is not None
 
     @property
     def chat_label(self) -> str:
@@ -104,7 +106,7 @@ class IncomingMessage:
 
     @property
     def mentions_scout(self) -> bool:
-        if SCOUT_MENTION.search(self.text) is not None:
+        if ADDRESSES_SCOUT.search(self.text) is not None:
             return True
         return self.media is not None and self.media.addresses_scout
 

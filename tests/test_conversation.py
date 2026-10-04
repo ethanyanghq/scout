@@ -162,7 +162,7 @@ def test_everyone_in_the_chat_joins_the_trip_including_quiet_members(store):
     assert {member.phone for member in members} == set(EVERYONE)
 
 
-def test_saying_scouts_name_without_the_at_sign_is_not_a_tag(store):
+def test_talking_about_scout_without_the_at_sign_is_not_a_tag(store):
     scout_joins(store)
     agent = FakeAgent()
 
@@ -170,6 +170,33 @@ def test_saying_scouts_name_without_the_at_sign_is_not_a_tag(store):
 
     assert replies == []
     assert agent.messages_seen == []
+
+
+def test_greeting_scout_by_name_in_a_text_is_a_tag(store):
+    scout_joins(store)
+    agent = FakeAgent()
+
+    for greeting in ["Yo Scout", "hey scout, where are we at?", "Scout, help"]:
+        send(store, agent, MAYA, greeting)
+
+    assert agent.messages_seen == [
+        "Yo Scout",
+        "hey scout, where are we at?",
+        "Scout, help",
+    ]
+
+
+def test_scout_misheard_as_scott_is_still_a_tag(store):
+    scout_joins(store)
+    agent = FakeAgent()
+    misheard = replace(
+        BOSTON_VOICE_NOTE, transcript="Hey Scott, I'm flying from Boston."
+    )
+
+    send(store, agent, MAYA, "", media=misheard)
+    send(store, agent, LEO, "at Scott what's the plan")
+
+    assert len(agent.messages_seen) == 2
 
 
 def test_a_voice_note_that_says_scouts_name_to_it_is_a_tag(store):
