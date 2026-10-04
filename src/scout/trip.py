@@ -229,7 +229,7 @@ class DeckActivity:
 
 
 class Rating(IntEnum):
-    """How a member swiped on an activity. The value is its weight in the
+    """How a member rated an activity. The value is its weight in the
     group's tally, so a meh keeps an activity alive without beating a yeah."""
 
     NAH = 0

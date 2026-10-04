@@ -1,9 +1,9 @@
 """The activity deck: what each member is up for at the destination (AC-1 to AC-3).
 
-Picks come back as an ordinary text, "@scout my picks: Scuba · Pass · Food
-tour", because Linq flattens a card's own reply to one unreadable character.
-The card's Send button fills that text in from the options people tapped;
-anyone without the card types the activity numbers instead.
+Picks come back as an ordinary text, "@scout my picks: Yeah · Nah · Meh",
+because Linq flattens a card's own reply to one unreadable character. The
+card's Send button fills that text in with one rating per activity, in deck
+order; anyone without the card types the activity numbers instead.
 """
 
 import re
@@ -31,11 +31,17 @@ def parse_picks(text: str, activity_names: list[str]) -> dict[int, Rating] | Non
     message = text.strip()
     if not message.casefold().startswith(PICKS_LEAD.casefold()):
         return None
+    answers = [
+        answer.strip()
+        for answer in PICK_SEPARATOR.split(message[len(PICKS_LEAD) :])
+        if answer.strip()
+    ]
+    card_ratings = [RATING_WORDS.get(answer.casefold()) for answer in answers]
+    if len(answers) == len(activity_names) and None not in card_ratings:
+        ratings = dict(enumerate(card_ratings))
+        return {index: r for index, r in ratings.items() if r != Rating.NAH}
     ratings: dict[int, Rating] = {}
-    for answer in PICK_SEPARATOR.split(message[len(PICKS_LEAD) :]):
-        answer = answer.strip()
-        if not answer:
-            continue
+    for answer in answers:
         activity, rating = _split_rating(answer)
         index = polls.parse_vote(activity, activity_names)
         if index is None:

@@ -717,7 +717,7 @@ DECK = [
 ]
 
 
-def test_the_deck_is_one_card_of_a_swipe_legend_and_a_stack_of_the_activities(
+def test_the_deck_is_one_card_with_a_nah_meh_yeah_choice_per_activity(
     locked_in_actions, store
 ):
     actions = actions_with(store, FakeBrochurePhotos())
@@ -728,24 +728,32 @@ def test_the_deck_is_one_card_of_a_swipe_legend_and_a_stack_of_the_activities(
     assert card.thumbnail_url == (
         "https://lh3.googleusercontent.com/San-Juan,-Puerto-Rico"
     )
-    nodes = card.layout["root"]["children"]
-    # Nothing but the legend and the stack, so the card fits without scrolling.
-    assert [node["type"] for node in nodes] == ["text", "swipeDeck"]
-    assert nodes[0]["text"] == "←  Nah      ↑  Meh      Yeah  →"
-    [swipe_deck] = [node for node in nodes if node["type"] == "swipeDeck"]
-    assert [c["title"] for c in swipe_deck["cards"]] == [a.name for a in DECK]
-    assert swipe_deck["cards"][0]["imageUrl"] == (
+    choices = card.layout["root"]["children"]
+    assert len(choices) == len(DECK)
+    first = choices[0]["child"]["children"]
+    assert first[0]["urls"] == [
         "https://lh3.googleusercontent.com/"
         "Night-kayak-in-the-bio-bay-in-San-Juan,-Puerto-Rico"
-    )
-    assert swipe_deck["cards"][0]["subtitle"] == ("~$60 per person · A local favorite.")
-    assert [(c["id"], c["swipeDirection"]) for c in swipe_deck["choices"]] == [
-        ("nah", "left"),
-        ("meh", "up"),
-        ("yeah", "right"),
     ]
+    assert first[1]["text"] == "Night kayak in the bio bay"
+    assert first[2]["text"] == "~$60 per person · A local favorite."
+    picker = first[3]
+    assert [o["label"] for o in picker["options"]] == ["Nah", "Meh", "Yeah"]
+    # Starting on nah means every activity has a rating when Send is tapped.
+    assert picker["selectedId"] == "nah"
     [send] = card.layout["actions"]
     assert send["deepLinkURL"] == "hermesshare://text?lead=%40scout%20my%20picks%3A"
+
+
+def test_the_deck_uses_only_nodes_the_hermesshare_build_on_phones_can_open(
+    locked_in_actions, store
+):
+    actions = actions_with(store, FakeBrochurePhotos())
+
+    actions.send_activity_deck(DECK)
+
+    [card] = actions.outbox
+    assert "swipeDeck" not in node_types(card.layout["root"])
 
 
 class FakeLongPhotoLinks(FakeBrochurePhotos):
@@ -766,10 +774,7 @@ def test_a_deck_too_big_for_one_message_drops_the_activity_photos(
     [card] = actions.outbox
     assert fits_in_one_message(card.layout)
     assert card.thumbnail_url is not None
-    [swipe_deck] = [
-        n for n in card.layout["root"]["children"] if n["type"] == "swipeDeck"
-    ]
-    assert all("imageUrl" not in c for c in swipe_deck["cards"])
+    assert "gallery" not in node_types(card.layout["root"])
 
 
 def test_without_place_search_the_deck_goes_out_as_numbered_text(
@@ -988,6 +993,16 @@ def card_words(layout):
     if not isinstance(layout, dict | list):
         return set()
     return set().union(*(card_words(child) for child in children), set())
+
+
+def node_types(node):
+    """The type of every node anywhere in a card's tree."""
+    if isinstance(node, list):
+        return set().union(*(node_types(child) for child in node), set())
+    if not isinstance(node, dict):
+        return set()
+    own = {node["type"]} if isinstance(node.get("type"), str) else set()
+    return own.union(*(node_types(child) for child in node.values()))
 
 
 def hotels_actions(store, hotels):

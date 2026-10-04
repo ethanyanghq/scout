@@ -55,14 +55,8 @@ INTERVIEW_ANSWER_LEAD = "@scout my trip:"
 # Linq's limit on a card's data: URL, mirrored from bridge/hermes-card.ts.
 MAX_CARD_URL_CHARS = 16_384
 CARD_URL_PREFIX = "data:application/json;base64,"
-# The activity deck's swipes. (rating, label, swipe direction, SF Symbol)
-SWIPE_CHOICES = [
-    (Rating.NAH, "Nah", "left", "arrow.left"),
-    (Rating.MEH, "Meh", "up", "arrow.up"),
-    (Rating.YEAH, "Yeah", "right", "arrow.right"),
-]
-# One line above the stack that says which way each swipe goes.
-SWIPE_LEGEND = "←  Nah      ↑  Meh      Yeah  →"
+# The activity deck's choices, left to right. (rating, label)
+DECK_CHOICES = [(Rating.NAH, "Nah"), (Rating.MEH, "Meh"), (Rating.YEAH, "Yeah")]
 # The budget slider, per person in US dollars: $500 to $3,000 in $100 steps,
 # labeled every $500 and starting at $1,000.
 BUDGET_SLIDER_MIN_USD = 500
@@ -403,9 +397,8 @@ def fits_in_one_message(layout: dict) -> bool:
 
 
 def activity_deck(destination: str, activities: list[DeckActivity]) -> dict:
-    """A stack of things to do to swipe through: left is nah, up is meh, right
-    is yeah. Send puts the swipes in the chat as text. It has no photo of its
-    own, so the stack gets the whole screen without scrolling."""
+    """Each thing to do with a nah, meh or yeah picker under it. Send puts the
+    ratings in the chat as text."""
     lead = urllib.parse.quote(PICKS_LEAD)
     return {
         "version": 1,
@@ -420,8 +413,8 @@ def activity_deck(destination: str, activities: list[DeckActivity]) -> dict:
             "spacing": 14,
             "alignment": "leading",
             "children": [
-                _text(SWIPE_LEGEND, role="callout", color_hex=SOFT_GRAY_HEX),
-                _swipe_deck(activities),
+                _activity_choice(position, activity)
+                for position, activity in enumerate(activities)
             ],
         },
         "actions": [
@@ -436,38 +429,45 @@ def activity_deck(destination: str, activities: list[DeckActivity]) -> dict:
     }
 
 
-def _swipe_deck(activities: list[DeckActivity]) -> dict:
-    # A swipeDeck is a form input like a picker: it holds one choice per card
-    # and fires nothing until Send. Its text summary is each card's title and
-    # the chosen choice's id, "Night kayak yeah", joined with " · ", which is
-    # what parse_picks reads back.
-    return {
-        "type": "swipeDeck",
-        "fieldId": "activities",
-        "cards": [_swipe_card(position, a) for position, a in enumerate(activities)],
-        "choices": [
-            {
-                "id": rating.name.lower(),
-                "label": label,
-                "swipeDirection": direction,
-                "systemImage": sf_symbol,
-            }
-            for rating, label, direction, sf_symbol in SWIPE_CHOICES
-        ],
-    }
-
-
-def _swipe_card(position: int, activity: DeckActivity) -> dict:
-    card = {
-        "id": f"activity-{position}",
-        "title": activity.name,
-        "subtitle": (
-            f"~${activity.estimated_cost_usd:,} per person · {activity.description}"
+def _activity_choice(position: int, activity: DeckActivity) -> dict:
+    # Each activity is its own single-select field, since HermesShare's form
+    # holds one answer per field. Every picker starts on nah, so the sent text
+    # has one rating per activity in deck order ("Nah · Yeah · Meh"), which is
+    # what parse_picks reads back. It isn't a swipe stack because the
+    # HermesShare build on people's phones has no swipeDeck node and can't open
+    # a card that uses one.
+    photo = (
+        [{"type": "gallery", "urls": [activity.photo_url], "heightPt": 140}]
+        if activity.photo_url
+        else []
+    )
+    picker = {
+        **_picker(
+            f"activity-{position}",
+            "grid",
+            [{"id": r.name.lower(), "label": label} for r, label in DECK_CHOICES],
         ),
+        "selectedId": Rating.NAH.name.lower(),
     }
-    if activity.photo_url:
-        card["imageUrl"] = activity.photo_url
-    return card
+    return {
+        "type": "card",
+        "child": {
+            "type": "vstack",
+            "spacing": 8,
+            "alignment": "leading",
+            "children": [
+                *photo,
+                _text(activity.name, role="headline"),
+                _text(
+                    f"~${activity.estimated_cost_usd:,} per person · "
+                    f"{activity.description}",
+                    role="footnote",
+                    color_hex=SOFT_GRAY_HEX,
+                ),
+                picker,
+            ],
+        },
+    }
 
 
 def itinerary(trip: Trip, destination_photo_url: str) -> dict:

@@ -19,7 +19,7 @@ here's how it goes:
 1. **add me.** put my number in the group text. no app, no accounts, nobody signs up for anything.
 2. **tell me what you want.** i send a quick trip card: pick the kind of trip, your dates on a calendar, your budget on a slider, where you're flying from, and what you're into. one tap sends it, and i keep track of who hasn't answered yet.
 3. **i pitch three places.** once everyone's in, i look up well-reviewed spots that fit the whole group and send three brochures: photos, the best hotel there, things to do, and what the whole trip runs per person. tell me your final decision ("final decision: cancun") and i'll lock it in.
-4. **you tell me what you'd actually do.** i send a deck of things to do at that hotel and that town, each with a picture and a price. swipe each one nah, meh or yeah, send once, and i'll tell you what the group agreed on.
+4. **you tell me what you'd actually do.** i send a deck of things to do at that hotel and that town, each with a picture and a price. rate each one nah, meh or yeah, send once, and i'll tell you what the group agreed on.
 5. **i plan the days.** a day-by-day plan built from what you actually picked, paced for whether you're up at six or noon. then one room and one flight for everyone — you book, i put what it cost in the ledger.
 6. **i put it on your calendar.** once the itinerary is posted, one link to subscribe to with every day of the plan as an event, kept up to date if the plan changes, then a shared album link for the photos.
 7. **we settle up.** tell me what you paid ("i got the airbnb, $1,240") or text me a photo of the receipt. i split it, work out the fewest payments to square everyone up, and check each one off when you tell me you've paid ("i paid leo").

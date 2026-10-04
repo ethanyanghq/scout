@@ -11,13 +11,23 @@ LEO = Member("+15550000002", display_name="Leo")
 PRIYA = Member("+15550000003", display_name="Priya")
 
 
-def test_reads_the_swipes_the_card_fills_in_leaving_out_nahs():
+def test_reads_named_ratings_leaving_out_nahs():
     text = (
         "@scout my picks: Night kayak in the bio bay yeah · "
         "Old San Juan food tour nah · El Yunque hike meh"
     )
 
     assert parse_picks(text, ACTIVITY_NAMES) == {0: Rating.YEAH, 2: Rating.MEH}
+
+
+def test_reads_the_card_ratings_in_deck_order_leaving_out_nahs():
+    text = "@scout my picks: Yeah · Nah · Meh"
+
+    assert parse_picks(text, ACTIVITY_NAMES) == {0: Rating.YEAH, 2: Rating.MEH}
+
+
+def test_bare_ratings_that_dont_cover_the_whole_deck_are_left_for_the_agent():
+    assert parse_picks("@scout my picks: Yeah · Meh", ACTIVITY_NAMES) is None
 
 
 def test_reads_ratings_typed_against_numbers():

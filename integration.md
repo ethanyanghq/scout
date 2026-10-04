@@ -147,10 +147,9 @@ the chat beats a half-finished poll.
 Everything in this stage is tied to the chosen destination **and its hotel** —
 activities at the hotel, or close enough to reach from it.
 
-One **deck card**, around eight activities, shown as a stack to swipe through,
-Hinge or Tinder style. Each card is a photo, a name, a price and a line on what
-it is. Swipe **left for nah, up for meh, right for yeah** (three buttons do the
-same for anyone who'd rather tap). The card has one submit bar at the end.
+One **deck card**, around eight activities, one under another. Each is a photo,
+a name, a price and a line on what it is, with a **Nah / Meh / Yeah** picker
+under it that starts on Nah. The card has one submit bar at the end.
 
 ```
 ┌──────────────────────────────────────┐
@@ -160,8 +159,9 @@ same for anyone who'd rather tap). The card has one submit bar at the end.
 │ │ Scuba at Cozumel Reef       $120 │ │
 │ │ Boat from the hotel dock,        │ │
 │ │ gear included.                   │ │
+│ │  [ Nah ]    [ Meh ]    [ Yeah ]  │ │
 │ └──────────────────────────────────┘ │
-│   ( ✕ Nah )    ( – Meh )   ( ♥ Yeah ) │
+│ …one card per activity               │
 │ ──────────────────────────────────── │
 │ [         Send my picks         ]    │
 └──────────────────────────────────────┘
@@ -169,7 +169,7 @@ same for anyone who'd rather tap). The card has one submit bar at the end.
 
 **Nothing sends until the submit bar is tapped.** That is a property of the
 renderer, not a choice (see §3): a control with a `fieldId` holds its state and
-fires nothing. So four people swiping eight activities produces four messages,
+fires nothing. So four people rating eight activities produces four messages,
 not thirty-two.
 
 It is one deck for the whole group, in the group thread, so people can see each
@@ -182,36 +182,22 @@ meh to each. A yeah is worth 2 and a meh 1, so a meh keeps an activity alive
 without beating a yeah, and the itinerary schedules the highest scorers.
 
 Built: `send_activity_deck` (`src/scout/trip_actions.py`), `activity_deck.py`
-for reading swipes and the tally, and `cards.activity_deck` for the layout. A
+for reading picks and the tally, and `cards.activity_deck` for the layout. A
 card's own submit never reaches scout (Linq flattens it to one character), so
 the deck works like the trip interview: Send fills in a text, "@scout my picks:
-Night kayak yeah · Food tour nah · Hike meh", and `conversation.py` counts it
-in code without a Claude call. A rating left off means yeah and an activity
-left out means nah. Instead of silence, each submit before the last gets a 👍
+Yeah · Nah · Meh", one rating per activity in deck order, and `conversation.py`
+counts it in code without a Claude call. Every picker starts on Nah so the text
+always has a rating for each activity; picks typed by hand name the activity or
+its number instead ("Night kayak yeah", "2 meh"), where a rating left off means
+yeah and an activity left out means nah. Instead of silence, each submit before the last gets a 👍
 tapback, as plain votes do. Without a Places key, or on a phone without the
 card, the deck goes out as a numbered list, answered with
 "@scout my picks: 1 yeah, 2 meh, 3 nah".
 
-**The `swipeDeck` node.** The deck needs a layout node HermesShare's renderer
-has to draw (our fork adds it; upstream has no swipe component):
-
-```json
-{
-  "type": "swipeDeck",
-  "fieldId": "activities",
-  "cards": [{"id": "activity-0", "title": "Scuba", "subtitle": "~$120 · Boat…", "imageUrl": "https://…"}],
-  "choices": [
-    {"id": "nah", "label": "Nah", "swipeDirection": "left", "systemImage": "xmark"},
-    {"id": "meh", "label": "Meh", "swipeDirection": "up", "systemImage": "minus"},
-    {"id": "yeah", "label": "Yeah", "swipeDirection": "right", "systemImage": "heart.fill"}
-  ]
-}
-```
-
-It holds one choice id per card, and its text summary, which the Send action
-appends after the `lead`, is each card's `title`, a space and its choice id
-(`Scuba yeah`), joined with ` · `. A card nobody swiped is left out, which
-scout reads as nah. `imageUrl` is optional.
+**Why not a swipe stack.** A Hinge-style stack would need a `swipeDeck` node,
+which upstream HermesShare doesn't have and the build on our phones doesn't
+either. HermesShare refuses to decode a card with a node type it doesn't know
+("payload undecodable"), so the deck uses `optionPicker`s, which it can draw.
 
 ### Stage 5 — Itinerary
 

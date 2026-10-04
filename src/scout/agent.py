@@ -226,7 +226,7 @@ def _describe_trip(trip: Trip) -> str:
 
 
 def _describe_activity_deck(trip: Trip) -> list[str]:
-    """Each deck activity and who swiped yeah or meh on it, and who hasn't sent
+    """Each deck activity and who said yeah or meh to it, and who hasn't sent
     picks."""
     deck = trip.activity_deck
     waiting_on = [m.label for m in trip.members if m.phone not in deck.picks]
