@@ -8,6 +8,7 @@ agent to read.
 
 import logging
 from collections.abc import Callable
+from dataclasses import replace
 from datetime import date
 
 from scout import polls
@@ -49,6 +50,7 @@ from scout.settle_up import (
 from scout.trip import (
     DateWindow,
     DestinationOption,
+    ItineraryAddOn,
     ItineraryDay,
     MediaKind,
     Member,
@@ -195,7 +197,11 @@ class TripActions:
         calendar = self._send_calendar(destination, dates)
         return f"Destination is now {destination}. {calendar}"
 
-    def post_itinerary(self, days: list[ItineraryDay]) -> str:
+    def post_itinerary(
+        self, days: list[ItineraryDay], add_ons: list[ItineraryAddOn]
+    ) -> str:
+        """Posts the day-by-day plan, with what only one member wanted offered
+        as optional add-ons. Replaces any earlier plan."""
         trip = self._load_locked_in_trip()
         if not days:
             raise TripActionError("an itinerary needs at least one day")
@@ -209,9 +215,16 @@ class TripActions:
                     f"{trip.dates.start} to {trip.dates.end}"
                 )
 
+        # Saved under the member's label as the chat shows it, not as the
+        # agent spelled it.
+        add_ons = [
+            replace(add_on, wanted_by=self._find_member(add_on.wanted_by).label)
+            for add_on in add_ons
+        ]
+
         in_order = sorted(days, key=lambda day: day.day)
-        self._store.replace_itinerary(self._space_id, in_order)
-        self.outbox.append(Say(format_itinerary(in_order)))
+        self._store.replace_itinerary(self._space_id, in_order, add_ons)
+        self.outbox.append(Say(format_itinerary(in_order, add_ons)))
         return "Itinerary posted."
 
     def send_booking_links(self) -> str:

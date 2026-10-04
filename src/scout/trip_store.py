@@ -5,7 +5,7 @@ import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
-from datetime import date, datetime
+from datetime import date, datetime, time
 from pathlib import Path
 
 from scout.places import Coordinates, Place
@@ -14,6 +14,7 @@ from scout.trip import (
     DateWindow,
     DestinationOption,
     Expense,
+    ItineraryAddOn,
     ItineraryDay,
     MediaKind,
     Member,
@@ -68,9 +69,18 @@ CREATE TABLE IF NOT EXISTS votes (
 
 CREATE TABLE IF NOT EXISTS itinerary_days (
     space_id TEXT NOT NULL REFERENCES trips (space_id),
-    day      TEXT NOT NULL,
-    plan     TEXT NOT NULL,
+    day       TEXT NOT NULL,
+    plan      TEXT NOT NULL,
+    starts_at TEXT,
     PRIMARY KEY (space_id, day)
+);
+
+CREATE TABLE IF NOT EXISTS itinerary_add_ons (
+    space_id  TEXT NOT NULL REFERENCES trips (space_id),
+    position  INTEGER NOT NULL,
+    activity  TEXT NOT NULL,
+    wanted_by TEXT NOT NULL,
+    PRIMARY KEY (space_id, position)
 );
 
 CREATE TABLE IF NOT EXISTS expenses (
@@ -141,6 +151,7 @@ TABLES_BY_SPACE = (
     "members",
     "polls",
     "itinerary_days",
+    "itinerary_add_ons",
     "expenses",
     "settlements",
     "pending_receipts",
@@ -180,6 +191,7 @@ class TripStore:
                 members=_load_members(db, space_id),
                 open_poll=_load_open_poll(db, space_id),
                 itinerary=_load_itinerary(db, space_id),
+                itinerary_add_ons=_load_itinerary_add_ons(db, space_id),
                 expenses=_load_expenses(db, space_id),
                 settlements=_load_settlements(db, space_id),
                 pending_receipt=_load_pending_receipt(db, space_id),
@@ -300,12 +312,32 @@ class TripStore:
                 ),
             )
 
-    def replace_itinerary(self, space_id: str, days: list[ItineraryDay]) -> None:
+    def replace_itinerary(
+        self, space_id: str, days: list[ItineraryDay], add_ons: list[ItineraryAddOn]
+    ) -> None:
         with self._transaction() as db:
             db.execute("DELETE FROM itinerary_days WHERE space_id = ?", (space_id,))
+            db.execute("DELETE FROM itinerary_add_ons WHERE space_id = ?", (space_id,))
             db.executemany(
-                "INSERT INTO itinerary_days (space_id, day, plan) VALUES (?, ?, ?)",
-                [(space_id, day.day.isoformat(), day.plan) for day in days],
+                "INSERT INTO itinerary_days (space_id, day, plan, starts_at) "
+                "VALUES (?, ?, ?, ?)",
+                [
+                    (
+                        space_id,
+                        day.day.isoformat(),
+                        day.plan,
+                        day.starts_at.isoformat() if day.starts_at else None,
+                    )
+                    for day in days
+                ],
+            )
+            db.executemany(
+                "INSERT INTO itinerary_add_ons (space_id, position, activity, "
+                "wanted_by) VALUES (?, ?, ?, ?)",
+                [
+                    (space_id, position, add_on.activity, add_on.wanted_by)
+                    for position, add_on in enumerate(add_ons)
+                ],
             )
 
     def add_expense(
@@ -519,10 +551,29 @@ def _load_open_poll(db: sqlite3.Connection, space_id: str) -> Poll | None:
 
 def _load_itinerary(db: sqlite3.Connection, space_id: str) -> list[ItineraryDay]:
     rows = db.execute(
-        "SELECT day, plan FROM itinerary_days WHERE space_id = ? ORDER BY day",
+        "SELECT day, plan, starts_at FROM itinerary_days WHERE space_id = ? "
+        "ORDER BY day",
         (space_id,),
     ).fetchall()
-    return [ItineraryDay(date.fromisoformat(row["day"]), row["plan"]) for row in rows]
+    return [
+        ItineraryDay(
+            date.fromisoformat(row["day"]),
+            row["plan"],
+            time.fromisoformat(row["starts_at"]) if row["starts_at"] else None,
+        )
+        for row in rows
+    ]
+
+
+def _load_itinerary_add_ons(
+    db: sqlite3.Connection, space_id: str
+) -> list[ItineraryAddOn]:
+    rows = db.execute(
+        "SELECT activity, wanted_by FROM itinerary_add_ons WHERE space_id = ? "
+        "ORDER BY position",
+        (space_id,),
+    ).fetchall()
+    return [ItineraryAddOn(row["activity"], row["wanted_by"]) for row in rows]
 
 
 def _load_expenses(db: sqlite3.Connection, space_id: str) -> list[Expense]:

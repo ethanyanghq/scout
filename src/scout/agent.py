@@ -13,7 +13,7 @@ from scout.money import format_usd
 from scout.outgoing import Outgoing, Say
 from scout.outside_services import NO_OUTSIDE_SERVICES, OutsideServices
 from scout.settle_up import plan_payments
-from scout.trip import IncomingMessage, Member, MessagePhoto, Trip
+from scout.trip import IncomingMessage, ItineraryDay, Member, MessagePhoto, Trip
 from scout.trip_actions import TripActionError, TripActions
 from scout.trip_store import TripStore
 
@@ -143,7 +143,11 @@ def _describe_trip(trip: Trip) -> str:
         lines.append(f"Trip dates: {format_window(trip.dates)} {trip.dates.start.year}")
     if trip.itinerary:
         lines.append("Itinerary:")
-        lines.extend(f"  {day.day:%a %Y-%m-%d}: {day.plan}" for day in trip.itinerary)
+        lines.extend(f"  {_describe_itinerary_day(day)}" for day in trip.itinerary)
+        lines.extend(
+            f"  Optional add-on: {add_on.activity} ({add_on.wanted_by})"
+            for add_on in trip.itinerary_add_ons
+        )
     lines.append("Members:")
     lines.extend(f"- {_describe_member(member)}" for member in trip.members)
     if summary.shared_window:
@@ -202,6 +206,11 @@ def _describe_costs(trip: Trip) -> list[str]:
             f"to confirm: {receipt.merchant}, {format_usd(receipt.total_cents)}"
         )
     return lines
+
+
+def _describe_itinerary_day(day: ItineraryDay) -> str:
+    starts_at = f" {day.starts_at:%H:%M}" if day.starts_at else ""
+    return f"{day.day:%a %Y-%m-%d}{starts_at}: {day.plan}"
 
 
 def _describe_member(member: Member) -> str:

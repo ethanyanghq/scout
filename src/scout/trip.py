@@ -2,7 +2,7 @@
 
 import re
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, time
 from enum import StrEnum
 from pathlib import Path
 
@@ -208,6 +208,19 @@ class ItineraryDay:
     day: date
     # The one big thing planned for the day, e.g. "Night kayak on a bio bay".
     plan: str
+    # When it starts, paced to the group. None on a loose day, like one spent
+    # traveling.
+    starts_at: time | None = None
+
+
+@dataclass(frozen=True)
+class ItineraryAddOn:
+    """Something only one member wanted, offered as optional rather than
+    scheduled for everyone or dropped (IT-2)."""
+
+    activity: str
+    # The member's label, e.g. "Leo".
+    wanted_by: str
 
 
 @dataclass(frozen=True)
@@ -254,6 +267,7 @@ class Trip:
     members: list[Member]
     open_poll: Poll | None
     itinerary: list[ItineraryDay]
+    itinerary_add_ons: list[ItineraryAddOn]
     expenses: list[Expense]
     settlements: list[Settlement]
     pending_receipt: PendingReceipt | None

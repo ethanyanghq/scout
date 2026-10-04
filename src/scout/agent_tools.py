@@ -1,6 +1,6 @@
 """The tools Claude can call, and how each call maps onto a TripAction."""
 
-from datetime import date
+from datetime import date, time
 from decimal import Decimal
 from typing import Any
 
@@ -10,6 +10,7 @@ from scout.money import CENTS_PER_DOLLAR
 from scout.trip import (
     Chronotype,
     DestinationOption,
+    ItineraryAddOn,
     ItineraryDay,
     MessagePhoto,
     PreferenceUpdate,
@@ -214,10 +215,13 @@ TOOL_DEFINITIONS = [
         "name": "post_itinerary",
         "description": (
             "Post a day-by-day plan for the chosen destination, one anchor "
-            "activity per day within the trip dates. Replaces any earlier plan, "
-            "so include every day when editing."
+            "activity per day within the trip dates, plus optional add-ons for "
+            "what only one person wanted. Replaces any earlier plan, so include "
+            "every day and add-on when editing."
         ),
-        "strict": True,
+        # Not strict: with it, every strict tool together compiles to a grammar
+        # too large for the API. post_itinerary checks every value it's given.
+        "strict": False,
         "input_schema": {
             "type": "object",
             "properties": {
@@ -237,13 +241,46 @@ TOOL_DEFINITIONS = [
                                     "e.g. 'Night kayak on a bioluminescent bay'."
                                 ),
                             },
+                            "starts_at": _nullable(
+                                "string",
+                                "When the plan starts, as 24-hour HH:MM, paced "
+                                "to the group. Null on a loose or travel day.",
+                            ),
                         },
-                        "required": ["date", "plan"],
+                        "required": ["date", "plan", "starts_at"],
+                        "additionalProperties": False,
+                    },
+                },
+                "optional_add_ons": {
+                    "type": "array",
+                    "description": (
+                        "Activities only one person asked for, offered as "
+                        "optional instead of scheduled for everyone. Empty if "
+                        "there are none."
+                    ),
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "activity": {
+                                "type": "string",
+                                "description": (
+                                    "Under 8 words, e.g. 'Scuba at Escambrón'."
+                                ),
+                            },
+                            "wanted_by": {
+                                "type": "string",
+                                "description": (
+                                    "Who asked for it, as the chat labels them, "
+                                    "like 'Leo'."
+                                ),
+                            },
+                        },
+                        "required": ["activity", "wanted_by"],
                         "additionalProperties": False,
                     },
                 },
             },
-            "required": ["days"],
+            "required": ["days", "optional_add_ons"],
             "additionalProperties": False,
         },
     },
@@ -658,7 +695,13 @@ def run_tool(
         case "lock_in_group_choice":
             return actions.lock_in_group_choice(tool_input["destination"])
         case "post_itinerary":
-            return actions.post_itinerary(_to_itinerary(tool_input))
+            return actions.post_itinerary(
+                _to_itinerary(tool_input),
+                [
+                    ItineraryAddOn(**add_on)
+                    for add_on in tool_input.get("optional_add_ons", [])
+                ],
+            )
         case "send_booking_links":
             return actions.send_booking_links()
         case "send_best_flights":
@@ -714,7 +757,11 @@ def _to_preference_update(tool_input: dict[str, Any]) -> PreferenceUpdate:
 
 def _to_itinerary(tool_input: dict[str, Any]) -> list[ItineraryDay]:
     return [
-        ItineraryDay(day=_parse_date(day["date"]), plan=day["plan"])
+        ItineraryDay(
+            day=_parse_date(day["date"]),
+            plan=day["plan"],
+            starts_at=_parse_time(day.get("starts_at")),
+        )
         for day in tool_input["days"]
     ]
 
@@ -745,6 +792,15 @@ def _parse_chronotype(value: str | None) -> Chronotype | None:
     except ValueError as error:
         choices = ", ".join(repr(pace.value) for pace in Chronotype)
         raise TripActionError(f"{value!r} is not one of {choices}") from error
+
+
+def _parse_time(value: str | None) -> time | None:
+    if value is None:
+        return None
+    try:
+        return time.fromisoformat(value)
+    except ValueError as error:
+        raise TripActionError(f"{value!r} is not an HH:MM time") from error
 
 
 def _parse_date(value: str | None) -> date | None:
